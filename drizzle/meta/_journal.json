@@ -8,6 +8,13 @@
       "when": 1782590931508,
       "tag": "0000_omniscient_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1782945864873,
+      "tag": "0001_spotty_magma",
+      "breakpoints": true
     }
   ]
 }

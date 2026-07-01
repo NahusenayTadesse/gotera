@@ -27,73 +27,32 @@
 
 	import NavMain from './NavMain.svelte';
 
-	let { messageNumber, ordersNumber, ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
+	let { ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
 
 	const navigation = [
 		{ title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
+		{ title: 'Orders', url: '/dashboard/orders', icon: ListOrdered },
+		{ title: 'Products', url: '/dashboard/products', icon: CookingPot },
+		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
 		{
-			title: 'Orders',
-			url: '/dashboard/orders',
-			icon: ListOrdered,
-			counter: ordersNumber,
-			items: [
-				{ title: 'All Orders', url: '/dashboard/orders/all-orders', icon: Sheet },
-				{ title: 'Pending Orders', url: '/dashboard/orders', icon: Loader },
-				{ title: 'Delivered Orders', url: '/dashboard/orders/delivered', icon: CircleCheckBig },
-				{ title: 'Cancelled Orders', url: '/dashboard/orders/cancelled', icon: OctagonMinus }
-			]
-		},
-
-		{
-			title: 'Products',
-			url: '/dashboard/products',
-			icon: Container,
-			items: [
-				{ title: 'All Products', url: '/dashboard/products', icon: Sheet },
-				{ title: 'Add Product', url: '/dashboard/products/add-products', icon: Plus },
-				{ title: 'Suppliers', url: '/dashboard/products/suppliers', icon: Sheet },
-				{ title: 'Add Supplier', url: '/dashboard/products/add-supplier', icon: Plus }
-			]
-		},
-
-		{
-			title: 'Recipes ',
-			url: '/dashboard/recipes',
-			icon: CookingPot,
-			items: [
-				{ title: 'All Recipes', url: '/dashboard/recipes', icon: Sheet },
-				{ title: 'Add Recipe', url: '/dashboard/recipes/add-recipes', icon: Plus }
-			]
+			title: 'Suppliers',
+			url: '/dashboard/suppliers',
+			icon: Building2
 		},
 		{
-			title: 'Delivery Address',
-			url: '/dashboard/delivery-address',
+			title: 'Deliveries',
+			url: '/dashboard/deliveries',
 			icon: Truck
 		},
-		{
-			title: 'Messages',
-			url: '/dashboard/messages',
-			icon: Mail,
-			counter: messageNumber
-		},
+		
 		{
 			title: 'Testimonials  ',
 			url: '/dashboard/testimonials',
 			icon: Star
 		},
 
-		{
-			title: 'Partner Logos  ',
-			url: '/dashboard/logos',
-			icon: Building2
-		},
 
-		{
-			title: 'Catalog & Manual',
-			url: '/dashboard/catalog',
-			icon: BookDown
-		},
 		{
 			title: 'Reports',
 			url: '/dashboard/reports',

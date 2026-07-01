@@ -19,17 +19,18 @@
 
 	// ── Display-only config (prices here are for show; the server recomputes
 	//    the authoritative total from PLAN_CONFIG + the addons catalogue). ──
-	const subscriptionPlans = [
-		{ id: 'one-off', name: 'One-Off', sub: 'No subscription.', price: 6.5, freq: 'Per pack · 3 injera', bullet: 'Ideal first order', featured: false },
-		{ id: 'starter', name: 'Starter', sub: 'Lighter monthly plan.', price: 12.0, freq: 'Monthly · 2 packs', bullet: 'Pause or skip anytime', featured: false },
-		{ id: 'regular', name: 'Regular', sub: 'Our core plan.', price: 24.0, freq: 'Monthly · 4 packs', bullet: 'Best value', bullet2: 'Most popular', featured: true }
-	];
+	// const subscriptionPlans = [
+	// 	{ id: 'one-off', name: 'One-Off', sub: 'No subscription.', price: 6.5, freq: 'Per pack · 3 injera', bullet: 'Ideal first order', featured: false },
+	// 	{ id: 'starter', name: 'Starter', sub: 'Lighter monthly plan.', price: 12.0, freq: 'Monthly · 2 packs', bullet: 'Pause or skip anytime', featured: false },
+	// 	{ id: 'regular', name: 'Regular', sub: 'Our core plan.', price: 24.0, freq: 'Monthly · 4 packs', bullet: 'Best value', bullet2: 'Most popular', featured: true }
+	// ];
 
-	const giftPlans = [
-		{ id: 'single-gift', name: 'Single Pack', sub: '3 injera. A proper introduction.', price: 8.5, freq: 'One-time' },
-		{ id: 'double-gift', name: 'Double Pack', sub: '6 injera. Pairs well with add-ons.', price: 15.0, freq: 'One-time' }
-	];
-
+	// const giftPlans = [
+	// 	{ id: 'single-gift', name: 'Single Pack', sub: '3 injera. A proper introduction.', price: 8.5, freq: 'One-time' },
+	// 	{ id: 'double-gift', name: 'Double Pack', sub: '6 injera. Pairs well with add-ons.', price: 15.0, freq: 'One-time' }
+	// ];
+     const subscriptionPlans = $derived(data.subscriptionPlans);
+	 const giftPlans = $derived(data.giftPlans);
 	function selectRecipient(who: 'me' | 'gift') {
 		$form.recipient = who;
 		$form.plan = who === 'me' ? 'regular' : 'single-gift';

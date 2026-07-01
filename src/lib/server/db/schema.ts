@@ -179,3 +179,46 @@ export const honeyOrders = mysqlTable('honey_orders', {
 		.notNull(),
 	...secureFields
 });
+
+
+// ── Plans (Catalogue — drives the subscribe page + server pricing) ──
+// Add this to schema.ts. Uses imports already present in your file
+// (mysqlTable, varchar, text, int, boolean, mysqlEnum, json, index, secureFields).
+//
+// ALIGNMENT CONSTRAINT: for kind === 'subscription', `slug` must be one of the
+// subscribers.plan enum values ('starter' | 'regular') — the server writes
+// plan.slug directly into subscribers.plan. The admin form enforces this.
+export const plans = mysqlTable(
+	'plans',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+
+		// App-level identifier used everywhere ('one-off', 'regular', 'single-gift'…).
+		slug: varchar('slug', { length: 64 }).notNull().unique(),
+
+		// ── Shown on the subscribe page ──
+		name: varchar('name', { length: 120 }).notNull(), // "Regular"
+		subtitle: varchar('subtitle', { length: 255 }), // "Our core plan."
+		pricePence: int('price_pence').notNull(), // 2400  (£24.00)
+		freqLabel: varchar('freq_label', { length: 120 }), // "Monthly · 4 packs"
+		bullets: json('bullets').$type<string[]>().default([]), // ["Best value","Most popular"]
+		featured: boolean('featured').default(false).notNull(),
+
+		// ── Used by the server ──
+		// billing period — one_time for one-off/gifts, monthly for subscriptions
+		interval: mysqlEnum('interval', ['one_time', 'monthly', 'bi_monthly']).notNull(),
+		packs: int('packs').default(1).notNull(), // pack count (order history + display)
+		// how the checkout treats it: order = one-off (needs orders table),
+		// subscription = recurring, gift = giftOrders row
+		kind: mysqlEnum('kind', ['order', 'subscription', 'gift']).notNull(),
+
+		// ── Admin controls ──
+		active: boolean('active').default(true).notNull(), // hide without deleting
+		sortOrder: int('sort_order').default(0).notNull(),
+
+		...secureFields
+	},
+	(table) => [index('idx_plans_kind').on(table.kind), index('idx_plans_active').on(table.active)]
+);

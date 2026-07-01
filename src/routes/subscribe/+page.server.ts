@@ -2,7 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { superValidate, message, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 
 // Adjust these two imports to your project's paths.
 import { db } from '$lib/server/db';
@@ -12,7 +12,8 @@ import {
 	subscriberAddons,
 	deliveries,
 	giftOrders,
-	addons as addonsTable
+	addons as addonsTable,
+	plans
 } from '$lib/server/db/schema';
 
 import {
@@ -47,12 +48,29 @@ async function resolveAddons(ids: string[]) {
 	if (ids.length === 0) return { rows: [], pence: 0, unknown: false };
 	const catalogue = await db.select().from(addonsTable);
 	const rows = catalogue.filter((a) => ids.includes(a.id));
+
+
+
 	return {
 		rows,
 		pence: rows.reduce((sum, a) => sum + a.pricePence, 0),
 		unknown: rows.length !== ids.length
 	};
 }
+
+type PlanRow = typeof plans.$inferSelect;
+
+// DB row -> the shape your page already uses
+const toPlan = (p: PlanRow) => ({
+	id: p.slug,                // page `id` is the slug ('one-off', 'regular', …)
+	name: p.name,
+	sub: p.subtitle ?? '',
+	price: p.pricePence / 100, // number, so your .toFixed(2)/.toFixed(0) still work
+	freq: p.freqLabel ?? '',
+	bullet: p.bullets?.[0],
+	bullet2: p.bullets?.[1],
+	featured: p.featured
+});
 
 export const load: PageServerLoad = async () => {
 	const catalogue = await db
@@ -62,7 +80,18 @@ export const load: PageServerLoad = async () => {
 
 	const form = await superValidate(zod4(checkoutSchema));
 
-	return { form, addons: catalogue };
+	const rows = await db
+	.select()
+	.from(plans)
+	.where(eq(plans.active, true))
+	.orderBy(asc(plans.sortOrder));
+
+const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
+const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
+
+return { form,  subscriptionPlans, giftPlans, addons: catalogue,  };
+
+	
 };
 
 export const actions: Actions = {
