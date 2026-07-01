@@ -7,7 +7,7 @@ import './layout.css';
 
 
 
-	let { children } = $props();
+	let { data, children } = $props();
 
 </script>
 
@@ -33,12 +33,17 @@ import './layout.css';
       <a href="/">Home</a>
       <a href="/subscribe">Subscribe</a>
       <a href="/about">About</a>
-      <a href="/account">Account</a>
+      <!-- <a href="/account">Account</a> -->
     </div>
     <div class="nav-right">
+    {#if !data.user}
       <a href="/signin" class="nav-signin">Sign In</a>
       <a href="/subscribe" class="btn-outline">Plans</a>
       <a href="/subscribe" class="btn">Subscribe</a>
+    {:else}
+      <a href="/account" class="btn-outline">Dashboard</a>
+    {/if}
+    
     </div>
   </div>
 </nav>
