@@ -28,7 +28,7 @@ export const subscribers = mysqlTable(
 		email: varchar('email', { length: 255 }).notNull().unique(),
 		fullName: varchar('full_name', { length: 255 }),
 		phone: varchar('phone', { length: 32 }),
-		plan: mysqlEnum('plan', ['starter', 'regular']).notNull(),
+		plan: mysqlEnum('plan', ['starter', 'regular']),
 		status: mysqlEnum('status', ['active', 'paused', 'cancelled']).default('active').notNull(),
 		marketingOptIn: boolean('marketing_opt_in').default(true).notNull(),
 		stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),

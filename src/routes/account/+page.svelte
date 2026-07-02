@@ -1,94 +1,178 @@
-<script>
-  // Add-ons runtime state tracking via Svelte 5 fine-grained states
-  let quantities = $state({ berbere: 0, mitmita: 0, kibbeh: 0 });
+<script lang="ts">
+	import { enhance } from '$app/forms';
+	import { toast } from 'svelte-sonner';
+	import type { PageData } from './$types';
 
-  const addonsList = [
-    { id: 'berbere', name: 'Berbere', price: '£3.50', desc: 'Bold Ethiopian spice blend.' },
-    { id: 'mitmita', name: 'Mitmita', price: '£3.50', desc: 'Sharper. Hotter.' },
-    { id: 'kibbeh', name: 'Niter Kibbeh', price: '£5.00', desc: 'Spiced Ethiopian butter.' }
-  ];
+	let { data }: { data: PageData } = $props();
 
-  function updateQty(id, change) {
-    quantities[id] = Math.max(0, quantities[id] + change);
-  }
+	// Per-add-on quantity steppers (client state; posted on Add).
+	let quantities = $state<Record<string, number>>(
+		Object.fromEntries(data.addons.map((a) => [a.id, 0]))
+	);
+
+	function updateQty(id: string, change: number) {
+		quantities[id] = Math.max(0, (quantities[id] ?? 0) + change);
+	}
+
+	const gbp = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+
+	const statusLabel: Record<string, string> = {
+		active: 'Active',
+		paused: 'Paused',
+		cancelled: 'Cancelled'
+	};
+	const statusSub: Record<string, string> = {
+		active: 'Renewing monthly',
+		paused: 'Paused — resume anytime',
+		cancelled: 'Subscription ended'
+	};
+
+	// Shared enhance handler: toast the action's message and refresh data.
+	function withToast(resetAddonId?: string) {
+		return () =>
+			async ({ result, update }: any) => {
+				const msg = result?.data?.message;
+				if (result.type === 'success') {
+					if (msg) toast.success(msg);
+					if (resetAddonId) quantities[resetAddonId] = 0;
+				} else if (result.type === 'failure') {
+					toast.error(msg ?? 'Something went wrong.');
+				}
+				await update();
+			};
+	}
 </script>
 
-<!-- NEXT DELIVERY CARD -->
-<div class="block">
-  <div class="delivery-card">
-    <div>
-      <span class="delivery-card-eyebrow">Next Delivery</span>
-      <div class="delivery-date">Saturday, 18 April</div>
-      <div class="delivery-detail">
-        <strong>Regular · 4 packs</strong> &nbsp;·&nbsp; 14 Brecknock Road, London
-      </div>
-      <span class="cutoff">Cut-off Sunday 14 April</span>
-    </div>
-    <div class="delivery-btns">
-      <button type="button" class="btn btn-full">Add to this order</button>
-      <a href="/account/delivery/skip" class="btn-ghost btn-full">Skip delivery</a>
-      <button type="button" class="btn-ghost btn-full">Pause subscription</button>
-    </div>
-  </div>
-</div>
+{#if !data.subscription}
+	<!-- No active subscription -->
+	<div class="block">
+		<div class="delivery-card">
+			<div>
+				<span class="delivery-card-eyebrow">No subscription</span>
+				<div class="delivery-date">You're not subscribed yet.</div>
+				<div class="delivery-detail">Start a plan to get injera delivered every month.</div>
+			</div>
+			<div class="delivery-btns">
+				<a href="/subscribe" class="btn btn-full">Choose a plan</a>
+			</div>
+		</div>
+	</div>
+{:else}
+	<!-- NEXT DELIVERY CARD -->
+	<div class="block">
+		<div class="delivery-card">
+			<div>
+				<span class="delivery-card-eyebrow">Next Delivery</span>
+				{#if data.nextDelivery}
+					<div class="delivery-date">{data.nextDelivery.dateLabel}</div>
+					<div class="delivery-detail">
+						<strong>{data.nextDelivery.planLabel}</strong> &nbsp;·&nbsp; {data.nextDelivery.addressLine}
+					</div>
+					<span class="cutoff">Cut-off {data.nextDelivery.cutoffLabel}</span>
+				{:else}
+					<div class="delivery-date">No delivery scheduled</div>
+					<div class="delivery-detail">
+						{data.subscription.status === 'paused'
+							? 'Your subscription is paused.'
+							: 'Your next delivery hasn’t been scheduled yet.'}
+					</div>
+				{/if}
+			</div>
+			<div class="delivery-btns">
+				<a href="#addons" class="btn btn-full">Add to this order</a>
 
-<!-- LIVE METRICS MATRIX -->
-<div class="block">
-  <div class="block-header">
-    <h2>Subscription</h2>
-    <a href="/account/change-plan" class="block-action">Change plan →</a>
-  </div>
-  <div class="stats-row">
-    <div class="stat">
-      <span class="stat-label">Plan</span>
-      <div class="stat-value">Regular</div>
-      <div class="stat-sub">4 packs · monthly</div>
-    </div>
-    <div class="stat">
-      <span class="stat-label">Next Payment</span>
-      <div class="stat-value">£24.00</div>
-      <div class="stat-sub">12 April 2026</div>
-    </div>
-    <div class="stat">
-      <span class="stat-label">Status</span>
-      <div class="stat-value green">Active</div>
-      <div class="stat-sub">Renewing monthly</div>
-    </div>
-  </div>
-</div>
+				{#if data.nextDelivery}
+					<form method="POST" action="?/skip" use:enhance={withToast()}>
+						<input type="hidden" name="deliveryId" value={data.nextDelivery.id} />
+						<button type="submit" class="btn-ghost btn-full">Skip delivery</button>
+					</form>
+				{/if}
 
-<!-- DYNAMIC LOOPED ADDONS SELECTION -->
-<div class="block">
-  <div class="block-header">
-    <h2>Add to this delivery</h2>
-    <span class="block-action text-normal">Before 14 April</span>
-  </div>
-  <div class="addons-row">
-    {#each addonsList as item}
-      <div class="addon">
-        <div class="addon-img-placeholder">
-          <span>{item.name}</span>
-        </div>
-        <div class="addon-body">
-          <div class="addon-head">
-            <div class="addon-name">{item.name}</div>
-            <div class="addon-price">{item.price}</div>
-          </div>
-          <div class="addon-desc">{item.desc}</div>
-          <div class="addon-foot">
-            <div class="qty">
-              <button type="button" class="qty-btn" onclick={() => updateQty(item.id, -1)}>−</button>
-              <div class="qty-n">{quantities[item.id]}</div>
-              <button type="button" class="qty-btn" onclick={() => updateQty(item.id, 1)}>+</button>
-            </div>
-            <button type="button" class="btn-outline">Add</button>
-          </div>
-        </div>
-      </div>
-    {/each}
-  </div>
-  <a href="/addons" class="see-all">See all add-ons →</a>
-</div>
+				{#if data.subscription.status === 'paused'}
+					<form method="POST" action="?/resume" use:enhance={withToast()}>
+						<button type="submit" class="btn-ghost btn-full">Resume subscription</button>
+					</form>
+				{:else}
+					<form method="POST" action="?/pause" use:enhance={withToast()}>
+						<button type="submit" class="btn-ghost btn-full">Pause subscription</button>
+					</form>
+				{/if}
+			</div>
+		</div>
+	</div>
+
+	<!-- SUBSCRIPTION -->
+	<div class="block">
+		<div class="block-header">
+			<h2>Subscription</h2>
+			<a href="/account/change-plan" class="block-action">Change plan →</a>
+		</div>
+		<div class="stats-row">
+			<div class="stat">
+				<span class="stat-label">Plan</span>
+				<div class="stat-value">{data.subscription.planName}</div>
+				<div class="stat-sub">{data.subscription.packsLabel}</div>
+			</div>
+			<div class="stat">
+				<span class="stat-label">Next Payment</span>
+				<div class="stat-value">{gbp(data.subscription.pricePence)}</div>
+				<div class="stat-sub">{data.subscription.nextPaymentDate ?? '—'}</div>
+			</div>
+			<div class="stat">
+				<span class="stat-label">Status</span>
+				<div class="stat-value" class:green={data.subscription.status === 'active'}>
+					{statusLabel[data.subscription.status] ?? data.subscription.status}
+				</div>
+				<div class="stat-sub">{statusSub[data.subscription.status] ?? ''}</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ADD TO THIS DELIVERY -->
+	<div class="block" id="addons">
+		<div class="block-header">
+			<h2>Add to this delivery</h2>
+			{#if data.nextDelivery}
+				<span class="block-action text-normal">Before {data.nextDelivery.cutoffLabel}</span>
+			{/if}
+		</div>
+		<div class="addons-row">
+			{#each data.addons as item (item.id)}
+				<div class="addon">
+					<div class="addon-img-placeholder">
+						<span>{item.name}</span>
+					</div>
+					<div class="addon-body">
+						<div class="addon-head">
+							<div class="addon-name">{item.name}</div>
+							<div class="addon-price">{gbp(item.pricePence)}</div>
+						</div>
+						<div class="addon-desc">{item.desc}</div>
+						<div class="addon-foot">
+							<div class="qty">
+								<button type="button" class="qty-btn" onclick={() => updateQty(item.id, -1)}>−</button>
+								<div class="qty-n">{quantities[item.id]}</div>
+								<button type="button" class="qty-btn" onclick={() => updateQty(item.id, 1)}>+</button>
+							</div>
+							<form method="POST" action="?/addAddon" use:enhance={withToast(item.id)}>
+								<input type="hidden" name="addonId" value={item.id} />
+								<input type="hidden" name="quantity" value={quantities[item.id]} />
+								<button
+									type="submit"
+									class="btn-outline"
+									disabled={!data.nextDelivery || quantities[item.id] < 1}
+								>
+									Add
+								</button>
+							</form>
+						</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<a href="/addons" class="see-all">See all add-ons →</a>
+	</div>
+{/if}
 
 <style>
   h2 { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; }

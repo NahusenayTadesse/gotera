@@ -1,3 +1,64 @@
+<script lang="ts">
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
+
+	// Bespoke homepage copy (intentionally different from the plans table copy).
+	// Price / featured come from the DB via `data.plans`.
+	const CARD_COPY: Record<
+		string,
+		{ title: string; desc: string; freq: string; bullets: string[]; cta: string }
+	> = {
+		'one-off': {
+			title: 'One-Off',
+			desc: 'Try GOTERA without committing.',
+			freq: 'Per pack · 3 injera',
+			bullets: ['No subscription', 'Ideal first order'],
+			cta: 'Order now'
+		},
+		starter: {
+			title: 'Starter',
+			desc: 'Lighter monthly plan.',
+			freq: 'Per month · 2 packs',
+			bullets: ['2 packs monthly', 'Pause or skip anytime'],
+			cta: 'Choose Starter'
+		},
+		regular: {
+			title: 'Regular',
+			desc: 'Our core plan.',
+			freq: 'Per month · 4 packs',
+			bullets: ['Best for regular households', 'Strongest monthly value'],
+			cta: 'Choose Regular'
+		},
+		'single-gift': {
+			title: 'Gift',
+			desc: 'Send injera to someone else.',
+			freq: 'One-time · 3 injera',
+			bullets: ['No subscription needed', 'Add pantry items'],
+			cta: 'Send a gift'
+		}
+	};
+
+	const CARD_ORDER = ['one-off', 'starter', 'regular', 'single-gift'];
+
+	// Merge copy + DB facts; drop any card whose plan is missing/inactive.
+	const cards = $derived(
+		CARD_ORDER.filter((slug) => data.plans[slug]).map((slug) => ({
+			slug,
+			...CARD_COPY[slug],
+			price: data.plans[slug].price,
+			featured: data.plans[slug].featured
+		}))
+	);
+
+	const giftPrice = $derived(data.plans['single-gift']?.price);
+
+	// £12 not £12.00, but £6.50 keeps its pence.
+	const fmtPrice = (p: number) => (Number.isInteger(p) ? `£${p}` : `£${p.toFixed(2)}`);
+	// Real number once there's data; keeps the "—" launch look at zero.
+	const stat = (n: number) => (n > 0 ? n.toLocaleString('en-GB') : '—');
+</script>
+
 <svelte:head>
   <title>GOTERA — Premium Ethiopian Food</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,7 +84,7 @@
         <a href="/about" class="btn-outline">About GOTERA</a>
       </div>
     </div>
-    
+
     <div class="hero-card">
       <div class="hero-card-img">
         <span class="ph-label">Hero photography</span>
@@ -40,21 +101,21 @@
 <div class="proof-strip">
   <div class="container proof-inner">
     <div class="proof-stat">
-      <span class="proof-stat-num">—</span>
+      <span class="proof-stat-num">{stat(data.stats.subscribers)}</span>
       <span class="proof-stat-label">Subscribers</span>
     </div>
     <div class="proof-divider"></div>
     <div class="proof-stat">
-      <span class="proof-stat-num">—</span>
+      <span class="proof-stat-num">{stat(data.stats.deliveries)}</span>
       <span class="proof-stat-label">Deliveries made</span>
     </div>
     <div class="proof-divider"></div>
     <div class="proof-stat">
-      <span class="proof-stat-num">—</span>
+      <span class="proof-stat-num">{stat(data.stats.cities)}</span>
       <span class="proof-stat-label">Cities covered</span>
     </div>
     <div class="proof-divider"></div>
-    
+
     <div class="proof-quote-ph">
       <span class="proof-quote-ph-text">"Subscriber quote placeholder — replace at launch."</span>
       <span class="proof-quote-ph-attr">Name · Location · GOTERA subscriber</span>
@@ -102,50 +163,18 @@
       <p>No minimum term. Cancel or pause any time.</p>
     </div>
     <div class="plans-grid">
-      <div class="plan">
-        <h3>One-Off</h3>
-        <p class="plan-desc">Try GOTERA without committing.</p>
-        <div class="price">£6.50</div>
-        <div class="freq">Per pack · 3 injera</div>
-        <ul>
-          <li>No subscription</li>
-          <li>Ideal first order</li>
-        </ul>
-        <a href="/subscribe" class="btn-outline">Order now</a>
-      </div>
-      <div class="plan">
-        <h3>Starter</h3>
-        <p class="plan-desc">Lighter monthly plan.</p>
-        <div class="price">£12</div>
-        <div class="freq">Per month · 2 packs</div>
-        <ul>
-          <li>2 packs monthly</li>
-          <li>Pause or skip anytime</li>
-        </ul>
-        <a href="/subscribe" class="btn-outline">Choose Starter</a>
-      </div>
-      <div class="plan plan-featured">
-        <h3>Regular</h3>
-        <p class="plan-desc">Our core plan.</p>
-        <div class="price">£24</div>
-        <div class="freq">Per month · 4 packs</div>
-        <ul>
-          <li>Best for regular households</li>
-          <li>Strongest monthly value</li>
-        </ul>
-        <a href="/subscribe" class="btn plan-featured-btn">Choose Regular</a>
-      </div>
-      <div class="plan">
-        <h3>Gift</h3>
-        <p class="plan-desc">Send injera to someone else.</p>
-        <div class="price">£8.50</div>
-        <div class="freq">One-time · 3 injera</div>
-        <ul>
-          <li>No subscription needed</li>
-          <li>Add pantry items</li>
-        </ul>
-        <a href="/subscribe" class="btn-outline">Send a gift</a>
-      </div>
+      {#each cards as card (card.slug)}
+        <div class="plan" class:plan-featured={card.featured}>
+          <h3>{card.title}</h3>
+          <p class="plan-desc">{card.desc}</p>
+          <div class="price">{fmtPrice(card.price)}</div>
+          <div class="freq">{card.freq}</div>
+          <ul>
+            {#each card.bullets as b}<li>{b}</li>{/each}
+          </ul>
+          <a href="/subscribe" class={card.featured ? 'btn plan-featured-btn' : 'btn-outline'}>{card.cta}</a>
+        </div>
+      {/each}
     </div>
   </div>
 </section>
@@ -209,7 +238,7 @@
       <span class="eyebrow">Gifting</span>
       <h2>Send GOTERA to someone's door.</h2>
       <p>Something they will actually use. One purchase, no subscription required.</p>
-      <a href="/subscribe" class="btn">Send a Gift — £8.50</a>
+      <a href="/subscribe" class="btn">Send a Gift{giftPrice ? ` — ${fmtPrice(giftPrice)}` : ''}</a>
     </div>
     <div class="gift-card">
       <div class="gift-card-img">
@@ -235,13 +264,13 @@
     --white: #fff;
     --max: 1180px;
   }
-  
+
   :global(*) {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
   }
-  
+
   :global(body) {
     font-family: 'Jost', sans-serif;
     background: var(--cream);

@@ -37,7 +37,9 @@ import './layout.css';
     </div>
     <div class="nav-right">
     {#if !data.user}
-      <a href="/signin" class="nav-signin">Sign In</a>
+      
+      <a href="/login" class="nav-signin">Sign In</a>
+      <a href="/signup" class="nav-signin">Sign Up</a>
       <a href="/subscribe" class="btn-outline">Plans</a>
       <a href="/subscribe" class="btn">Subscribe</a>
     {:else}

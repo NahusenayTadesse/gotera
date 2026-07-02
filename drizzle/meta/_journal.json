@@ -15,6 +15,13 @@
       "when": 1782945864873,
       "tag": "0001_spotty_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1782983817519,
+      "tag": "0002_thin_banshee",
+      "breakpoints": true
     }
   ]
 }

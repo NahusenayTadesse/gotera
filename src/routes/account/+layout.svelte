@@ -1,94 +1,108 @@
-<script>
-	import { page } from "$app/state";
+<script lang="ts">
+	import { page } from '$app/state';
+	import type { LayoutData } from './$types';
 
+	let { children, data }: { children: any; data: LayoutData } = $props();
 
-  // Structural arrays to keep the layout navigation completely DRY
-  const managementLinks = [
-    { href: '/account', label: 'Overview', iconPath: '<rect x="1" y="1" width="14" height="14" rx="1"/><path d="M1 6h14M6 6v9"/>' },
-    { href: '/account/delivery', label: 'Next Delivery', iconPath: '<path d="M8 2v5l3 2"/><circle cx="8" cy="8" r="6.5"/>' },
-    { href: '/account/history', label: 'Order History', iconPath: '<path d="M2 4h12M2 8h8M2 12h5"/>' },
-    { href: '/account/details', label: 'Your Details', iconPath: '<circle cx="8" cy="5" r="3"/><path d="M1.5 14c0-3 3-5.5 6.5-5.5s6.5 2.5 6.5 5.5"/>' }
-  ];
+	// Sidebar nav (static, already DRY).
+	const managementLinks = [
+		{ href: '/account', label: 'Overview', iconPath: '<rect x="1" y="1" width="14" height="14" rx="1"/><path d="M1 6h14M6 6v9"/>' },
+		{ href: '/account/delivery', label: 'Next Delivery', iconPath: '<path d="M8 2v5l3 2"/><circle cx="8" cy="8" r="6.5"/>' },
+		{ href: '/account/history', label: 'Order History', iconPath: '<path d="M2 4h12M2 8h8M2 12h5"/>' },
+		{ href: '/account/details', label: 'Your Details', iconPath: '<circle cx="8" cy="5" r="3"/><path d="M1.5 14c0-3 3-5.5 6.5-5.5s6.5 2.5 6.5 5.5"/>' }
+	];
+	const subscriptionLinks = [
+		{ href: '/account/change-plan', label: 'Change Plan', iconPath: '<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 3V1.5M11 3V1.5M2 7h12"/>' },
+		{ href: '/account/payment', label: 'Payment', iconPath: '<rect x="1" y="4" width="14" height="9" rx="1"/><path d="M1 8h14M5 8v5"/>' }
+	];
 
-  const subscriptionLinks = [
-    { href: '/account/change-plan', label: 'Change Plan', iconPath: '<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 3V1.5M11 3V1.5M2 7h12"/>' },
-    { href: '/account/payment', label: 'Payment', iconPath: '<rect x="1" y="4" width="14" height="9" rx="1"/><path d="M1 8h14M5 8v5"/>' }
-  ];
+	let currentPath = $derived(page.url.pathname);
 
-  let { children } = $props();
-
-  // Helper utility to strictly catch if current link is active
-  let currentPath = $derived(page.url.pathname);
+	// "£24.00 · 12 April" once the date exists, otherwise just the amount.
+	const paymentLabel = $derived(
+		data.summary
+			? data.summary.nextPaymentDate
+				? `${data.summary.nextPaymentAmount} · ${data.summary.nextPaymentDate}`
+				: data.summary.nextPaymentAmount
+			: ''
+	);
 </script>
 
 <div class="page-header">
-  <div class="container">
-    <div class="page-header-inner">
-      <div>
-        <span class="greeting">My Account</span>
-        <h1>Good to see you, Tensai.</h1>
-        <div class="header-meta">
-          <span class="header-meta-item"><strong>Regular plan</strong>4 packs monthly</span>
-          <span class="header-meta-item"><strong>Next delivery</strong>18 April</span>
-          <span class="header-meta-item"><strong>Next payment</strong>£24.00 · 12 April</span>
-        </div>
-      </div>
-      <div class="status-pill">
-        <span class="status-dot"></span>Active
-      </div>
-    </div>
-  </div>
+	<div class="container">
+		<div class="page-header-inner">
+			<div>
+				<span class="greeting">My Account</span>
+				<h1>Good to see you, {data.firstName}.</h1>
+				{#if data.summary}
+					<div class="header-meta">
+						<span class="header-meta-item">
+							<strong>{data.summary.planLabel}</strong>{data.summary.packsLabel}
+						</span>
+						{#if data.summary.nextDeliveryLabel}
+							<span class="header-meta-item">
+								<strong>Next delivery</strong>{data.summary.nextDeliveryLabel}
+							</span>
+						{/if}
+						<span class="header-meta-item">
+							<strong>Next payment</strong>{paymentLabel}
+						</span>
+					</div>
+				{/if}
+			</div>
+			{#if data.summary}
+				<div class="status-pill">
+					<span class="status-dot"></span>{data.summary.statusLabel}
+				</div>
+			{/if}
+		</div>
+	</div>
 </div>
 
 <div class="container">
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="sidebar-section">
-        <span class="sidebar-label">Manage</span>
-        <nav class="sidebar-nav">
-          {#each managementLinks as link}
-            <a href={link.href} class="sidebar-link" class:active={currentPath === link.href}>
-              <svg class="sidebar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                {@html link.iconPath}
-              </svg>
-              {link.label}
-            </a>
-          {/each}
-        </nav>
-      </div>
-
-      <div class="sidebar-divider"></div>
-
-      <div class="sidebar-section">
-        <span class="sidebar-label">Subscription</span>
-        <nav class="sidebar-nav">
-          {#each subscriptionLinks as link}
-            <a href={link.href} class="sidebar-link" class:active={currentPath === link.href}>
-              <svg class="sidebar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                {@html link.iconPath}
-              </svg>
-              {link.label}
-            </a>
-          {/each}
-        </nav>
-      </div>
-
-      <div class="sidebar-divider"></div>
-
-      <div class="sidebar-danger">
-        <a href="/account/cancel" class="sidebar-danger-link">
-          <svg class="sidebar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5">
-            <circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5M8 11v.5"/>
-          </svg>
-          Cancel subscription
-        </a>
-      </div>
-    </aside>
-
-    <main class="content">
-      {@render children?.()}
-    </main>
-  </div>
+	<div class="layout">
+		<aside class="sidebar">
+			<div class="sidebar-section">
+				<span class="sidebar-label">Manage</span>
+				<nav class="sidebar-nav">
+					{#each managementLinks as link (link.href)}
+						<a href={link.href} class="sidebar-link" class:active={currentPath === link.href}>
+							<svg class="sidebar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+								{@html link.iconPath}
+							</svg>
+							{link.label}
+						</a>
+					{/each}
+				</nav>
+			</div>
+			<div class="sidebar-divider"></div>
+			<div class="sidebar-section">
+				<span class="sidebar-label">Subscription</span>
+				<nav class="sidebar-nav">
+					{#each subscriptionLinks as link (link.href)}
+						<a href={link.href} class="sidebar-link" class:active={currentPath === link.href}>
+							<svg class="sidebar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+								{@html link.iconPath}
+							</svg>
+							{link.label}
+						</a>
+					{/each}
+				</nav>
+			</div>
+			<div class="sidebar-divider"></div>
+			<div class="sidebar-danger">
+				<a href="/account/cancel" class="sidebar-danger-link">
+					<svg class="sidebar-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5">
+						<circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5M8 11v.5"/>
+					</svg>
+					Cancel subscription
+				</a>
+			</div>
+		</aside>
+		<main class="content">
+			{@render children?.()}
+		</main>
+	</div>
 </div>
 
 <style>
