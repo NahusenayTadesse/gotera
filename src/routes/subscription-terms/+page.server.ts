@@ -28,11 +28,26 @@ const subscriptionPlans = await db
 		asc(plans.pricePence)
 	);
 
-    // Keyed by slug so the page can look up price/featured per card.
+   const displayPlans = subscriptionPlans.map((plan) => ({
+	...plan,
+	price: new Intl.NumberFormat('en-GB', {
+		style: 'currency',
+		currency: 'GBP'
+	}).format(plan.pricePence / 100),
+
+	intervalLabel:
+		plan.interval === 'monthly'
+			? 'month'
+			: plan.interval === 'bi_monthly'
+				? '2 months'
+				: 'one-off',
+
+	contents: `${plan.packs} ${plan.packs === 1 ? 'pack' : 'packs'}`
+}));
 
 
     return {
-        subscriptionPlans
+        displayPlans
    
     };
 };

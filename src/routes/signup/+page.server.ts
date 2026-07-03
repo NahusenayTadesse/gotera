@@ -54,7 +54,6 @@ export const actions: Actions = {
 		//    Requires: subscribers.plan nullable + 'pending' in the status enum.
 		try {
 			await db.insert(subscribers).values({
-				id: crypto.randomUUID(),
 				userId,
 				email,
 				fullName: name,

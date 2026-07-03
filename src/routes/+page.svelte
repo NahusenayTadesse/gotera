@@ -67,7 +67,7 @@
 </svelte:head>
 
 
-<section class="hero">
+<section class="hero hidden! lg:block!" aria-label="Hero">
   <div class="container hero-grid">
     <div>
       <span class="eyebrow">Made &amp; packed in Ethiopia</span>
@@ -94,6 +94,35 @@
         <h3>Injera</h3>
         <p>100% teff · naturally fermented · made in Ethiopia</p>
       </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="hero-mobile flex! lg:hidden!" aria-label="Hero">
+  <div class="hero__img">
+    <div class="img-ph" style="width:100%;height:100%">
+      <span class="img-ph__label">Full bleed hero photography</span>
+      <span class="img-ph__sub">Injera · warm light · portrait · 9:16</span>
+    </div>
+  </div>
+  <div class="hero__gradient"></div>
+  <div class="hero__content">
+    <div class="hero__tag">
+      <div class="hero__tag-line"></div>
+      <span>Made &amp; packed in Ethiopia</span>
+    </div>
+    <h1 class="hero__h1">Injera,<br><em>every<br>month.</em></h1>
+    <div class="hero__price-row">
+      <span class="hero__price-from">From</span>
+      <span class="hero__price-num">£12</span>
+      <span class="hero__price-note">/ month · London delivery</span>
+    </div>
+    <a href="/subscribe" class="btn btn--primary" style="margin-bottom:12px">Choose your plan</a>
+    <div class="hero__claims">
+      <span class="hero__claim">Gluten free</span>
+      <span class="hero__claim">Vegan</span>
+      <span class="hero__claim">100% teff</span>
     </div>
   </div>
 </section>
@@ -871,4 +900,137 @@
       display: none;
     }
   }
+
+
+
+
+  .hero-mobile {
+  position: relative;
+  height: 100dvh;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+
+}
+.hero__img {
+  position: absolute;
+  inset: 0;
+  background: var(--panel);
+  overflow: hidden;
+}
+.hero__img img { width: 100%; height: 100%; object-fit: cover; }
+.hero__gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70%;
+  background: linear-gradient(0deg, rgba(26,26,26,.92) 0%, rgba(26,26,26,.55) 50%, transparent 100%);
+}
+.hero__content {
+  position: relative;
+  z-index: 1;
+  padding: 0 var(--px) 36px;
+}
+.hero__tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.hero__tag-line { width: 18px; height: 1px; background: var(--copper); }
+.hero__tag span {
+  font-size: .62rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(250,248,244,.65);
+  font-weight: 500;
+}
+.hero__h1 {
+  font-family: var(--serif);
+  font-size: var(--t-hero);
+  font-style: italic;
+  font-weight: 600;
+  color: #fff;
+  line-height: .92;
+  margin-bottom: 14px;
+}
+.hero__h1 em { color: #B5622A; font-style: italic; }
+.hero__price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.hero__price-from {
+  font-size: .7rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(250,248,244,.5);
+  font-weight: 500;
+}
+.hero__price-num {
+  font-family: var(--serif);
+  font-size: 2rem;
+  color: #fff;
+  line-height: 1;
+}
+.hero__price-note { font-size: .7rem; color: rgba(250,248,244,.5); }
+.hero__claims {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.hero__claim {
+  font-size: .6rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(250,248,244,.5);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hero__claim::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--copper);
+  flex-shrink: 0;
+}
+
+/* Interior copper band hero */
+.hero-band {
+  padding: 32px var(--px) 28px;
+  text-align: center;
+}
+.hero-band--copper { background: var(--copper); }
+.hero-band--ink    { background: var(--ink); }
+.hero-band--green  { background: var(--success); }
+
+.hero-band__eyebrow {
+  display: block;
+  font-size: var(--t-micro);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.65);
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+.hero-band__title {
+  font-family: var(--serif);
+  font-size: var(--t-h1);
+  font-style: italic;
+  color: #fff;
+  margin-bottom: 6px;
+  line-height: 1;
+}
+.hero-band__sub {
+  font-size: .9rem;
+  color: rgba(255,255,255,.72);
+  line-height: 1.65;
+}
 </style>

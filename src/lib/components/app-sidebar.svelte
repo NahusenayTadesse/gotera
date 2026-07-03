@@ -33,7 +33,6 @@
 		{ title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
 		{ title: 'Orders', url: '/dashboard/orders', icon: ListOrdered },
-		{ title: 'Products', url: '/dashboard/products', icon: CookingPot },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
 		{
 			title: 'Suppliers',
@@ -113,15 +112,9 @@
 	>
 		<Sidebar.Group>
 			<Sidebar.GroupLabel>
-				<a
-					class="flex flex-row items-center justify-center gap-4"
-					href="/"
-					title="Go to Website Home Page"
-					target="_blank"
-				>
-					<img src="/logo.webp" class=" h-16 w-16" alt="Logo" />
-					<h4 class="text-center text-[16px]! text-primary">Lalo Bakery Solutions</h4>
-				</a></Sidebar.GroupLabel
+				<div class="logo-row">
+		    <a href="/" class="logo">G O T E R A</a>
+		</div></Sidebar.GroupLabel
 			>
 			<Sidebar.GroupContent class="my-4">
 				<NavMain items={navigation} />
@@ -148,8 +141,25 @@
 		</Sidebar.Group>
 	</Sidebar.Content>
 	<Sidebar.Footer class="flex flex-row bg-white dark:bg-black">
-		<Sidebar.GroupLabel>
+		<!-- <Sidebar.GroupLabel>
 			Powered By <a href="https://nahusenaytadesse.vercel.app" target="_blank" class="ml-1">NT</a>
-		</Sidebar.GroupLabel>
+		</Sidebar.GroupLabel> -->
 	</Sidebar.Footer>
 </Sidebar.Root>
+
+<style>
+.logo-row {
+		display: flex;
+		justify-content: center;
+		margin: 20px;
+	}
+
+	.logo {
+
+		   font-family: 'Cormorant Garamond', serif;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: #9A4F22;
+    font-weight: 600;
+	}
+</style>
