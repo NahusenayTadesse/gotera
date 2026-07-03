@@ -22,6 +22,27 @@
       "when": 1782983817519,
       "tag": "0002_thin_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1783080573125,
+      "tag": "0003_jazzy_moon_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1783080755524,
+      "tag": "0004_eager_diamondback",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1783081894401,
+      "tag": "0005_nervous_nuke",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,9 @@
 import type { PageServerLoad, Actions } from './$types';
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { superValidate, message, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, and, asc } from 'drizzle-orm';
+import { stripe } from '$lib/server/stripe';
 
 // Adjust these two imports to your project's paths.
 import { db } from '$lib/server/db';
@@ -10,7 +11,6 @@ import {
 	subscribers,
 	addresses,
 	subscriberAddons,
-	deliveries,
 	giftOrders,
 	addons as addonsTable,
 	plans
@@ -23,9 +23,8 @@ import {
 	type FormMessage
 } from './schema';
 
-/* ── Authoritative server-side pricing (never trust client numbers) ──
- * Plans aren't in the DB (there's no plans table), so they live here.
- * pricePence is the source of truth for the total. */
+/* PLAN_CONFIG is only used by the gift flow now (subscriptions read the plan,
+ * with its Stripe price id, straight from the DB). */
 const PLAN_CONFIG = {
 	'one-off': { pricePence: 650, packs: 1, kind: 'order' },
 	starter: { pricePence: 1200, packs: 2, kind: 'subscription', dbPlan: 'starter' },
@@ -34,23 +33,11 @@ const PLAN_CONFIG = {
 	'double-gift': { pricePence: 1500, packs: 2, kind: 'gift' }
 } as const satisfies Record<string, { pricePence: number; packs: number; kind: string; dbPlan?: string }>;
 
-/** Next Saturday (never today). Returned as a Date for the `date` column. */
-function nextSaturday(from = new Date()): Date {
-	const d = new Date(from);
-	const diff = (6 - d.getDay() + 7) % 7 || 7;
-	d.setDate(d.getDate() + diff);
-	d.setHours(0, 0, 0, 0);
-	return d;
-}
-
 /** Validate submitted addon ids against the live catalogue; return the rows + total. */
 async function resolveAddons(ids: string[]) {
 	if (ids.length === 0) return { rows: [], pence: 0, unknown: false };
 	const catalogue = await db.select().from(addonsTable);
 	const rows = catalogue.filter((a) => ids.includes(a.id));
-
-
-
 	return {
 		rows,
 		pence: rows.reduce((sum, a) => sum + a.pricePence, 0),
@@ -62,10 +49,10 @@ type PlanRow = typeof plans.$inferSelect;
 
 // DB row -> the shape your page already uses
 const toPlan = (p: PlanRow) => ({
-	id: p.slug,                // page `id` is the slug ('one-off', 'regular', …)
+	id: p.slug,
 	name: p.name,
 	sub: p.subtitle ?? '',
-	price: p.pricePence / 100, // number, so your .toFixed(2)/.toFixed(0) still work
+	price: p.pricePence / 100,
 	freq: p.freqLabel ?? '',
 	bullet: p.bullets?.[0],
 	bullet2: p.bullets?.[1],
@@ -73,34 +60,29 @@ const toPlan = (p: PlanRow) => ({
 });
 
 export const load: PageServerLoad = async () => {
-	const catalogue = await db
-		.select()
-		.from(addonsTable)
-		.orderBy(addonsTable.sortOrder);
-
+	const catalogue = await db.select().from(addonsTable).orderBy(addonsTable.sortOrder);
 	const form = await superValidate(zod4(checkoutSchema));
 
 	const rows = await db
-	.select()
-	.from(plans)
-	.where(eq(plans.active, true))
-	.orderBy(asc(plans.sortOrder));
+		.select()
+		.from(plans)
+		.where(eq(plans.active, true))
+		.orderBy(asc(plans.sortOrder));
 
-const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
-const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
+	const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
+	const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
 
-return { form,  subscriptionPlans, giftPlans, addons: catalogue,  };
-
-	
+	return { form, subscriptionPlans, giftPlans, addons: catalogue };
 };
 
 export const actions: Actions = {
 	/* ──────────────────────────────────────────────────────────────
-	 * SUBSCRIBE (insert)  — "For me" flow.
-	 * Creates/refreshes the subscriber, address, recurring add-ons and
-	 * the first delivery in one transaction.
+	 * SUBSCRIBE — "For me" flow.
+	 * Creates the subscriber (pending) + delivery address, then hands off
+	 * to Stripe Checkout. The webhook activates the subscriber, writes the
+	 * recurring add-ons and schedules the first delivery once paid.
 	 * ────────────────────────────────────────────────────────────── */
-	subscribe: async ({ request, locals }) => {
+	subscribe: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
 		if (!form.valid) return fail(400, { form });
 
@@ -110,8 +92,6 @@ export const actions: Actions = {
 			});
 		}
 
-		// Better Auth session. Adjust to however you expose it in hooks.server.ts
-		// (e.g. `const session = await locals.auth();` then session.user).
 		const user = locals.user;
 		if (!user) {
 			return message(form, { type: 'error', text: 'Please sign in to start a subscription.' } satisfies FormMessage, {
@@ -119,38 +99,44 @@ export const actions: Actions = {
 			});
 		}
 
-		const cfg = PLAN_CONFIG[form.data.plan];
-		if (cfg.kind !== 'subscription' || !('dbPlan' in cfg)) {
-			// One-off has no home in the current schema (no orders table, and
-			// subscribers.plan only allows starter|regular). See the note in chat.
+		// Resolve the plan from the DB — it carries the Stripe price id.
+		const [plan] = await db
+			.select()
+			.from(plans)
+			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
+
+		if (!plan || plan.kind !== 'subscription') {
+			return message(form, { type: 'error', text: "That plan isn't available as a subscription." } satisfies FormMessage, {
+				status: 400
+			});
+		}
+		if (!plan.stripePriceId) {
 			return message(
 				form,
-				{ type: 'error', text: 'One-off orders aren’t wired up yet — needs an `orders` table.' } satisfies FormMessage,
-				{ status: 400 }
+				{ type: 'error', text: 'This plan has no Stripe price set — add stripePriceId in the admin.' } satisfies FormMessage,
+				{ status: 500 }
 			);
 		}
 
-		const { rows: chosenAddons, pence: addonsPence, unknown } = await resolveAddons(form.data.addonIds);
+		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
 		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
 
-		const amountPence = cfg.pricePence + addonsPence;
+		// Upsert the subscriber (pending) + create the delivery address.
+		let subscriberId = '';
+		let addressId = '';
+		let stripeCustomerId: string | null = null;
 
 		try {
 			await db.transaction(async (tx) => {
-				// One subscriber per user (subscribers.userId is unique).
-				const [existing] = await tx
-					.select()
-					.from(subscribers)
-					.where(eq(subscribers.userId, user.id));
-
-				let subscriberId = existing?.id;
+				const [existing] = await tx.select().from(subscribers).where(eq(subscribers.userId, user.id));
 
 				if (existing) {
+					subscriberId = existing.id;
+					stripeCustomerId = existing.stripeCustomerId ?? null;
 					await tx
 						.update(subscribers)
 						.set({
-							plan: cfg.dbPlan,
-							status: 'active',
+							plan: plan.slug as 'starter' | 'regular',
 							marketingOptIn: form.data.marketingOptIn
 						})
 						.where(eq(subscribers.id, existing.id));
@@ -162,17 +148,16 @@ export const actions: Actions = {
 						email: user.email,
 						fullName: user.name ?? null,
 						phone: null,
-						plan: cfg.dbPlan,
-						status: 'active',
+						plan: plan.slug as 'starter' | 'regular',
+						status: 'pending', // requires 'pending' in the status enum
 						marketingOptIn: form.data.marketingOptIn
 					});
 				}
 
-				// Address (marked primary).
-				const addressId = crypto.randomUUID();
+				addressId = crypto.randomUUID();
 				await tx.insert(addresses).values({
 					id: addressId,
-					subscriberId: subscriberId!,
+					subscriberId,
 					label: form.data.addressLabel || null,
 					line1: form.data.line1,
 					line2: form.data.line2 || null,
@@ -180,48 +165,54 @@ export const actions: Actions = {
 					postcode: form.data.postcode,
 					isPrimary: true
 				});
-
-				// Recurring add-ons: replace the set.
-				await tx.delete(subscriberAddons).where(eq(subscriberAddons.subscriberId, subscriberId!));
-				if (chosenAddons.length) {
-					await tx.insert(subscriberAddons).values(
-						chosenAddons.map((a) => ({
-							subscriberId: subscriberId!,
-							addonId: a.id,
-							quantity: 1
-						}))
-					);
-				}
-
-				// First delivery.
-				await tx.insert(deliveries).values({
-					subscriberId: subscriberId!,
-					addressId,
-					scheduledDate: nextSaturday(),
-					status: 'scheduled'
-				});
 			});
 		} catch (e) {
-			console.error('subscribe failed', e);
+			console.error('subscribe (db) failed', e);
 			return message(form, { type: 'error', text: 'Something went wrong starting your subscription.' } satisfies FormMessage, {
 				status: 500
 			});
 		}
 
-		// ─── Stripe hook point ───
-		// Here is where you'd create a Stripe Checkout session for `amountPence`
-		// and `throw redirect(303, session.url)` instead of returning a message.
-		return message(form, {
-			type: 'success',
-			text: `Subscription started — first delivery next Saturday. First payment £${(amountPence / 100).toFixed(2)}.`
-		} satisfies FormMessage);
+		// Add-ons need their own recurring Stripe prices to be billed. Any without
+		// a stripePriceId are still attached (via metadata) but won't be charged.
+		const addonLineItems = chosenAddons
+			.map((a) => (a as { stripePriceId?: string | null }).stripePriceId)
+			.filter((price): price is string => !!price)
+			.map((price) => ({ price, quantity: 1 }));
+
+		const lineItems = [{ price: plan.stripePriceId, quantity: 1 }, ...addonLineItems];
+
+		let session;
+		try {
+			session = await stripe.checkout.sessions.create({
+				mode: 'subscription',
+				customer: stripeCustomerId ?? undefined,
+				customer_email: stripeCustomerId ? undefined : user.email,
+				line_items: lineItems,
+				success_url: `${url.origin}/account?welcome=1`,
+				cancel_url: `${url.origin}/subscribe`,
+				metadata: {
+					subscriberId,
+					addressId,
+					addonIds: chosenAddons.map((a) => a.id).join(',')
+				},
+				subscription_data: {
+					metadata: { subscriberId }
+				}
+			});
+		} catch (e) {
+			console.error('stripe checkout create failed', e);
+			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, {
+				status: 500
+			});
+		}
+
+		// redirect() throws, so nothing runs after it.
+		redirect(303, session.url!);
 	},
 
 	/* ──────────────────────────────────────────────────────────────
-	 * GIFT (insert)  — "As a gift" flow. Guests allowed.
-	 * NOTE: giftOrders has no add-on relation, so selected add-ons are
-	 * priced into the total but NOT persisted. Add a giftOrderAddons
-	 * table (or a JSON column) if you need to save them.
+	 * GIFT — "As a gift" flow. Guests allowed. (No Stripe yet — placeholder.)
 	 * ────────────────────────────────────────────────────────────── */
 	gift: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
@@ -267,16 +258,13 @@ export const actions: Actions = {
 			});
 		}
 
-		// ─── Stripe hook point (PaymentIntent) ───
 		return message(form, {
 			type: 'success',
 			text: `Gift order created — £${(amountPence / 100).toFixed(2)}. Next: payment.`
 		} satisfies FormMessage);
 	},
 
-	/* ──────────────────────────────────────────────────────────────
-	 * UPDATE (manage page — no UI on this page)
-	 * ────────────────────────────────────────────────────────────── */
+	/* UPDATE (manage page — no UI on this page) */
 	updateSubscription: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(updateSubscriptionSchema));
 		if (!form.valid) return fail(400, { form });
@@ -289,7 +277,6 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx) => {
-				// Ownership check baked into the WHERE clause.
 				const [owned] = await tx
 					.select()
 					.from(subscribers)
@@ -322,9 +309,7 @@ export const actions: Actions = {
 		return message(form, { type: 'success', text: 'Subscription updated.' } satisfies FormMessage);
 	},
 
-	/* ──────────────────────────────────────────────────────────────
-	 * CANCEL ("delete" = soft cancel; correct for Stripe-backed subs)
-	 * ────────────────────────────────────────────────────────────── */
+	/* CANCEL (soft cancel) */
 	cancelSubscription: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(cancelSubscriptionSchema));
 		if (!form.valid) return fail(400, { form });
@@ -333,8 +318,7 @@ export const actions: Actions = {
 		if (!user) return fail(401, { form });
 
 		try {
-			// ─── Stripe hook point ───
-			// Cancel the Stripe subscription (owned.stripeSubscriptionId) first.
+			// Stripe: also stripe.subscriptions.update(id, { cancel_at_period_end: true })
 			await db
 				.update(subscribers)
 				.set({ status: 'cancelled' })

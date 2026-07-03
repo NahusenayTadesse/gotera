@@ -8,7 +8,8 @@ import {
 	json,
 	date,
 	unique,
-	index
+	index,
+	timestamp
 } from 'drizzle-orm/mysql-core';
 import { secureFields, user } from './auth.schema';
 
@@ -29,10 +30,11 @@ export const subscribers = mysqlTable(
 		fullName: varchar('full_name', { length: 255 }),
 		phone: varchar('phone', { length: 32 }),
 		plan: mysqlEnum('plan', ['starter', 'regular']),
-		status: mysqlEnum('status', ['active', 'paused', 'cancelled']).default('active').notNull(),
+		status: mysqlEnum('status', ['pending','active', 'paused', 'cancelled']).default('active').notNull(),
 		marketingOptIn: boolean('marketing_opt_in').default(true).notNull(),
 		stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),
 		stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }).unique(),
+		currentPeriodEnd: timestamp('current_period_end', { fsp: 3 }),
 		...secureFields
 	},
 	(table) => [index('idx_subscribers_stripe_customer_id').on(table.stripeCustomerId)]
@@ -70,6 +72,7 @@ export const addons = mysqlTable('addons', {
 	pricePence: int('price_pence').notNull(),
 	imageUrl: text('image_url'),
 	sortOrder: int('sort_order').default(0),
+	stripePriceId: varchar('stripe_price_id', { length: 255 }),
 	...secureFields
 });
 
@@ -213,6 +216,7 @@ export const plans = mysqlTable(
 		// how the checkout treats it: order = one-off (needs orders table),
 		// subscription = recurring, gift = giftOrders row
 		kind: mysqlEnum('kind', ['order', 'subscription', 'gift']).notNull(),
+		stripePriceId: varchar('stripe_price_id', { length: 255 }), // Stripe Price ID for checkout
 
 		// ── Admin controls ──
 		active: boolean('active').default(true).notNull(), // hide without deleting
