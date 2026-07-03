@@ -11,12 +11,20 @@ export const auth = betterAuth({
 	secret: env.BETTER_AUTH_SECRET,
 	database: drizzleAdapter(db, { provider: 'mysql' }),
 	emailAndPassword: { enabled: true },
+	socialProviders: {
+        google: { 
+			prompt: "select_account", 
+            clientId: env.CLIENTID as string, 
+            clientSecret: env.CLIENTSECRET as string, 
+        }, 
+		
+    },
 	plugins: [
-		magicLink({
-			sendMagicLink: async ({ email, token, url, metadata }, ctx) => {
-				// send email to user
-			}
-		}),
+		// magicLink({
+		// 	sendMagicLink: async ({ email, token, url, metadata }, ctx) => {
+		// 		// send email to user
+		// 	}
+		// }),
 		sveltekitCookies(getRequestEvent) // make sure this is the last plugin in the array
 	]
 });
