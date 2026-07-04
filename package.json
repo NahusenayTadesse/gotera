@@ -66,6 +66,7 @@
 		"jspdf": "^4.2.1",
 		"jspdf-autotable": "^5.0.8",
 		"mode-watcher": "^1.1.0",
+		"nodemailer": "^9.0.3",
 		"paneforge": "^1.0.2",
 		"papaparse": "^5.5.4",
 		"pluralize": "^8.0.0",

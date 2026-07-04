@@ -20,11 +20,11 @@ export const auth = betterAuth({
 		
     },
 	plugins: [
-		// magicLink({
-		// 	sendMagicLink: async ({ email, token, url, metadata }, ctx) => {
-		// 		// send email to user
-		// 	}
-		// }),
+		magicLink({
+			sendMagicLink: async ({ email, token, url, metadata }, ctx) => {
+				
+			}
+		}),
 		sveltekitCookies(getRequestEvent) // make sure this is the last plugin in the array
 	]
 });
