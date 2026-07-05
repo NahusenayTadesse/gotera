@@ -43,15 +43,15 @@
 
 	// Merge copy + DB facts; drop any card whose plan is missing/inactive.
 	const cards = $derived(
-		CARD_ORDER.filter((slug) => data.plans[slug]).map((slug) => ({
+		CARD_ORDER.filter((slug) => data?.plans[slug]).map((slug) => ({
 			slug,
 			...CARD_COPY[slug],
-			price: data.plans[slug].price,
-			featured: data.plans[slug].featured
+			price: data?.plans[slug].price,
+			featured: data?.plans[slug].featured
 		}))
 	);
 
-	const giftPrice = $derived(data.plans['single-gift']?.price);
+	const giftPrice = $derived(data?.plans['single-gift']?.price);
 
 	// £12 not £12.00, but £6.50 keeps its pence.
 	const fmtPrice = (p: number) => (Number.isInteger(p) ? `£${p}` : `£${p.toFixed(2)}`);
@@ -130,17 +130,17 @@
 <div class="proof-strip">
   <div class="container proof-inner">
     <div class="proof-stat">
-      <span class="proof-stat-num">{stat(data.stats.subscribers)}</span>
+      <span class="proof-stat-num">{stat(data?.stats?.subscribers)}</span>
       <span class="proof-stat-label">Subscribers</span>
     </div>
     <div class="proof-divider"></div>
     <div class="proof-stat">
-      <span class="proof-stat-num">{stat(data.stats.deliveries)}</span>
+      <span class="proof-stat-num">{stat(data?.stats?.deliveries)}</span>
       <span class="proof-stat-label">Deliveries made</span>
     </div>
     <div class="proof-divider"></div>
     <div class="proof-stat">
-      <span class="proof-stat-num">{stat(data.stats.cities)}</span>
+      <span class="proof-stat-num">{stat(data?.stats?.cities)}</span>
       <span class="proof-stat-label">Cities covered</span>
     </div>
     <div class="proof-divider"></div>
@@ -199,7 +199,7 @@
           <div class="price">{fmtPrice(card.price)}</div>
           <div class="freq">{card.freq}</div>
           <ul>
-            {#each card.bullets as b}<li>{b}</li>{/each}
+            {#each card?.bullets as b}<li>{b}</li>{/each}
           </ul>
           <a href="/subscribe" class={card.featured ? 'btn plan-featured-btn' : 'btn-outline'}>{card.cta}</a>
         </div>

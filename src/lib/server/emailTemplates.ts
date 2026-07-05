@@ -20,7 +20,7 @@ const C = {
 };
 
 const SITE = 'https://gotera.co.uk';
-const LOGO_URL = 'https://gotera.co.uk/logo192.png';
+const LOGO_URL = 'https://gotera.co.uk/logo192.jpg';
 const SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 const SERIF = "Georgia, 'Times New Roman', serif";
 
@@ -269,6 +269,30 @@ export const customerChangeEmail = (url: string) => ({
 			${button('Confirm change', url)}
 			${fallbackLink(url)}
 			<p style="margin:20px 0 0; color:${C.taupe}; font-size:13px;">If you didn't request this, ignore this email — nothing changes.</p>
+		`
+	})
+});
+
+export const customerGiftReceived = (data: {
+	buyerName: string;
+	recipientName: string;
+	amountLabel: string;
+}) => ({
+	subject: `Your GOTERA gift for ${data.recipientName} is confirmed`,
+	html: layout({
+		heading: 'Gift confirmed',
+		preheader: `Your gift for ${data.recipientName} is on its way to being prepared.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.buyerName},</p>
+			<p style="margin:0 0 6px;">Thank you — your gift is confirmed and paid. We'll prepare real injera, made in Ethiopia, and get it ready for ${data.recipientName}.</p>
+			${detailTable(
+				detailRow('Recipient', data.recipientName) +
+					detailRow('Total paid', data.amountLabel) +
+					detailRow('Status', 'Confirmed')
+			)}
+			<p style="margin:0 0 6px;">We'll follow up with delivery details. There's nothing more you need to do.</p>
+			${button('Send another gift', `${SITE}/subscribe`)}
+			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Questions about this gift? Just reply to this email.</p>
 		`
 	})
 });

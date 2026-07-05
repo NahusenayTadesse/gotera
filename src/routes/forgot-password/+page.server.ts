@@ -1,60 +1,40 @@
-import { fail } from '@sveltejs/kit';
-import { eq, and } from 'drizzle-orm';
-
-import { db } from '$lib/server/db';
-import * as table from '$lib/server/db/schema';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { message, superValidate, setError } from 'sveltekit-superforms';
+import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { ForgotPasswordSchema } from './schema';
-import { redirect } from 'sveltekit-flash-message/server';
-import { sendResetPasswordEmail } from '$lib/server/email';
-import { generatePassword } from '$lib/global.svelte';
-import { updateUserPassword } from '$lib/server/updatePassword';
+import { auth } from '$lib/server/auth';
+import { magicLinkSchema, type MagicLinkMessage } from './schema';
 
 export const load: PageServerLoad = async (event) => {
-	if (event.locals.user) {
-		return redirect(302, '/dashboard');
-	}
-	const form = await superValidate(zod4(ForgotPasswordSchema));
-
+	if (event.locals.user) redirect(302, '/account');
+	const form = await superValidate(zod4(magicLinkSchema));
 	return { form };
 };
 
 export const actions: Actions = {
-	forgotPassword: async (event) => {
-		const form = await superValidate(event.request, zod4(ForgotPasswordSchema));
-		if (!form.valid) {
-			return fail(400, { form });
-		}
+	default: async ({ request }) => {
+		const form = await superValidate(request, zod4(magicLinkSchema));
+		if (!form.valid) return fail(400, { form });
+
 		try {
-			const { email } = form.data;
-
-			const result = await db
-				.select()
-				.from(table.user)
-				.where(and(eq(table.user.email, email), eq(table.user.isActive, true)))
-				.then((rows) => rows[0]);
-
-			if (!result) {
-				setError(form, 'email', 'Account with Email not Found');
-
-				return message(form, { type: 'error', text: 'Account with Email not Found' });
-			}
-
-			const password = generatePassword();
-
-			await updateUserPassword(result.id, password);
-
-			await sendResetPasswordEmail(email, password);
-
-			return message(form, { type: 'success', text: 'Reset Password sent Successfully!' });
-		} catch (error) {
-			console.error(error?.message);
-			return message(form, {
-				type: 'error',
-				text: 'An error occurred while sending reset password email ' + error?.message
+			// Triggers the magicLink plugin's sendMagicLink -> your GOTERA email.
+			// (Endpoint: POST /sign-in/magic-link)
+			await auth.api.signInMagicLink({
+				body: {
+					email: form.data.email,
+					callbackURL: '/account' // where the link lands them after sign-in
+				},
+				headers: request.headers
 			});
+		} catch (e) {
+			// Swallow the error on purpose: revealing "no such account" lets people
+			// probe which emails are registered. Always report the same success.
+			console.error('magic link send failed', e);
 		}
+
+		return message(form, {
+			type: 'success',
+			text: 'If that email has an account, a sign-in link is on its way.'
+		} satisfies MagicLinkMessage);
 	}
 };

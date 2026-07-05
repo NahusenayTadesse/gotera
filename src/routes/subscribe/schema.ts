@@ -23,8 +23,7 @@ export const FREQUENCIES = ['Monthly'] as const;
 const ALL_PLANS = [...SUB_PLANS, ...GIFT_PLANS] as const;
 
 /** Flash message shape returned via superforms `message()` and shown by sonner. */
-export type FormMessage = { type: 'success' | 'error' | 'warning'; text: string };
-
+export type FormMessage = { type: 'success' | 'error' | 'redirect'; text?: string; url?: string };
 export const checkoutSchema = z
 	.object({
 		recipient: z.enum(RECIPIENTS).default('me'),

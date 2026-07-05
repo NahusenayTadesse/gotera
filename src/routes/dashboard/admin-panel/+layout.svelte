@@ -9,7 +9,6 @@
 	let { children } = $props();
 
 	let userManagement = [
-		{ name: 'Payment Methods', href: '/dashboard/admin-panel/payment-methods' },
 		{ name: 'Users', href: '/dashboard/admin-panel/users' },
 		{ name: 'Roles', href: '/dashboard/admin-panel/roles' }
 	];

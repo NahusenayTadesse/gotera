@@ -23,19 +23,12 @@ import {
 	type FormMessage
 } from './schema';
 
-/* PLAN_CONFIG is only used by the gift flow now (subscriptions read the plan,
- * with its Stripe price id, straight from the DB). */
-const PLAN_CONFIG = {
-	'one-off': { pricePence: 650, packs: 1, kind: 'order' },
-	starter: { pricePence: 1200, packs: 2, kind: 'subscription', dbPlan: 'starter' },
-	regular: { pricePence: 2400, packs: 4, kind: 'subscription', dbPlan: 'regular' },
-	'single-gift': { pricePence: 850, packs: 1, kind: 'gift' },
-	'double-gift': { pricePence: 1500, packs: 2, kind: 'gift' }
-} as const satisfies Record<string, { pricePence: number; packs: number; kind: string; dbPlan?: string }>;
+type PlanRow = typeof plans.$inferSelect;
+type AddonRow = typeof addonsTable.$inferSelect;
 
 /** Validate submitted addon ids against the live catalogue; return the rows + total. */
 async function resolveAddons(ids: string[]) {
-	if (ids.length === 0) return { rows: [], pence: 0, unknown: false };
+	if (ids.length === 0) return { rows: [] as AddonRow[], pence: 0, unknown: false };
 	const catalogue = await db.select().from(addonsTable);
 	const rows = catalogue.filter((a) => ids.includes(a.id));
 	return {
@@ -45,7 +38,62 @@ async function resolveAddons(ids: string[]) {
 	};
 }
 
-type PlanRow = typeof plans.$inferSelect;
+/** Add-on line items — only those with a Stripe price. NOTE: for mode:'payment'
+ *  these must be ONE-TIME prices in Stripe (a recurring price mixed into a
+ *  payment session will be rejected). */
+function addonLineItems(rows: AddonRow[]) {
+	return rows
+		.map((a) => (a as { stripePriceId?: string | null }).stripePriceId)
+		.filter((price): price is string => !!price)
+		.map((price) => ({ price, quantity: 1 }));
+}
+
+/**
+ * One-time order (one-off for self, or a gift). Records a giftOrders row and
+ * returns a Stripe Checkout URL (mode: 'payment'). The caller redirects.
+ * The webhook marks the order paid on checkout.session.completed (mode payment).
+ */
+async function oneTimeCheckout(opts: {
+	plan: PlanRow;
+	addons: AddonRow[];
+	buyerEmail: string;
+	buyerName: string | null;
+	recipientName: string;
+	recipientAddress: { line1: string; line2: string | null; city: string; postcode: string };
+	giftMessage: string | null;
+	durationMonths: number;
+	successUrl: string;
+	cancelUrl: string;
+}): Promise<string> {
+	const giftOrderId = crypto.randomUUID();
+
+	await db.insert(giftOrders).values({
+		id: giftOrderId,
+		buyerEmail: opts.buyerEmail,
+		buyerName: opts.buyerName,
+		recipientName: opts.recipientName,
+		recipientAddress: opts.recipientAddress,
+		giftMessage: opts.giftMessage,
+		durationMonths: opts.durationMonths,
+		status: 'pending'
+	});
+
+	const session = await stripe.checkout.sessions.create({
+		mode: 'payment',
+		customer_email: opts.buyerEmail,
+		line_items: [{ price: opts.plan.stripePriceId!, quantity: 1 }, ...addonLineItems(opts.addons)],
+		success_url: opts.successUrl,
+		cancel_url: opts.cancelUrl,
+		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
+		metadata: {
+			giftOrderId,
+			kind: opts.plan.kind,
+			addonIds: opts.addons.map((a) => a.id).join(',')
+		}
+	});
+
+	return session.url!;
+}
 
 // DB row -> the shape your page already uses
 const toPlan = (p: PlanRow) => ({
@@ -77,36 +125,35 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	/* ──────────────────────────────────────────────────────────────
-	 * SUBSCRIBE — "For me" flow.
-	 * Creates the subscriber (pending) + delivery address, then hands off
-	 * to Stripe Checkout. The webhook activates the subscriber, writes the
-	 * recurring add-ons and schedules the first delivery once paid.
+	 * SUBSCRIBE — "For me" flow. Handles both:
+	 *   - subscription plans (starter/regular)  → mode: 'subscription'
+	 *   - one-off (kind 'order')                → mode: 'payment'
 	 * ────────────────────────────────────────────────────────────── */
 	subscribe: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'me') {
-			return message(form, { type: 'error', text: 'Wrong flow for a subscription.' } satisfies FormMessage, {
+			return message(form, { type: 'error', text: 'Wrong flow for this order.' } satisfies FormMessage, {
 				status: 400
 			});
 		}
 
 		const user = locals.user;
 		if (!user) {
-			return message(form, { type: 'error', text: 'Please sign in to start a subscription.' } satisfies FormMessage, {
+			return message(form, { type: 'error', text: 'Please sign in to order.' } satisfies FormMessage, {
 				status: 401
 			});
 		}
 
-		// Resolve the plan from the DB — it carries the Stripe price id.
 		const [plan] = await db
 			.select()
 			.from(plans)
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
 
-		if (!plan || plan.kind !== 'subscription') {
-			return message(form, { type: 'error', text: "That plan isn't available as a subscription." } satisfies FormMessage, {
+		// "me" flow allows subscriptions and one-off orders.
+		if (!plan || (plan.kind !== 'subscription' && plan.kind !== 'order')) {
+			return message(form, { type: 'error', text: "That plan isn't available here." } satisfies FormMessage, {
 				status: 400
 			});
 		}
@@ -121,7 +168,39 @@ export const actions: Actions = {
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
 		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
 
-		// Upsert the subscriber (pending) + create the delivery address.
+		const recipientAddress = {
+			line1: form.data.line1,
+			line2: form.data.line2 || null,
+			city: form.data.city || 'London',
+			postcode: form.data.postcode
+		};
+
+		/* ── One-off: one-time payment, recorded as a self-order ── */
+		if (plan.kind === 'order') {
+			let checkoutUrl: string;
+			try {
+				checkoutUrl = await oneTimeCheckout({
+					plan,
+					addons: chosenAddons,
+					buyerEmail: user.email,
+					buyerName: user.name ?? null,
+					recipientName: user.name ?? 'Me',
+					recipientAddress,
+					giftMessage: null,
+					durationMonths: 1,
+					successUrl: `${url.origin}/account?welcome=1`,
+					cancelUrl: `${url.origin}/subscribe`
+				});
+			} catch (e) {
+				console.error('one-off checkout failed', e);
+				return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, {
+					status: 500
+				});
+			}
+			redirect(303, checkoutUrl);
+		}
+
+		/* ── Subscription: subscriber (pending) + address, then subscription checkout ── */
 		let subscriberId = '';
 		let addressId = '';
 		let stripeCustomerId: string | null = null;
@@ -149,7 +228,7 @@ export const actions: Actions = {
 						fullName: user.name ?? null,
 						phone: null,
 						plan: plan.slug as 'starter' | 'regular',
-						status: 'pending', // requires 'pending' in the status enum
+						status: 'pending',
 						marketingOptIn: form.data.marketingOptIn
 					});
 				}
@@ -159,10 +238,7 @@ export const actions: Actions = {
 					id: addressId,
 					subscriberId,
 					label: form.data.addressLabel || null,
-					line1: form.data.line1,
-					line2: form.data.line2 || null,
-					city: form.data.city || 'London',
-					postcode: form.data.postcode,
+					...recipientAddress,
 					isPrimary: true
 				});
 			});
@@ -173,22 +249,13 @@ export const actions: Actions = {
 			});
 		}
 
-		// Add-ons need their own recurring Stripe prices to be billed. Any without
-		// a stripePriceId are still attached (via metadata) but won't be charged.
-		const addonLineItems = chosenAddons
-			.map((a) => (a as { stripePriceId?: string | null }).stripePriceId)
-			.filter((price): price is string => !!price)
-			.map((price) => ({ price, quantity: 1 }));
-
-		const lineItems = [{ price: plan.stripePriceId, quantity: 1 }, ...addonLineItems];
-
 		let session;
 		try {
 			session = await stripe.checkout.sessions.create({
 				mode: 'subscription',
 				customer: stripeCustomerId ?? undefined,
 				customer_email: stripeCustomerId ? undefined : user.email,
-				line_items: lineItems,
+				line_items: [{ price: plan.stripePriceId, quantity: 1 }, ...addonLineItems(chosenAddons)],
 				success_url: `${url.origin}/account?welcome=1`,
 				cancel_url: `${url.origin}/subscribe`,
 				metadata: {
@@ -207,14 +274,13 @@ export const actions: Actions = {
 			});
 		}
 
-		// redirect() throws, so nothing runs after it.
 		redirect(303, session.url!);
 	},
 
 	/* ──────────────────────────────────────────────────────────────
-	 * GIFT — "As a gift" flow. Guests allowed. (No Stripe yet — placeholder.)
+	 * GIFT — "As a gift" flow. One-time payment; redirects to Stripe.
 	 * ────────────────────────────────────────────────────────────── */
-	gift: async ({ request, locals }) => {
+	gift: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
 		if (!form.valid) return fail(400, { form });
 
@@ -222,22 +288,33 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: 'Wrong flow for a gift.' } satisfies FormMessage, { status: 400 });
 		}
 
-		const cfg = PLAN_CONFIG[form.data.plan];
-		if (cfg.kind !== 'gift') return setError(form, 'plan', 'Choose a gift pack.');
+		const [plan] = await db
+			.select()
+			.from(plans)
+			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
+
+		if (!plan || plan.kind !== 'gift') return setError(form, 'plan', 'Choose a gift pack.');
+		if (!plan.stripePriceId) {
+			return message(
+				form,
+				{ type: 'error', text: 'This gift has no Stripe price set — add stripePriceId in the admin.' } satisfies FormMessage,
+				{ status: 500 }
+			);
+		}
 
 		const buyerEmail = form.data.buyerEmail ?? locals.user?.email;
 		if (!buyerEmail) {
 			return setError(form, 'buyerEmail', 'Enter your email so we can send the confirmation.');
 		}
 
-		const { pence: addonsPence, unknown } = await resolveAddons(form.data.addonIds);
+		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
 		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
 
-		const amountPence = cfg.pricePence + addonsPence;
-
+		let checkoutUrl: string;
 		try {
-			await db.insert(giftOrders).values({
-				id: crypto.randomUUID(),
+			checkoutUrl = await oneTimeCheckout({
+				plan,
+				addons: chosenAddons,
 				buyerEmail,
 				buyerName: form.data.buyerName || locals.user?.name || null,
 				recipientName: form.data.recipientName,
@@ -249,19 +326,18 @@ export const actions: Actions = {
 				},
 				giftMessage: form.data.giftMessage || null,
 				durationMonths: form.data.durationMonths,
-				status: 'pending'
+				// Gift buyers may be guests — don't land them on /account (it redirects to login).
+				successUrl: `${url.origin}/?checkout=gift-success`,
+				cancelUrl: `${url.origin}/subscribe`
 			});
 		} catch (e) {
-			console.error('gift failed', e);
-			return message(form, { type: 'error', text: 'Something went wrong creating the gift order.' } satisfies FormMessage, {
+			console.error('gift checkout failed', e);
+			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, {
 				status: 500
 			});
 		}
 
-		return message(form, {
-			type: 'success',
-			text: `Gift order created — £${(amountPence / 100).toFixed(2)}. Next: payment.`
-		} satisfies FormMessage);
+		redirect(303, checkoutUrl);
 	},
 
 	/* UPDATE (manage page — no UI on this page) */

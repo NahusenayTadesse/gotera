@@ -19,7 +19,7 @@ export const planFormSchema = z
 		packs: z.number().int().min(1).default(1),
 		kind: z.enum(['order', 'subscription', 'gift']).default('subscription'),
 		active: z.boolean().default(true),
-		sortOrder: z.number().int().default(0)
+		sortOrder: z.number().int().default(0),
 	})
 	// Keeps the table honest against subscribers.plan (enum: starter | regular).
 	.refine((v) => v.kind !== 'subscription' || v.slug === 'starter' || v.slug === 'regular', {

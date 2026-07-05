@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import Logout from '$lib/forms/Logout.svelte';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children: any; data: LayoutData } = $props();
@@ -97,6 +98,7 @@
 					</svg>
 					Cancel subscription
 				</a>
+        <Logout />
 			</div>
 		</aside>
 		<main class="content">

@@ -124,7 +124,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <span>© 2026 GOTERA Foods Ltd.</span>
+        <span>© {new Date().getFullYear()} GOTERA Foods Ltd.</span>
         <span>Made &amp; packed in Ethiopia · Distributed in the UK</span>
       </div>
     </div>

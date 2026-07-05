@@ -11,6 +11,7 @@ import { plans, subscribers, deliveries, addresses } from '$lib/server/db/schema
 const HOMEPAGE_SLUGS = ['one-off', 'starter', 'regular', 'single-gift'];
 
 export const load: PageServerLoad = async () => {
+	try {
 	const [planRows, subsRes, delsRes, cityRes] = await Promise.all([
 		db
 			.select({
@@ -40,4 +41,21 @@ export const load: PageServerLoad = async () => {
 			cities: Number(cityRes[0]?.n ?? 0)
 		}
 	};
+	} catch (err) {
+		console.error('Error loading homepage data:', err);
+	}
+};
+
+
+import type { Actions } from "./$types";
+import { auth } from "$lib/server/auth";
+import { redirect } from 'sveltekit-flash-message/server';
+
+export const actions: Actions = {
+	logout: async (event) => {
+		await auth.api.signOut({
+			headers: event.request.headers
+		});
+		redirect('/login', { type: 'success', message: 'Logout Successful' }, event.cookies);
+	}
 };

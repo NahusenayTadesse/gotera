@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
-import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT, ADMIN_EMAIL } from '$env/static/private';
-import * as t from './email-templates';
+import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT } from '$env/static/private';
+import * as t from './emailTemplates';
 
 const port = Number(SMTP_PORT);
 
@@ -89,5 +89,13 @@ export const sendMagicLink = (to: string, url: string) => {
 
 export const sendChangeEmail = (to: string, url: string) => {
 	const { subject, html } = t.customerChangeEmail(url);
+	return sendEmail(to, subject, html);
+};
+
+export const sendGiftReceived = (
+	to: string,
+	data: { buyerName: string; recipientName: string; amountLabel: string }
+) => {
+	const { subject, html } = t.customerGiftReceived(data);
 	return sendEmail(to, subject, html);
 };

@@ -32,24 +32,15 @@
 	const navigation = [
 		{ title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
-		{ title: 'Orders', url: '/dashboard/orders', icon: ListOrdered },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
-		{
-			title: 'Suppliers',
-			url: '/dashboard/suppliers',
-			icon: Building2
-		},
+
 		{
 			title: 'Deliveries',
 			url: '/dashboard/deliveries',
 			icon: Truck
 		},
 		
-		{
-			title: 'Testimonials  ',
-			url: '/dashboard/testimonials',
-			icon: Star
-		},
+
 
 
 		{

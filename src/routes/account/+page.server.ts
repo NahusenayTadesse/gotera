@@ -13,6 +13,7 @@ import {
 	deliveryAddons,
 	addons as addonsTable
 } from '$lib/server/db/schema';
+import { auth } from '$lib/server/auth';
 
 // Cut-off is derived (no field on deliveries). Change the rule/offset to match ops.
 const CUTOFF_DAYS = 4;
@@ -181,5 +182,10 @@ export const actions: Actions = {
 		}
 
 		return { message: `${addon.name} added to your next delivery.` };
+	},
+	logout: async (event) => {
+		await auth.api.signOut({
+			headers: event.request.headers
+		});
 	}
 };

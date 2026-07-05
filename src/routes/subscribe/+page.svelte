@@ -29,8 +29,8 @@
 	// 	{ id: 'single-gift', name: 'Single Pack', sub: '3 injera. A proper introduction.', price: 8.5, freq: 'One-time' },
 	// 	{ id: 'double-gift', name: 'Double Pack', sub: '6 injera. Pairs well with add-ons.', price: 15.0, freq: 'One-time' }
 	// ];
-     const subscriptionPlans = $derived(data.subscriptionPlans);
-	 const giftPlans = $derived(data.giftPlans);
+     const subscriptionPlans = $derived(data?.subscriptionPlans);
+	 const giftPlans = $derived(data?.giftPlans);
 	function selectRecipient(who: 'me' | 'gift') {
 		$form.recipient = who;
 		$form.plan = who === 'me' ? 'regular' : 'single-gift';
@@ -43,7 +43,7 @@
 	}
 
 	// data.addons comes from the DB catalogue (pricePence). Convert to pounds for display.
-	const activeAddons = $derived(data.addons.filter((a) => $form.addonIds.includes(a.id)));
+	const activeAddons = $derived(data?.addons.filter((a) => $form.addonIds.includes(a.id)));
 	const addonsTotal = $derived(activeAddons.reduce((sum, a) => sum + a.pricePence / 100, 0));
 
 	const currentPlanDetails = $derived(
@@ -173,7 +173,7 @@
 				</div>
 				<div class="step-body">
 					<div class="addons-grid">
-						{#each data.addons as item (item.id)}
+						{#each data?.addons as item (item.id)}
 							<button type="button" class="{$form.addonIds.includes(item.id) ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
 								<div class="addon-img">
 									<span class="ph-label">{item.name} · product photo</span>

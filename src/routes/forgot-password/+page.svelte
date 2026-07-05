@@ -1,35 +1,32 @@
 <script lang="ts">
-	import { authClient } from '$lib/auth-client';
+	import { superForm } from 'sveltekit-superforms';
 	import { Loader2, AlertCircle, CheckCircle2 } from '@lucide/svelte';
+	import type { PageData } from './$types';
 
-	let email = $state('');
-	let isLoading = $state(false);
+	let { data }: { data: PageData } = $props();
+
+	let submitted = $state(false);
+	let sentTo = $state('');
 	let errorMessage = $state('');
-	let isSuccess = $state(false);
 
-	async function handleSubmit(e: SubmitEvent) {
-		e.preventDefault();
-		isLoading = true;
-		errorMessage = '';
-		isSuccess = false;
-
-		const { error } = await authClient.requestPasswordReset({
-			email,
-			// Make sure this points exactly to your reset page route
-			redirectTo: '/reset-password'
-		});
-
-		isLoading = false;
-		if (error) {
-			errorMessage = error.message || 'Something went wrong. Please try again.';
-		} else {
-			isSuccess = true;
+	const { form, errors, enhance, submitting } = superForm(data.form, {
+		resetForm: false,
+		onUpdated({ form }) {
+			const m = form.message as { type: string; text: string } | undefined;
+			if (!m) return;
+			if (m.type === 'success') {
+				sentTo = form.data.email;
+				submitted = true;
+				errorMessage = '';
+			} else {
+				errorMessage = m.text;
+			}
 		}
-	}
+	});
 </script>
 
 <svelte:head>
-	<title>Reset your password — GOTERA</title>
+	<title>Sign-in link — GOTERA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -41,29 +38,29 @@
 <div class="auth-wrap">
 	<div class="auth-card">
 		<div class="logo-row">
-		    <a href="/" class="logo">G O T E R A</a>
+			<a href="/" class="logo">G O T E R A</a>
 		</div>
 
-		{#if isSuccess}
+		{#if submitted}
 			<div class="sent">
 				<CheckCircle2 class="sent-icon" />
 				<span class="eyebrow">Check your inbox</span>
 				<h1>Link sent.</h1>
 				<p>
-					We've sent a password reset link to <strong>{email}</strong>. Follow it to set a new
-					password.
+					If <strong>{sentTo}</strong> has an account, we've sent a secure sign-in link. Follow it to
+					get back in — then you can set a new password from your account.
 				</p>
 				<a href="/login" class="btn btn-full">Back to sign in</a>
 				<p class="fine">Didn't get it? Check spam, or give it a minute to arrive.</p>
 			</div>
 		{:else}
 			<div class="brand">
-				<span class="eyebrow">Reset password</span>
-				<h1>Forgot password?</h1>
-				<p class="sub">Enter your email and we'll send you a link to reset it.</p>
+				<span class="eyebrow">Forgot password?</span>
+				<h1>Get back in.</h1>
+				<p class="sub">Enter your email and we'll send a secure sign-in link — no password needed.</p>
 			</div>
 
-			<form onsubmit={handleSubmit} class="form">
+			<form method="POST" use:enhance class="form">
 				{#if errorMessage}
 					<div class="alert">
 						<AlertCircle class="alert-icon" />
@@ -75,22 +72,24 @@
 					<label class="field-label" for="email">Email address</label>
 					<input
 						id="email"
+						name="email"
 						type="email"
 						class="input"
 						autocomplete="email"
 						placeholder="name@example.com"
-						bind:value={email}
+						bind:value={$form.email}
 						required
-						disabled={isLoading}
+						disabled={$submitting}
 					/>
+					{#if $errors.email}<span class="form-error">{$errors.email}</span>{/if}
 				</div>
 
-				<button type="submit" class="btn btn-full" disabled={isLoading}>
-					{#if isLoading}
+				<button type="submit" class="btn btn-full" disabled={$submitting}>
+					{#if $submitting}
 						<Loader2 class="spin btn-icon" />
 						Sending link…
 					{:else}
-						Send reset link
+						Send sign-in link
 					{/if}
 				</button>
 
@@ -126,29 +125,20 @@
 		border: 1px solid var(--border);
 		padding: 40px 36px;
 	}
-.logo-row {
+
+	.logo-row {
 		display: flex;
 		justify-content: center;
 		margin-bottom: 20px;
 	}
 
 	.logo {
-
-		   font-family: 'Cormorant Garamond', serif;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: #9A4F22;
-    font-weight: 600;
-	}
-
-	.logo-dark {
-		display: none;
-	}
-	:global(.dark) .logo-light {
-		display: none;
-	}
-	:global(.dark) .logo-dark {
-		display: block;
+		font-family: 'Cormorant Garamond', serif;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: #9a4f22;
+		font-weight: 600;
+		text-decoration: none;
 	}
 
 	.eyebrow {
@@ -219,6 +209,13 @@
 	.input:disabled {
 		background: var(--panel);
 		color: var(--taupe);
+	}
+
+	.form-error {
+		display: block;
+		margin-top: 6px;
+		font-size: 0.76rem;
+		color: #b23a2a;
 	}
 
 	.alert {

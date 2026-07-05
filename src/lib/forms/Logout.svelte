@@ -9,14 +9,16 @@
 
 	let deleting = $state(false);
 
+	let { action = "/dashboard/?/logout" } = $props();
+
 	import { toast } from 'svelte-sonner';
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Trigger class={buttonVariants({ variant: 'destructive' })}
+	<Dialog.Trigger class="{buttonVariants({ variant: 'ghost' })} text-destructive p-0 pl-3!"
 		><LogOut /> LogOut
 	</Dialog.Trigger>
-	<Dialog.Content class="w-full">
+	<Dialog.Content class="w-full p-4!">
 		<Dialog.Header>
 			<Dialog.Title>Logout</Dialog.Title>
 		</Dialog.Header>
@@ -25,7 +27,7 @@
 			<div class="flex flex-row items-center justify-center gap-4 pt-4">
 				<form
 					method="post"
-					action="/dashboard/?/logout"
+					{action}
 					use:enhance={() => {
 						deleting = true; // 1. start spinner
 
@@ -41,7 +43,7 @@
 						};
 					}}
 				>
-					<Button type="submit" disabled={deleting} variant="destructive" size="lg">
+					<Button type="submit" disabled={deleting} class="px-2!" variant="destructive" size="lg">
 						{#if deleting}
 							<LoadingBtn name="Logging Out" />
 						{:else}
@@ -50,7 +52,7 @@
 					</Button>
 				</form>
 
-				<Button onclick={() => (open = false)} size="lg">Cancel</Button>
+				<Button onclick={() => (open = false)} class="px-2!" size="lg">Cancel</Button>
 			</div>
 		</ScrollArea>
 	</Dialog.Content>
