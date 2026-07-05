@@ -53,6 +53,7 @@
 	);
 
 	const finalTotalPrice = $derived((currentPlanDetails?.price ?? 0) + addonsTotal);
+
 </script>
 
 <div class="page-head">
@@ -127,10 +128,16 @@
 									<p class="plan-sub">{plan.sub}</p>
 									<div class="price">£{plan.price.toFixed(0)}</div>
 									<div class="freq">{plan.freq}</div>
-									<ul>
-										<li>{plan.bullet}</li>
-										{#if plan.bullet2}<li>{plan.bullet2}</li>{/if}
-									</ul>
+									
+			<ul>				
+
+    {#if plan.bullet && plan.bullet.trim() !== ""}
+        {#each JSON.parse(plan.bullet) as item}
+            <li>{item}</li>
+        {/each}
+    {/if}
+
+</ul>
 								</button>
 							{/each}
 						</div>

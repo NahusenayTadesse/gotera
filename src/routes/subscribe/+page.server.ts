@@ -102,8 +102,8 @@ const toPlan = (p: PlanRow) => ({
 	sub: p.subtitle ?? '',
 	price: p.pricePence / 100,
 	freq: p.freqLabel ?? '',
-	bullet: p.bullets?.[0],
-	bullet2: p.bullets?.[1],
+	bullet: p.bullets,
+	
 	featured: p.featured
 });
 
