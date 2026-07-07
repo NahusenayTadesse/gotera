@@ -1,13 +1,19 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
 	import { toast } from 'svelte-sonner';
-	import type { PageData } from './$types';
+	import type { PageData, Snapshot } from './$types';
+	import Signup from '$lib/forms/Signup.svelte';
+	import Login from '$lib/forms/Login.svelte';
+	import DialogComp from '$lib/formComponents/DialogComp.svelte';
+	import { UserCheck, UserRoundPlus } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { data }: { data: PageData } = $props();
 
-	const { form, errors, enhance, submitting } = superForm(data.form, {
-		dataType: 'json', // required: addonIds is an array
+	const { form, errors, enhance, submitting, capture, restore } = superForm(data.form, {
+		dataType: 'json',
 		resetForm: false,
+		invalidateAll: false,
 		onUpdated({ form }) {
 			const m = form.message as { type: 'success' | 'error' | 'warning'; text: string } | undefined;
 			if (!m) return;
@@ -16,15 +22,33 @@
 			else toast.warning(m.text);
 		}
 	});
+	export const snapshot: Snapshot = { capture, restore };
 
-	// ── Dynamic data (shared, unchanged) ──
+	// ── Dynamic data ──
 	const subscriptionPlans = $derived(data?.subscriptionPlans ?? []);
 	const giftPlans = $derived(data?.giftPlans ?? []);
+
+	// ── Mode availability ──
+	const hasSubscriptions = $derived(subscriptionPlans.length > 0);
+	const hasGifts = $derived(giftPlans.length > 0);
+	const bothModes = $derived(hasSubscriptions && hasGifts);
+	const onlyMode = $derived(
+		hasSubscriptions && !hasGifts ? 'me' : hasGifts && !hasSubscriptions ? 'gift' : null
+	);
 
 	function selectRecipient(who: 'me' | 'gift') {
 		$form.recipient = who;
 		$form.plan = who === 'me' ? 'regular' : 'single-gift';
 	}
+
+	// If only one mode exists, auto-select it so the flow has a valid recipient/plan
+	// and we can hide the choice entirely.
+	$effect(() => {
+		if (onlyMode && $form.recipient !== onlyMode) {
+			selectRecipient(onlyMode);
+		}
+	});
+
 	function toggleAddon(id: string) {
 		$form.addonIds = $form.addonIds.includes(id)
 			? $form.addonIds.filter((x) => x !== id)
@@ -40,7 +64,6 @@
 	);
 	const finalTotalPrice = $derived((currentPlanDetails?.price ?? 0) + addonsTotal);
 
-	// Preview prices for the wizard "who" step
 	const mePrice = $derived(
 		subscriptionPlans.find((p) => p.id === 'regular')?.price ??
 			subscriptionPlans[subscriptionPlans.length - 1]?.price ??
@@ -48,14 +71,19 @@
 	);
 	const giftFromPrice = $derived(giftPlans.length ? Math.min(...giftPlans.map((p) => p.price)) : 8.5);
 
-	// ── Wizard state (mobile only — design layer, no form-data changes) ──
+	// ── Wizard state ──
 	type StepId = 'who' | 'plan' | 'extras' | 'details' | 'review';
-	const STEPS: StepId[] = ['who', 'plan', 'extras', 'details', 'review'];
+	// Drop the 'who' step when only one mode is available.
+	const STEPS = $derived<StepId[]>(
+		bothModes
+			? ['who', 'plan', 'extras', 'details', 'review']
+			: ['plan', 'extras', 'details', 'review']
+	);
 	let stepIdx = $state(0);
 	let animating = $state(false);
 	let stepError = $state<string | null>(null);
 
-	const step = $derived(STEPS[stepIdx]);
+	const step = $derived(STEPS[Math.min(stepIdx, STEPS.length - 1)]);
 	const progress = $derived(((stepIdx + 1) / STEPS.length) * 100);
 
 	function next() {
@@ -129,6 +157,9 @@
 					: 'Continue'
 				: 'Continue'
 	);
+
+	let loginOpen = $state(false);
+	let signupOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -141,7 +172,6 @@
 </svelte:head>
 
 <!-- ═══════════════════════ MOBILE: wizard ═══════════════════════ -->
-<!-- Always rendered; CSS media query decides whether it's shown. -->
 <div class="sub-page mobile-view">
 	<div class="sub-bg">
 		<div class="sub-plan-hero">
@@ -355,9 +385,19 @@
 
 		<div class="sub-cta">
 			{#if step === 'review'}
-				<button type="submit" formaction={$form.recipient === 'me' ? '?/subscribe' : '?/gift'} class="sub-cta__btn" disabled={$submitting}>
+				<button type="submit" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' ? '?/subscribe' : '?/gift'} class="sub-cta__btn" disabled={$submitting && !data?.user}>
 					{ctaLabel}
 				</button>
+				{#if !data?.user}
+					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
+						<DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
+							<Login data={data?.loginForm} callBack="/subscribe" onSuccess={() => (loginOpen = false)} />
+						</DialogComp>
+						<DialogComp variant="default" title="Register if you don't have an account" IconComp={UserRoundPlus} bind:open={signupOpen}>
+							<Signup data={data?.signupForm} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
+						</DialogComp>
+					</div>
+				{/if}
 			{:else}
 				<button type="button" class="sub-cta__btn" onclick={handleCta}>{ctaLabel}</button>
 			{/if}
@@ -366,7 +406,6 @@
 </div>
 
 <!-- ═══════════════════════ DESKTOP: stacked page ═══════════════════════ -->
-<!-- Always rendered; CSS media query decides whether it's shown. -->
 <div class="desktop-view">
 	<div class="page-head">
 		<div class="container">
@@ -379,27 +418,29 @@
 	<main class="wrap">
 		<form class="container layout" method="POST" use:enhance>
 			<div class="steps">
-				<div class="step">
-					<div class="step-head"><span class="step-num">01</span><h2>Who is this for?</h2></div>
-					<div class="step-body">
-						<div class="choice-grid">
-							<button type="button" class="choice" class:active={$form.recipient === 'me'} onclick={() => selectRecipient('me')}>
-								<h3>For me</h3>
-								<p>Monthly subscription. Manage from your account.</p>
-								<span class="choice-tag">Monthly subscription</span>
-							</button>
-							<button type="button" class="choice" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
-								<h3>As a gift</h3>
-								<p>One-time order. Different address. No subscription.</p>
-								<span class="choice-tag">One-time · From £8.50</span>
-							</button>
+				{#if bothModes}
+					<div class="step">
+						<div class="step-head"><span class="step-num">01</span><h2>Who is this for?</h2></div>
+						<div class="step-body">
+							<div class="choice-grid">
+								<button type="button" class="choice" class:active={$form.recipient === 'me'} onclick={() => selectRecipient('me')}>
+									<h3>For me</h3>
+									<p>Monthly subscription. Manage from your account.</p>
+									<span class="choice-tag">Monthly subscription</span>
+								</button>
+								<button type="button" class="choice" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
+									<h3>As a gift</h3>
+									<p>One-time order. Different address. No subscription.</p>
+									<span class="choice-tag">One-time · From £8.50</span>
+								</button>
+							</div>
 						</div>
 					</div>
-				</div>
+				{/if}
 
 				{#if $form.recipient === 'gift'}
 					<div class="step gift-step">
-						<div class="step-head"><span class="step-num">—</span><h2>Sending as a gift?</h2></div>
+						<div class="step-head"><span class="step-num">{bothModes ? '02' : '01'}</span><h2>Sending as a gift?</h2></div>
 						<div class="step-body">
 							<span class="gift-label">No subscription required</span>
 							<div class="gift-grid">
@@ -417,7 +458,7 @@
 					</div>
 				{:else}
 					<div class="step">
-						<div class="step-head"><span class="step-num">02</span><h2>Choose your plan.</h2></div>
+						<div class="step-head"><span class="step-num">{bothModes ? '02' : '01'}</span><h2>Choose your plan.</h2></div>
 						<div class="step-body">
 							<div class="plans-grid">
 								{#each subscriptionPlans as plan (plan.id)}
@@ -442,7 +483,7 @@
 				{/if}
 
 				<div class="step">
-					<div class="step-head"><span class="step-num">03</span><h2>Delivery.</h2></div>
+					<div class="step-head"><span class="step-num">{bothModes ? '03' : '02'}</span><h2>Delivery.</h2></div>
 					<div class="step-body">
 						<div class="delivery-grid">
 							<div class="field-box">
@@ -460,7 +501,7 @@
 				</div>
 
 				<div class="step">
-					<div class="step-head"><span class="step-num">04</span><h2>Add to your order.</h2></div>
+					<div class="step-head"><span class="step-num">{bothModes ? '04' : '03'}</span><h2>Add to your order.</h2></div>
 					<div class="step-body">
 						<div class="addons-grid">
 							{#each data?.addons as item (item.id)}
@@ -482,7 +523,7 @@
 				</div>
 
 				<div class="step">
-					<div class="step-head"><span class="step-num">05</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
+					<div class="step-head"><span class="step-num">{bothModes ? '05' : '04'}</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
 					<div class="step-body">
 						{#if $form.recipient === 'gift'}
 							<div class="detail-grid">
@@ -585,9 +626,18 @@
 					</div>
 					<div class="sum-actions">
 						{#if $form.recipient === 'me'}
-							<button type="submit" formaction="?/subscribe" class="btn btn-full" disabled={$submitting}>{$submitting ? 'Starting…' : 'Start Subscription'}</button>
+							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : 'Start Subscription'}</Button>
 						{:else}
-							<button type="submit" formaction="?/gift" class="btn btn-full" disabled={$submitting}>{$submitting ? 'Processing…' : 'Continue as Gift'}</button>
+							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
+						{/if}
+
+						{#if !data?.user}
+							<DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
+								<Login data={data?.loginForm} callBack="/subscribe" onSuccess={() => (loginOpen = false)} />
+							</DialogComp>
+							<DialogComp variant="default" title="Register if you don't have an account" IconComp={UserRoundPlus} bind:open={signupOpen}>
+								<Signup data={data?.signupForm} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
+							</DialogComp>
 						{/if}
 					</div>
 					<p class="sum-note">Pause, skip, or cancel any time from your account.</p>
@@ -614,7 +664,7 @@
 	.sub-progress { height: 2px; background: rgba(255,255,255,.08); flex-shrink: 0; }
 	.sub-progress__fill { height: 100%; background: #9a4f22; transition: width .4s cubic-bezier(.4,0,.2,1); }
 	.sub-card-wrap { flex-shrink: 0; position: relative; display: block; }
-	.sub-card { background: #faf8f4; border-top: 2px solid #9a4f22; max-height: 72dvh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; transition: opacity .18s ease, transform .18s ease; }
+	.sub-card { background: #faf8f4; border-top: 2px solid #9a4f22; -webkit-overflow-scrolling: touch; transition: opacity .18s ease, transform .18s ease; }
 	.sub-card.animating { opacity: 0; transform: translateY(12px); }
 	.sub-card__head { padding: 22px 20px 14px; position: sticky; top: 0; background: #faf8f4; z-index: 1; border-bottom: 1px solid #e8e4e0; }
 	.sub-card__title { font-family: 'Cormorant Garamond', serif; font-size: 1.55rem; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 2px; line-height: 1.1; }
@@ -779,8 +829,6 @@
 	.trust-attr { font-size: .64rem; text-transform: uppercase; letter-spacing: .12em; color: rgba(122,116,110,.5); font-weight: 500; }
 
 	/* ═══════════ RESPONSIVE VIEW TOGGLE (CSS-only, no JS) ═══════════ */
-	/* Kept at the end of the stylesheet + !important so it always wins the */
-	/* cascade over .sub-page's own `display: flex`, regardless of source order. */
 	.mobile-view { display: flex !important; }
 	.desktop-view { display: none !important; }
 	@media (min-width: 921px) {

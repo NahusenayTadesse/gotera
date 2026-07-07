@@ -87,8 +87,9 @@
 
     <div class="hero-card">
       <div class="hero-card-img">
-        <span class="ph-label">Hero photography</span>
-        <span class="ph-sub">Warm light · injera texture · 4:3</span>
+        <!-- <span class="ph-label">Hero photography</span>
+        <span class="ph-sub">Warm light · injera texture · 4:3</span> -->
+        <img src="/hero.jpeg" alt="GOTERA injera" style="width:100%;height:100%;object-fit:cover;object-position:center" />
       </div>
       <div class="hero-card-body">
         <h3>Injera</h3>
@@ -102,8 +103,10 @@
 <section class="hero-mobile flex! lg:hidden!" aria-label="Hero">
   <div class="hero__img">
     <div class="img-ph" style="width:100%;height:100%">
-      <span class="img-ph__label">Full bleed hero photography</span>
-      <span class="img-ph__sub">Injera · warm light · portrait · 9:16</span>
+      <!-- <span class="img-ph__label">Full bleed hero photography</span>
+      <span class="img-ph__sub">Injera · warm light · portrait · 9:16</span> -->
+
+      <img src="/hero.jpeg" alt="GOTERA injera" style="width:100%;height:100%;object-fit:cover;object-position:center" />
     </div>
   </div>
   <div class="hero__gradient"></div>
@@ -205,7 +208,6 @@
         </div>
       {/each}
     </div>
-  </div>
 </section>
 
 <section class="origin">

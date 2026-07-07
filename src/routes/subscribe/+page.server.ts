@@ -4,6 +4,8 @@ import { superValidate, message, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, and, asc } from 'drizzle-orm';
 import { stripe } from '$lib/server/stripe';
+import { loginSchema, addUser } from '$lib/ZodSchema';
+
 
 // Adjust these two imports to your project's paths.
 import { db } from '$lib/server/db';
@@ -110,6 +112,8 @@ const toPlan = (p: PlanRow) => ({
 export const load: PageServerLoad = async () => {
 	const catalogue = await db.select().from(addonsTable).orderBy(addonsTable.sortOrder);
 	const form = await superValidate(zod4(checkoutSchema));
+	const loginForm = await superValidate(zod4(loginSchema));
+	const signupForm = await superValidate(zod4(addUser));
 
 	const rows = await db
 		.select()
@@ -120,7 +124,7 @@ export const load: PageServerLoad = async () => {
 	const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
 	const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
 
-	return { form, subscriptionPlans, giftPlans, addons: catalogue };
+	return { form, subscriptionPlans, giftPlans, addons: catalogue, loginForm, signupForm};
 };
 
 export const actions: Actions = {

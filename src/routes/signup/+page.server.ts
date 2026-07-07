@@ -1,5 +1,5 @@
 import type { PageServerLoad, Actions } from './$types';
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { superValidate, message, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { APIError } from 'better-auth/api';
@@ -11,7 +11,13 @@ import { subscribers } from '$lib/server/db/schema';
 
 import { signupSchema, type SignupMessage } from './schema';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) {
+		redirect(
+			303,
+			`/auth/signup?redirectTo=${encodeURIComponent(url.pathname + url.search)}`
+		);
+	}
 	return { form: await superValidate(zod4(signupSchema)) };
 };
 

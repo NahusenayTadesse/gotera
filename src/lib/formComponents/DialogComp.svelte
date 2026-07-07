@@ -13,6 +13,7 @@
 		children,
 		variant,
 		IconComp,
+		open = $bindable(),
 
 		class: className = ''
 	}: {
@@ -21,13 +22,15 @@
 		variant: ButtonVariant;
 		IconComp?: Component<IconProps>;
 		class?: string;
+		open?: boolean;
 	} = $props();
+
 </script>
 
-<Dialog.Root>
-	<Dialog.Trigger class="w-auto border-0">
+<Dialog.Root bind:open>
+	<Dialog.Trigger class="w-full border-0">
 		{#snippet child({ props })}
-			<Button size="sm" class="border-0" {variant} {...props}>
+			<Button class="border-0" {variant} {...props}>
 				{#if variant === 'destructive'}
 					<Trash />
 				{/if}
