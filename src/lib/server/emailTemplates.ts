@@ -296,3 +296,31 @@ export const customerGiftReceived = (data: {
 		`
 	})
 });
+
+export const adminTest = () => ({
+	subject: 'GOTERA Admin Email Test',
+	html: layout({
+		heading: 'Email Test',
+		preheader: 'Your email system is working.',
+		body: `
+			<p style="margin:0 0 14px;">
+				Hello,
+			</p>
+
+			<p style="margin:0 0 14px;">
+				If you're reading this, the GOTERA email system is working correctly.
+			</p>
+
+			${detailTable(
+				detailRow('Status', 'Success') +
+				detailRow('Server Time', new Date().toUTCString())
+			)}
+
+			<p style="margin:18px 0 0;">
+				This email was sent from the application using Nodemailer.
+			</p>
+
+			${button('Open GOTERA', `${SITE}`)}
+		`
+	})
+});

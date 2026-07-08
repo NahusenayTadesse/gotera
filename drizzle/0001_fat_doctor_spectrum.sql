@@ -1,0 +1,2 @@
+ALTER TABLE `deliveries` ADD `subscription_id` varchar(36) NOT NULL;--> statement-breakpoint
+ALTER TABLE `deliveries` ADD CONSTRAINT `deliveries_subscription_id_subscriptions_id_fk` FOREIGN KEY (`subscription_id`) REFERENCES `subscriptions`(`id`) ON DELETE cascade ON UPDATE no action;

@@ -1,1 +1,0 @@
-ALTER TABLE `subscribers` MODIFY COLUMN `status` enum('pending','active','paused','cancelled') NOT NULL DEFAULT 'active';

@@ -5,19 +5,17 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, and, asc } from 'drizzle-orm';
 import { stripe } from '$lib/server/stripe';
 import { loginSchema, addUser } from '$lib/ZodSchema';
-
-
-// Adjust these two imports to your project's paths.
+// Adjust these to your project's paths.
 import { db } from '$lib/server/db';
 import {
 	subscribers,
+	subscriptions,
+	subscriptionAddons,
 	addresses,
-	subscriberAddons,
 	giftOrders,
 	addons as addonsTable,
 	plans
 } from '$lib/server/db/schema';
-
 import {
 	checkoutSchema,
 	updateSubscriptionSchema,
@@ -28,21 +26,15 @@ import {
 type PlanRow = typeof plans.$inferSelect;
 type AddonRow = typeof addonsTable.$inferSelect;
 
-/** Validate submitted addon ids against the live catalogue; return the rows + total. */
 async function resolveAddons(ids: string[]) {
 	if (ids.length === 0) return { rows: [] as AddonRow[], pence: 0, unknown: false };
 	const catalogue = await db.select().from(addonsTable);
 	const rows = catalogue.filter((a) => ids.includes(a.id));
-	return {
-		rows,
-		pence: rows.reduce((sum, a) => sum + a.pricePence, 0),
-		unknown: rows.length !== ids.length
-	};
+	return { rows, pence: rows.reduce((sum, a) => sum + a.pricePence, 0), unknown: rows.length !== ids.length };
 }
 
-/** Add-on line items — only those with a Stripe price. NOTE: for mode:'payment'
- *  these must be ONE-TIME prices in Stripe (a recurring price mixed into a
- *  payment session will be rejected). */
+/** Add-on line items — only those with a Stripe price. For mode:'payment' these
+ *  must be ONE-TIME prices in Stripe. */
 function addonLineItems(rows: AddonRow[]) {
 	return rows
 		.map((a) => (a as { stripePriceId?: string | null }).stripePriceId)
@@ -50,11 +42,29 @@ function addonLineItems(rows: AddonRow[]) {
 		.map((price) => ({ price, quantity: 1 }));
 }
 
-/**
- * One-time order (one-off for self, or a gift). Records a giftOrders row and
- * returns a Stripe Checkout URL (mode: 'payment'). The caller redirects.
- * The webhook marks the order paid on checkout.session.completed (mode payment).
- */
+/** Ensure a subscriber (the person) row exists; return its id + stripe customer. */
+async function ensureSubscriber(
+	tx: typeof db,
+	user: { id: string; email: string; name?: string | null },
+	marketingOptIn: boolean
+) {
+	const [existing] = await tx.select().from(subscribers).where(eq(subscribers.userId, user.id));
+	if (existing) {
+		return { id: existing.id, stripeCustomerId: existing.stripeCustomerId ?? null };
+	}
+	const id = crypto.randomUUID();
+	await tx.insert(subscribers).values({
+		id,
+		userId: user.id,
+		email: user.email,
+		fullName: user.name ?? null,
+		phone: null,
+		marketingOptIn
+	});
+	return { id, stripeCustomerId: null };
+}
+
+/** One-time order (one-off for self, or a gift). */
 async function oneTimeCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
@@ -68,7 +78,6 @@ async function oneTimeCheckout(opts: {
 	cancelUrl: string;
 }): Promise<string> {
 	const giftOrderId = crypto.randomUUID();
-
 	await db.insert(giftOrders).values({
 		id: giftOrderId,
 		buyerEmail: opts.buyerEmail,
@@ -79,7 +88,6 @@ async function oneTimeCheckout(opts: {
 		durationMonths: opts.durationMonths,
 		status: 'pending'
 	});
-
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',
 		customer_email: opts.buyerEmail,
@@ -87,17 +95,11 @@ async function oneTimeCheckout(opts: {
 		success_url: opts.successUrl,
 		cancel_url: opts.cancelUrl,
 		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
-		metadata: {
-			giftOrderId,
-			kind: opts.plan.kind,
-			addonIds: opts.addons.map((a) => a.id).join(',')
-		}
+		metadata: { giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(',') }
 	});
-
 	return session.url!;
 }
 
-// DB row -> the shape your page already uses
 const toPlan = (p: PlanRow) => ({
 	id: p.slug,
 	name: p.name,
@@ -105,7 +107,6 @@ const toPlan = (p: PlanRow) => ({
 	price: p.pricePence / 100,
 	freq: p.freqLabel ?? '',
 	bullet: p.bullets,
-	
 	featured: p.featured
 });
 
@@ -115,58 +116,35 @@ export const load: PageServerLoad = async () => {
 	const loginForm = await superValidate(zod4(loginSchema));
 	const signupForm = await superValidate(zod4(addUser));
 
-	const rows = await db
-		.select()
-		.from(plans)
-		.where(eq(plans.active, true))
-		.orderBy(asc(plans.sortOrder));
-
+	const rows = await db.select().from(plans).where(eq(plans.active, true)).orderBy(asc(plans.sortOrder));
 	const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
 	const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
-
-	return { form, subscriptionPlans, giftPlans, addons: catalogue, loginForm, signupForm};
+	return { form, subscriptionPlans, giftPlans, addons: catalogue, loginForm, signupForm };
 };
 
 export const actions: Actions = {
-	/* ──────────────────────────────────────────────────────────────
-	 * SUBSCRIBE — "For me" flow. Handles both:
-	 *   - subscription plans (starter/regular)  → mode: 'subscription'
-	 *   - one-off (kind 'order')                → mode: 'payment'
-	 * ────────────────────────────────────────────────────────────── */
+	/* SUBSCRIBE — "For me": subscription plans OR one-off (kind 'order'). */
 	subscribe: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'me') {
-			return message(form, { type: 'error', text: 'Wrong flow for this order.' } satisfies FormMessage, {
-				status: 400
-			});
+			return message(form, { type: 'error', text: 'Wrong flow for this order.' } satisfies FormMessage, { status: 400 });
 		}
-
 		const user = locals.user;
 		if (!user) {
-			return message(form, { type: 'error', text: 'Please sign in to order.' } satisfies FormMessage, {
-				status: 401
-			});
+			return message(form, { type: 'error', text: 'Please sign in to order.' } satisfies FormMessage, { status: 401 });
 		}
 
 		const [plan] = await db
 			.select()
 			.from(plans)
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
-
-		// "me" flow allows subscriptions and one-off orders.
 		if (!plan || (plan.kind !== 'subscription' && plan.kind !== 'order')) {
-			return message(form, { type: 'error', text: "That plan isn't available here." } satisfies FormMessage, {
-				status: 400
-			});
+			return message(form, { type: 'error', text: "That plan isn't available here." } satisfies FormMessage, { status: 400 });
 		}
 		if (!plan.stripePriceId) {
-			return message(
-				form,
-				{ type: 'error', text: 'This plan has no Stripe price set — add stripePriceId in the admin.' } satisfies FormMessage,
-				{ status: 500 }
-			);
+			return message(form, { type: 'error', text: 'This plan has no Stripe price set.' } satisfies FormMessage, { status: 500 });
 		}
 
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
@@ -179,7 +157,7 @@ export const actions: Actions = {
 			postcode: form.data.postcode
 		};
 
-		/* ── One-off: one-time payment, recorded as a self-order ── */
+		// One-off → one-time payment
 		if (plan.kind === 'order') {
 			let checkoutUrl: string;
 			try {
@@ -197,60 +175,47 @@ export const actions: Actions = {
 				});
 			} catch (e) {
 				console.error('one-off checkout failed', e);
-				return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, {
-					status: 500
-				});
+				return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
 			}
 			redirect(303, checkoutUrl);
 		}
 
-		/* ── Subscription: subscriber (pending) + address, then subscription checkout ── */
+		/* Subscription: person + address + a NEW subscriptions row (pending). */
 		let subscriberId = '';
 		let addressId = '';
+		let subscriptionId = '';
 		let stripeCustomerId: string | null = null;
 
 		try {
 			await db.transaction(async (tx) => {
-				const [existing] = await tx.select().from(subscribers).where(eq(subscribers.userId, user.id));
+				const sub = await ensureSubscriber(tx as typeof db, user, form.data.marketingOptIn);
+				subscriberId = sub.id;
+				stripeCustomerId = sub.stripeCustomerId;
 
-				if (existing) {
-					subscriberId = existing.id;
-					stripeCustomerId = existing.stripeCustomerId ?? null;
-					await tx
-						.update(subscribers)
-						.set({
-							plan: plan.slug as 'starter' | 'regular',
-							marketingOptIn: form.data.marketingOptIn
-						})
-						.where(eq(subscribers.id, existing.id));
-				} else {
-					subscriberId = crypto.randomUUID();
-					await tx.insert(subscribers).values({
-						id: subscriberId,
-						userId: user.id,
-						email: user.email,
-						fullName: user.name ?? null,
-						phone: null,
-						plan: plan.slug as 'starter' | 'regular',
-						status: 'pending',
-						marketingOptIn: form.data.marketingOptIn
-					});
-				}
-
+				// One address per subscription (home vs office ship independently).
 				addressId = crypto.randomUUID();
 				await tx.insert(addresses).values({
 					id: addressId,
 					subscriberId,
 					label: form.data.addressLabel || null,
 					...recipientAddress,
-					isPrimary: true
+					isPrimary: false
+				});
+
+				// A fresh subscription row for THIS plan.
+				subscriptionId = crypto.randomUUID();
+				await tx.insert(subscriptions).values({
+					id: subscriptionId,
+					subscriberId,
+					planId: plan.id,
+					addressId,
+					status: 'pending',
+					cancelAtPeriodEnd: false
 				});
 			});
 		} catch (e) {
 			console.error('subscribe (db) failed', e);
-			return message(form, { type: 'error', text: 'Something went wrong starting your subscription.' } satisfies FormMessage, {
-				status: 500
-			});
+			return message(form, { type: 'error', text: 'Something went wrong starting your subscription.' } satisfies FormMessage, { status: 500 });
 		}
 
 		let session;
@@ -262,28 +227,20 @@ export const actions: Actions = {
 				line_items: [{ price: plan.stripePriceId, quantity: 1 }, ...addonLineItems(chosenAddons)],
 				success_url: `${url.origin}/account?welcome=1`,
 				cancel_url: `${url.origin}/subscribe`,
-				metadata: {
-					subscriberId,
-					addressId,
-					addonIds: chosenAddons.map((a) => a.id).join(',')
-				},
-				subscription_data: {
-					metadata: { subscriberId }
-				}
+				// The webhook keys everything off subscriptionId now.
+				metadata: {     subscriberId,subscriptionId, addressId, addonIds: chosenAddons.map((a) => a.id).join(',') },
+				subscription_data: { metadata: { subscriptionId } }
 			});
+			console.log("Metadata:", session.metadata);
 		} catch (e) {
 			console.error('stripe checkout create failed', e);
-			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, {
-				status: 500
-			});
+			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
 		}
 
 		redirect(303, session.url!);
 	},
 
-	/* ──────────────────────────────────────────────────────────────
-	 * GIFT — "As a gift" flow. One-time payment; redirects to Stripe.
-	 * ────────────────────────────────────────────────────────────── */
+	/* GIFT — one-time payment; redirects to Stripe. */
 	gift: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
 		if (!form.valid) return fail(400, { form });
@@ -291,25 +248,17 @@ export const actions: Actions = {
 		if (form.data.recipient !== 'gift') {
 			return message(form, { type: 'error', text: 'Wrong flow for a gift.' } satisfies FormMessage, { status: 400 });
 		}
-
 		const [plan] = await db
 			.select()
 			.from(plans)
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
-
 		if (!plan || plan.kind !== 'gift') return setError(form, 'plan', 'Choose a gift pack.');
 		if (!plan.stripePriceId) {
-			return message(
-				form,
-				{ type: 'error', text: 'This gift has no Stripe price set — add stripePriceId in the admin.' } satisfies FormMessage,
-				{ status: 500 }
-			);
+			return message(form, { type: 'error', text: 'This gift has no Stripe price set.' } satisfies FormMessage, { status: 500 });
 		}
 
 		const buyerEmail = form.data.buyerEmail ?? locals.user?.email;
-		if (!buyerEmail) {
-			return setError(form, 'buyerEmail', 'Enter your email so we can send the confirmation.');
-		}
+		if (!buyerEmail) return setError(form, 'buyerEmail', 'Enter your email so we can send the confirmation.');
 
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
 		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
@@ -330,25 +279,20 @@ export const actions: Actions = {
 				},
 				giftMessage: form.data.giftMessage || null,
 				durationMonths: form.data.durationMonths,
-				// Gift buyers may be guests — don't land them on /account (it redirects to login).
 				successUrl: `${url.origin}/?checkout=gift-success`,
 				cancelUrl: `${url.origin}/subscribe`
 			});
 		} catch (e) {
 			console.error('gift checkout failed', e);
-			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, {
-				status: 500
-			});
+			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
 		}
-
 		redirect(303, checkoutUrl);
 	},
 
-	/* UPDATE (manage page — no UI on this page) */
+	/* UPDATE — change add-ons on one subscription (plan swap handled elsewhere). */
 	updateSubscription: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(updateSubscriptionSchema));
 		if (!form.valid) return fail(400, { form });
-
 		const user = locals.user;
 		if (!user) return fail(401, { form });
 
@@ -357,57 +301,55 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx) => {
+				// Verify this subscription belongs to the user (join through subscribers).
 				const [owned] = await tx
-					.select()
-					.from(subscribers)
-					.where(and(eq(subscribers.id, form.data.subscriberId), eq(subscribers.userId, user.id)));
+					.select({ id: subscriptions.id })
+					.from(subscriptions)
+					.innerJoin(subscribers, eq(subscriptions.subscriberId, subscribers.id))
+					.where(and(eq(subscriptions.id, form.data.subscriptionId), eq(subscribers.userId, user.id)));
 				if (!owned) throw new Error('not found or not owned');
 
-				await tx
-					.update(subscribers)
-					.set({
-						plan: form.data.plan,
-						status: 'active',
-						marketingOptIn: form.data.marketingOptIn
-					})
-					.where(eq(subscribers.id, owned.id));
-
-				await tx.delete(subscriberAddons).where(eq(subscriberAddons.subscriberId, owned.id));
+				await tx.delete(subscriptionAddons).where(eq(subscriptionAddons.subscriptionId, owned.id));
 				if (chosenAddons.length) {
-					await tx.insert(subscriberAddons).values(
-						chosenAddons.map((a) => ({ subscriberId: owned.id, addonId: a.id, quantity: 1 }))
+					await tx.insert(subscriptionAddons).values(
+						chosenAddons.map((a) => ({ subscriptionId: owned.id, addonId: a.id, quantity: 1 }))
 					);
 				}
 			});
 		} catch (e) {
 			console.error('updateSubscription failed', e);
-			return message(form, { type: 'error', text: 'Could not update your subscription.' } satisfies FormMessage, {
-				status: 400
-			});
+			return message(form, { type: 'error', text: 'Could not update your subscription.' } satisfies FormMessage, { status: 400 });
 		}
 
 		return message(form, { type: 'success', text: 'Subscription updated.' } satisfies FormMessage);
 	},
 
-	/* CANCEL (soft cancel) */
+	/* CANCEL — one subscription at period end. */
 	cancelSubscription: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(cancelSubscriptionSchema));
 		if (!form.valid) return fail(400, { form });
-
 		const user = locals.user;
 		if (!user) return fail(401, { form });
 
+		const [owned] = await db
+			.select({ id: subscriptions.id, stripeSubscriptionId: subscriptions.stripeSubscriptionId })
+			.from(subscriptions)
+			.innerJoin(subscribers, eq(subscriptions.subscriberId, subscribers.id))
+			.where(and(eq(subscriptions.id, form.data.subscriptionId), eq(subscribers.userId, user.id)));
+		if (!owned) {
+			return message(form, { type: 'error', text: 'Subscription not found.' } satisfies FormMessage, { status: 404 });
+		}
+
 		try {
-			// Stripe: also stripe.subscriptions.update(id, { cancel_at_period_end: true })
-			await db
-				.update(subscribers)
-				.set({ status: 'cancelled' })
-				.where(and(eq(subscribers.id, form.data.subscriberId), eq(subscribers.userId, user.id)));
+			if (owned.stripeSubscriptionId) {
+				await stripe.subscriptions.update(owned.stripeSubscriptionId, { cancel_at_period_end: true });
+				await db.update(subscriptions).set({ cancelAtPeriodEnd: true }).where(eq(subscriptions.id, owned.id));
+			} else {
+				await db.update(subscriptions).set({ status: 'cancelled' }).where(eq(subscriptions.id, owned.id));
+			}
 		} catch (e) {
 			console.error('cancelSubscription failed', e);
-			return message(form, { type: 'error', text: 'Could not cancel your subscription.' } satisfies FormMessage, {
-				status: 400
-			});
+			return message(form, { type: 'error', text: 'Could not cancel your subscription.' } satisfies FormMessage, { status: 400 });
 		}
 
 		return message(form, { type: 'success', text: 'Subscription cancelled.' } satisfies FormMessage);

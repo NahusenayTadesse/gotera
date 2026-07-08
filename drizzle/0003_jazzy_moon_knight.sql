@@ -1,1 +1,0 @@
-ALTER TABLE `plans` ADD `stripe_price_id` varchar(255);

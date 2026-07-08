@@ -40,8 +40,7 @@ async function signInWithGoogle() {
 	// Ask Better Auth for the Google authorization URL WITHOUT redirecting.
 	const { data: social, error } = await authClient.signIn.social({
 		provider: 'google',
-		callbackURL: '/auth/popup-callback', // where Google returns to (inside popup)
-		disableRedirect: true                // <-- return the URL instead of navigating
+		callbackURL: callBack, // where Google returns to (inside popup)
 	});
 
 	if (error || !social?.url) {

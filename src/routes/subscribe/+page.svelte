@@ -35,6 +35,7 @@
 	const onlyMode = $derived(
 		hasSubscriptions && !hasGifts ? 'me' : hasGifts && !hasSubscriptions ? 'gift' : null
 	);
+	const hasAddons = $derived((data?.addons?.length ?? 0) > 0);
 
 	function selectRecipient(who: 'me' | 'gift') {
 		$form.recipient = who;
@@ -74,11 +75,22 @@
 	// ── Wizard state ──
 	type StepId = 'who' | 'plan' | 'extras' | 'details' | 'review';
 	// Drop the 'who' step when only one mode is available.
-	const STEPS = $derived<StepId[]>(
-		bothModes
-			? ['who', 'plan', 'extras', 'details', 'review']
-			: ['plan', 'extras', 'details', 'review']
-	);
+	const STEPS = $derived<StepId[]>([
+		...(bothModes ? (['who'] as StepId[]) : []),
+		'plan',
+		...(hasAddons ? (['extras'] as StepId[]) : []),
+		'details',
+		'review'
+	]);
+	// Desktop step numbering, computed so numbers stay sequential when steps drop.
+	const DESKTOP_STEPS = $derived<string[]>([
+		...(bothModes ? ['who'] : []),
+		'plan',
+		'delivery',
+		...(hasAddons ? ['addons'] : []),
+		'details'
+	]);
+	const stepNo = (key: string) => String(DESKTOP_STEPS.indexOf(key) + 1).padStart(2, '0');
 	let stepIdx = $state(0);
 	let animating = $state(false);
 	let stepError = $state<string | null>(null);
@@ -440,7 +452,7 @@
 
 				{#if $form.recipient === 'gift'}
 					<div class="step gift-step">
-						<div class="step-head"><span class="step-num">{bothModes ? '02' : '01'}</span><h2>Sending as a gift?</h2></div>
+						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>Sending as a gift?</h2></div>
 						<div class="step-body">
 							<span class="gift-label">No subscription required</span>
 							<div class="gift-grid">
@@ -458,7 +470,7 @@
 					</div>
 				{:else}
 					<div class="step">
-						<div class="step-head"><span class="step-num">{bothModes ? '02' : '01'}</span><h2>Choose your plan.</h2></div>
+						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>Choose your plan.</h2></div>
 						<div class="step-body">
 							<div class="plans-grid">
 								{#each subscriptionPlans as plan (plan.id)}
@@ -483,7 +495,7 @@
 				{/if}
 
 				<div class="step">
-					<div class="step-head"><span class="step-num">{bothModes ? '03' : '02'}</span><h2>Delivery.</h2></div>
+					<div class="step-head"><span class="step-num">{stepNo('delivery')}</span><h2>Delivery.</h2></div>
 					<div class="step-body">
 						<div class="delivery-grid">
 							<div class="field-box">
@@ -500,8 +512,9 @@
 					</div>
 				</div>
 
+				{#if hasAddons}
 				<div class="step">
-					<div class="step-head"><span class="step-num">{bothModes ? '04' : '03'}</span><h2>Add to your order.</h2></div>
+					<div class="step-head"><span class="step-num">{stepNo('addons')}</span><h2>Add to your order.</h2></div>
 					<div class="step-body">
 						<div class="addons-grid">
 							{#each data?.addons as item (item.id)}
@@ -522,8 +535,9 @@
 					</div>
 				</div>
 
+				{/if}
 				<div class="step">
-					<div class="step-head"><span class="step-num">{bothModes ? '05' : '04'}</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
+					<div class="step-head"><span class="step-num">{stepNo('details')}</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
 					<div class="step-body">
 						{#if $form.recipient === 'gift'}
 							<div class="detail-grid">

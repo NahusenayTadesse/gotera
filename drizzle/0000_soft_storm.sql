@@ -6,6 +6,7 @@ CREATE TABLE `addons` (
 	`price_pence` int NOT NULL,
 	`image_url` text,
 	`sort_order` int DEFAULT 0,
+	`stripe_price_id` varchar(255),
 	`is_active` boolean NOT NULL DEFAULT true,
 	`created_by` varchar(255),
 	`updated_by` varchar(255),
@@ -101,6 +102,32 @@ CREATE TABLE `honey_orders` (
 	CONSTRAINT `honey_orders_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
+CREATE TABLE `plans` (
+	`id` varchar(36) NOT NULL,
+	`slug` varchar(64) NOT NULL,
+	`name` varchar(120) NOT NULL,
+	`subtitle` varchar(255),
+	`price_pence` int NOT NULL,
+	`freq_label` varchar(120),
+	`bullets` json DEFAULT ('[]'),
+	`featured` boolean NOT NULL DEFAULT false,
+	`interval` enum('one_time','monthly','bi_monthly') NOT NULL,
+	`packs` int NOT NULL DEFAULT 1,
+	`kind` enum('order','subscription','gift') NOT NULL,
+	`stripe_price_id` varchar(255),
+	`active` boolean NOT NULL DEFAULT true,
+	`sort_order` int NOT NULL DEFAULT 0,
+	`is_active` boolean NOT NULL DEFAULT true,
+	`created_by` varchar(255),
+	`updated_by` varchar(255),
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP(3) on update CURRENT_TIMESTAMP(3),
+	`deleted_at` datetime,
+	`deleted_by` varchar(255),
+	CONSTRAINT `plans_id` PRIMARY KEY(`id`),
+	CONSTRAINT `plans_slug_unique` UNIQUE(`slug`)
+);
+--> statement-breakpoint
 CREATE TABLE `referrals` (
 	`id` varchar(36) NOT NULL,
 	`referrer_id` varchar(36) NOT NULL,
@@ -138,12 +165,9 @@ CREATE TABLE `subscribers` (
 	`user_id` varchar(36) NOT NULL,
 	`email` varchar(255) NOT NULL,
 	`full_name` varchar(255),
-	`phone` varchar(32),
-	`plan` enum('starter','regular') NOT NULL,
-	`status` enum('active','paused','cancelled') NOT NULL DEFAULT 'active',
-	`marketing_opt_in` boolean NOT NULL DEFAULT true,
+	`phone` varchar(40),
 	`stripe_customer_id` varchar(255),
-	`stripe_subscription_id` varchar(255),
+	`marketing_opt_in` boolean NOT NULL DEFAULT true,
 	`is_active` boolean NOT NULL DEFAULT true,
 	`created_by` varchar(255),
 	`updated_by` varchar(255),
@@ -152,10 +176,28 @@ CREATE TABLE `subscribers` (
 	`deleted_at` datetime,
 	`deleted_by` varchar(255),
 	CONSTRAINT `subscribers_id` PRIMARY KEY(`id`),
-	CONSTRAINT `subscribers_user_id_unique` UNIQUE(`user_id`),
-	CONSTRAINT `subscribers_email_unique` UNIQUE(`email`),
-	CONSTRAINT `subscribers_stripe_customer_id_unique` UNIQUE(`stripe_customer_id`),
-	CONSTRAINT `subscribers_stripe_subscription_id_unique` UNIQUE(`stripe_subscription_id`)
+	CONSTRAINT `subscribers_user_id_unique` UNIQUE(`user_id`)
+);
+--> statement-breakpoint
+CREATE TABLE `subscriptions` (
+	`id` varchar(36) NOT NULL,
+	`subscriber_id` varchar(36) NOT NULL,
+	`plan_id` varchar(36) NOT NULL,
+	`stripe_subscription_id` varchar(255),
+	`status` enum('pending','active','paused','cancelled') NOT NULL DEFAULT 'pending',
+	`current_period_end` timestamp,
+	`cancel_at_period_end` boolean NOT NULL DEFAULT false,
+	`pending_plan_id` varchar(36),
+	`pending_plan_at` timestamp,
+	`address_id` varchar(36),
+	`is_active` boolean NOT NULL DEFAULT true,
+	`created_by` varchar(255),
+	`updated_by` varchar(255),
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP(3) on update CURRENT_TIMESTAMP(3),
+	`deleted_at` datetime,
+	`deleted_by` varchar(255),
+	CONSTRAINT `subscriptions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
 CREATE TABLE `account` (
@@ -282,6 +324,9 @@ ALTER TABLE `honey_orders` ADD CONSTRAINT `honey_orders_subscriber_id_subscriber
 ALTER TABLE `honey_orders` ADD CONSTRAINT `honey_orders_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `honey_orders` ADD CONSTRAINT `honey_orders_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `honey_orders` ADD CONSTRAINT `honey_orders_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `plans` ADD CONSTRAINT `plans_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `plans` ADD CONSTRAINT `plans_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `plans` ADD CONSTRAINT `plans_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `referrals` ADD CONSTRAINT `referrals_referrer_id_subscribers_id_fk` FOREIGN KEY (`referrer_id`) REFERENCES `subscribers`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `referrals` ADD CONSTRAINT `referrals_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `referrals` ADD CONSTRAINT `referrals_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -291,10 +336,16 @@ ALTER TABLE `subscriber_addons` ADD CONSTRAINT `subscriber_addons_addon_id_addon
 ALTER TABLE `subscriber_addons` ADD CONSTRAINT `subscriber_addons_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `subscriber_addons` ADD CONSTRAINT `subscriber_addons_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `subscriber_addons` ADD CONSTRAINT `subscriber_addons_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `subscribers` ADD CONSTRAINT `subscribers_user_id_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `subscribers` ADD CONSTRAINT `subscribers_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `subscribers` ADD CONSTRAINT `subscribers_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `subscribers` ADD CONSTRAINT `subscribers_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_subscriber_id_subscribers_id_fk` FOREIGN KEY (`subscriber_id`) REFERENCES `subscribers`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_plan_id_plans_id_fk` FOREIGN KEY (`plan_id`) REFERENCES `plans`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_pending_plan_id_plans_id_fk` FOREIGN KEY (`pending_plan_id`) REFERENCES `plans`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_address_id_addresses_id_fk` FOREIGN KEY (`address_id`) REFERENCES `addresses`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `account` ADD CONSTRAINT `account_user_id_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_permission_id_permissions_id_fk` FOREIGN KEY (`permission_id`) REFERENCES `permissions`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -311,7 +362,8 @@ ALTER TABLE `user` ADD CONSTRAINT `user_role_id_roles_id_fk` FOREIGN KEY (`role_
 CREATE INDEX `idx_addresses_subscriber_id` ON `addresses` (`subscriber_id`);--> statement-breakpoint
 CREATE INDEX `idx_deliveries_subscriber_id` ON `deliveries` (`subscriber_id`);--> statement-breakpoint
 CREATE INDEX `idx_deliveries_scheduled_date` ON `deliveries` (`scheduled_date`);--> statement-breakpoint
-CREATE INDEX `idx_subscribers_stripe_customer_id` ON `subscribers` (`stripe_customer_id`);--> statement-breakpoint
+CREATE INDEX `idx_plans_kind` ON `plans` (`kind`);--> statement-breakpoint
+CREATE INDEX `idx_plans_active` ON `plans` (`active`);--> statement-breakpoint
 CREATE INDEX `account_userId_idx` ON `account` (`user_id`);--> statement-breakpoint
 CREATE INDEX `session_userId_idx` ON `session` (`user_id`);--> statement-breakpoint
 CREATE INDEX `verification_identifier_idx` ON `verification` (`identifier`);

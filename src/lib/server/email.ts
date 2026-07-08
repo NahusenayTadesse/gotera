@@ -63,7 +63,7 @@ export const notifyAdminNewSubscriber = (data: {
 	amountLabel: string;
 }) => {
 	const { subject, html } = t.adminNewSubscriber(data);
-	return sendEmail(ADMIN_EMAIL, subject, html);
+	return sendEmail(SMTP_USER, subject, html);
 };
 
 export const notifyAdminGiftOrder = (data: {
@@ -73,12 +73,12 @@ export const notifyAdminGiftOrder = (data: {
 	amountLabel: string;
 }) => {
 	const { subject, html } = t.adminGiftOrder(data);
-	return sendEmail(ADMIN_EMAIL, subject, html);
+	return sendEmail(SMTP_USER, subject, html);
 };
 
 export const notifyAdminPaymentFailed = (data: { name: string; email: string }) => {
 	const { subject, html } = t.adminPaymentFailed(data);
-	return sendEmail(ADMIN_EMAIL, subject, html);
+	return sendEmail(SMTP_USER, subject, html);
 };
 
 
@@ -98,4 +98,10 @@ export const sendGiftReceived = (
 ) => {
 	const { subject, html } = t.customerGiftReceived(data);
 	return sendEmail(to, subject, html);
+};
+
+
+export const sendAdminTest = () => {
+	const { subject, html } = t.adminTest();
+	return sendEmail(SMTP_USER, subject, html);
 };

@@ -1,1 +1,0 @@
-ALTER TABLE `subscribers` MODIFY COLUMN `plan` enum('starter','regular');

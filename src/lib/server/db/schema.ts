@@ -15,30 +15,35 @@ import { secureFields, user } from './auth.schema';
 
 export * from './auth.schema';
 
-// ── Subscribers (Linked to Better Auth User) ──
-export const subscribers = mysqlTable(
-	'subscribers',
-	{
-		id: varchar('id', { length: 36 })
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: varchar('user_id', { length: 36 })
-			.notNull()
-			.unique()
-			.references(() => user.id, { onDelete: 'cascade' }),
-		email: varchar('email', { length: 255 }).notNull().unique(),
-		fullName: varchar('full_name', { length: 255 }),
-		phone: varchar('phone', { length: 32 }),
-		plan: mysqlEnum('plan', ['starter', 'regular']),
-		status: mysqlEnum('status', ['pending','active', 'paused', 'cancelled']).default('active').notNull(),
-		marketingOptIn: boolean('marketing_opt_in').default(true).notNull(),
-		stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),
-		stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }).unique(),
-		currentPeriodEnd: timestamp('current_period_end', { fsp: 3 }),
-		...secureFields
-	},
-	(table) => [index('idx_subscribers_stripe_customer_id').on(table.stripeCustomerId)]
-);
+export const subscribers = mysqlTable('subscribers', {
+	id: varchar('id', { length: 36 }).primaryKey(),
+	userId: varchar('user_id', { length: 36 }).notNull().unique(),
+	email: varchar('email', { length: 255 }).notNull(),
+	fullName: varchar('full_name', { length: 255 }),
+	phone: varchar('phone', { length: 40 }),
+	stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
+	marketingOptIn: boolean('marketing_opt_in').default(true).notNull(),
+	...secureFields
+});
+
+// NEW: one row per plan the person subscribes to
+export const subscriptions = mysqlTable('subscriptions', {
+	id: varchar('id', { length: 36 }).primaryKey(),
+	subscriberId: varchar('subscriber_id', { length: 36 })
+		.notNull()
+		.references(() => subscribers.id, { onDelete: 'cascade' }),
+	planId: varchar('plan_id', { length: 36 })
+		.notNull()
+		.references(() => plans.id),
+	stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }),
+	status: mysqlEnum('status', ['pending', 'active', 'paused', 'cancelled']).default('pending').notNull(),
+	currentPeriodEnd: timestamp('current_period_end'),
+	cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
+	pendingPlanId: varchar('pending_plan_id', { length: 36 }).references(() => plans.id),
+	pendingPlanAt: timestamp('pending_plan_at'),
+	addressId: varchar('address_id', { length: 36 }).references(() => addresses.id),
+	...secureFields
+});
 
 // ── Addresses ──
 export const addresses = mysqlTable(
@@ -50,6 +55,7 @@ export const addresses = mysqlTable(
 		subscriberId: varchar('subscriber_id', { length: 36 })
 			.notNull()
 			.references(() => subscribers.id, { onDelete: 'cascade' }),
+	
 		label: varchar('label', { length: 255 }),
 		line1: varchar('line1', { length: 255 }).notNull(),
 		line2: varchar('line2', { length: 255 }),
@@ -86,6 +92,9 @@ export const subscriberAddons = mysqlTable(
 		subscriberId: varchar('subscriber_id', { length: 36 })
 			.notNull()
 			.references(() => subscribers.id, { onDelete: 'cascade' }),
+		subscriptionId: varchar('subscription_id', { length: 36 })
+			.notNull()
+			.references(() => subscriptions.id, { onDelete: 'cascade' }),
 		addonId: varchar('addon_id', { length: 36 })
 			.notNull()
 			.references(() => addons.id),
@@ -105,6 +114,9 @@ export const deliveries = mysqlTable(
 		subscriberId: varchar('subscriber_id', { length: 36 })
 			.notNull()
 			.references(() => subscribers.id, { onDelete: 'cascade' }),
+		subscriptionId: varchar('subscription_id', { length: 36 })
+			.notNull()
+			.references(() => subscriptions.id, { onDelete: 'cascade' }),
 		addressId: varchar('address_id', { length: 36 })
 			.notNull()
 			.references(() => addresses.id),
@@ -226,3 +238,5 @@ export const plans = mysqlTable(
 	},
 	(table) => [index('idx_plans_kind').on(table.kind), index('idx_plans_active').on(table.active)]
 );
+
+

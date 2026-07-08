@@ -1,110 +1,139 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
-import { superValidate, message, setError } from 'sveltekit-superforms';
+import { message, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { and, asc, eq } from 'drizzle-orm';
-
-// Adjust to your project's paths.
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { subscribers, plans } from '$lib/server/db/schema';
+import { addresses, plans, subscribers, subscriptions } from '$lib/server/db/schema';
+import { cancelSchema } from './schema';
+// import { stripe } from '$lib/server/stripe';
 
-import { changePlanSchema, type ChangePlanMessage } from './schema';
-
-const gbpWhole = (pence: number) => {
-	const p = pence / 100;
-	return Number.isInteger(p) ? `£${p}` : `£${p.toFixed(2)}`;
-};
-
-const fmtDate = (d: Date) =>
-	new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
-
-// First of next month — stand-in until Stripe's current_period_end is wired.
-function nextCycle(from = new Date()) {
-	const d = new Date(from);
-	d.setMonth(d.getMonth() + 1, 1);
-	d.setHours(0, 0, 0, 0);
-	return d;
+function poundsFromPence(pence: number) {
+	return pence / 100;
 }
 
-async function getSubscriber(userId: string) {
-	const [s] = await db.select().from(subscribers).where(eq(subscribers.userId, userId));
-	return s ?? null;
+function formatPeriodEnd(value: Date | string | null) {
+	if (!value) return null;
+	return new Date(value).toLocaleDateString('en-GB', {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric'
+	});
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) redirect(303, '/login');
+	if (!locals.user) {
+		throw redirect(302, '/login');
+	}
 
-	const sub = await getSubscriber(locals.user.id);
-	// Only makes sense for an active subscriber with a real plan.
-	if (!sub || !sub.plan || sub.status === 'cancelled') {
-		return { subscription: false, currentPlanId: null, plans: [], effectiveDate: '', pending: null };
+	const subscriber = await db.query.subscribers.findFirst({
+		where: eq(subscribers.userId, locals.user.id)
+	});
+
+	// No subscriber record for this user — nothing to cancel
+	if (!subscriber) {
+		throw redirect(302, '/account');
 	}
 
 	const rows = await db
-		.select()
-		.from(plans)
-		.where(and(eq(plans.kind, 'subscription'), eq(plans.active, true)))
-		.orderBy(asc(plans.sortOrder));
+		.select({
+			id: subscriptions.id,
+			cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+			currentPeriodEnd: subscriptions.currentPeriodEnd,
+			planName: plans.name,
+			pricePence: plans.pricePence,
+			freqLabel: plans.freqLabel,
+			addressLabel: addresses.label,
+			addressLine1: addresses.line1
+		})
+		.from(subscriptions)
+		.innerJoin(plans, eq(plans.id, subscriptions.planId))
+		.leftJoin(addresses, eq(addresses.id, subscriptions.addressId))
+		.where(
+			and(
+				eq(subscriptions.subscriberId, subscriber.id),
+				inArray(subscriptions.status, ['pending', 'active', 'paused'])
+			)
+		);
 
-	const planCards = rows.map((p) => ({
-		id: p.slug,
-		name: p.name,
-		desc: p.subtitle ?? '',
-		price: gbpWhole(p.pricePence),
-		pricePence: p.pricePence,
-		packs: p.packs,
-		freq: `Per month · ${p.packs} packs`,
-		details: [`${p.packs} packs monthly`, ...((p.bullets as string[]) ?? [])],
-		label: `${p.name} · ${gbpWhole(p.pricePence)}/month`
+	const plansList = rows.map((row) => ({
+		id: row.id,
+		planName: row.planName,
+		price: poundsFromPence(row.pricePence),
+		freq: row.freqLabel ?? '',
+		addressLabel: row.addressLabel ?? row.addressLine1 ?? null,
+		cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+		periodEndLabel: formatPeriodEnd(row.currentPeriodEnd)
 	}));
 
-	const effective = nextCycle();
+	const form = await superValidate(zod4(cancelSchema));
 
-	return {
-		subscription: true,
-		currentPlanId: sub.plan,
-		plans: planCards,
-		effectiveDate: fmtDate(effective),
-		pending: sub.pendingPlan
-			? { plan: sub.pendingPlan, at: sub.pendingPlanAt ? fmtDate(new Date(sub.pendingPlanAt)) : '' }
-			: null,
-		form: await superValidate({ plan: sub.plan }, zod4(changePlanSchema))
-	};
+	return { form, plansList };
 };
 
 export const actions: Actions = {
-	changePlan: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(changePlanSchema));
-		if (!form.valid) return fail(400, { form });
+	default: async ({ request, locals }) => {
+		if (!locals.user) {
+			throw redirect(302, '/login');
+		}
 
-		const sub = await getSubscriber(locals.user!.id);
-		if (!sub || !sub.plan) {
-			return message(form, { type: 'error', text: 'No active plan to change.' } satisfies ChangePlanMessage, {
-				status: 400
+		const form = await superValidate(request, zod4(cancelSchema));
+
+		if (!form.valid) {
+			return fail(400, { form });
+		}
+
+		const subscriber = await db.query.subscribers.findFirst({
+			where: eq(subscribers.userId, locals.user.id)
+		});
+
+		if (!subscriber) {
+			return message(form, { type: 'error', text: 'We could not find your account.' }, { status: 404 });
+		}
+
+		// Confirm the subscription belongs to this subscriber before touching it
+		const subscription = await db.query.subscriptions.findFirst({
+			where: and(
+				eq(subscriptions.id, form.data.subscriptionId),
+				eq(subscriptions.subscriberId, subscriber.id)
+			)
+		});
+
+		if (!subscription) {
+			return message(
+				form,
+				{ type: 'error', text: 'That plan could not be found on your account.' },
+				{ status: 404 }
+			);
+		}
+
+		if (subscription.cancelAtPeriodEnd || subscription.status === 'cancelled') {
+			return message(form, {
+				type: 'error',
+				text: 'That plan is already scheduled to cancel.'
 			});
 		}
 
-		// Target must be a real, active subscription plan.
-		const [target] = await db
-			.select()
-			.from(plans)
-			.where(and(eq(plans.slug, form.data.plan), eq(plans.kind, 'subscription'), eq(plans.active, true)));
-		if (!target) return setError(form, 'plan', "That plan isn't available.");
-		if (form.data.plan === sub.plan) return setError(form, 'plan', "That's already your plan.");
+		// Tell Stripe first — if this fails, we don't want a DB record that's out of sync
+		// if (subscription.stripeSubscriptionId) {
+		// 	await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+		// 		cancel_at_period_end: true
+		// 	});
+		// }
 
-		const effective = nextCycle();
-
-		// ── Stripe hook point: schedule the plan change at period end ──
-		// Requires pendingPlan + pendingPlanAt columns on subscribers (see note).
-		// For an immediate change instead: .set({ plan: form.data.plan })
 		await db
-			.update(subscribers)
-			.set({ pendingPlan: form.data.plan, pendingPlanAt: effective })
-			.where(eq(subscribers.id, sub.id));
+			.update(subscriptions)
+			.set({
+				cancelAtPeriodEnd: true,
+				cancellationReason: form.data.reason ?? null,
+				cancellationFeedback: form.data.feedback ?? null,
+				cancelledAt: new Date()
+			})
+			.where(eq(subscriptions.id, subscription.id));
 
 		return message(form, {
 			type: 'success',
-			text: `Plan change scheduled for ${fmtDate(effective)}.`
-		} satisfies ChangePlanMessage);
+			text: 'Your plan is scheduled to cancel at the end of the current period.'
+		});
 	}
 };

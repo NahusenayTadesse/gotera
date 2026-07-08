@@ -1,305 +1,436 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
+	import { cancelSchema } from './schema';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	let selectedPlanId = $state(data.currentPlanId);
-	let submitted = $state(false);
-
-	const { form, enhance, submitting } = superForm(data.form, {
+	const { form, errors, enhance, submitting, message } = superForm(data.form, {
+		validators: zod4Client(cancelSchema),
 		onUpdated({ form }) {
-			const m = form.message as { type: string; text: string } | undefined;
-			if (!m) return;
-			if (m.type === 'success') {
-				submitted = true;
-				toast.success(m.text);
-			} else {
-				toast.error(m.text);
+			if (form.message?.type === 'error') {
+				toast.error(form.message.text);
+			} else if (form.message?.type === 'success') {
+				toast.success(form.message.text);
+				goto('/account');
 			}
 		}
 	});
 
-	function select(id: string) {
-		if (id === data.currentPlanId) return;
-		selectedPlanId = id;
-		$form.plan = id;
-	}
+	const reasons = [
+		{ value: 'too_expensive', label: 'Too expensive' },
+		{ value: 'too_much_food', label: 'Too much injera' },
+		{ value: 'taking_a_break', label: 'Just taking a break' },
+		{ value: 'moving', label: 'Moving / delivery area' },
+		{ value: 'quality', label: 'Not happy with quality' },
+		{ value: 'other', label: 'Something else' }
+	];
 
-	const isDifferent = $derived(selectedPlanId !== data.currentPlanId);
-	const current = $derived(data.plans.find((p) => p.id === data.currentPlanId));
-	const selected = $derived(data.plans.find((p) => p.id === selectedPlanId));
+	// Cancellable plans only — an already-cancelling plan can't be re-selected
+	const cancellable = $derived(data.plansList.filter((p) => !p.cancelAtPeriodEnd));
 
-	const thisMonth = new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(new Date());
-
-	// Savings / uplift note, computed from the price + pack difference.
-	const changeNote = $derived.by(() => {
-		if (!isDifferent || !current || !selected) return '';
-		const diff = (selected.pricePence - current.pricePence) / 100;
-		const money = (n: number) => `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
-		const packs = `Your packs change from ${current.packs} to ${selected.packs} from ${data.effectiveDate}.`;
-		if (diff < 0) return `You'll save ${money(Math.abs(diff))} per month. ${packs}`;
-		if (diff > 0) return `You'll pay ${money(diff)} more per month. ${packs}`;
-		return packs;
-	});
+	const selected = $derived(data.plansList.find((p) => p.id === $form.subscriptionId) ?? null);
 </script>
 
-<div class="card">
-	<div class="card-head">
-		<span class="eyebrow">Subscription</span>
-		<h1>Change your plan.</h1>
-		<p>Changes take effect from your next billing cycle. Your current delivery is not affected.</p>
-	</div>
+<svelte:head>
+	<title>Cancel a plan — GOTERA</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap"
+		rel="stylesheet"
+	/>
+</svelte:head>
 
-	{#if !data.subscription}
-		<div class="card-body">
-			<p class="empty-copy">You don't have an active plan to change.</p>
+<div class="wrap">
+	<div class="card">
+		<span class="eyebrow">Manage subscriptions</span>
+		<h1>Cancel a plan.</h1>
+
+		{#if data.plansList.length === 0}
+			<p class="lead">You don't have any active plans to cancel.</p>
 			<div class="actions">
-				<a href="/subscribe" class="btn">Choose a plan</a>
-				<a href="/account" class="btn-soft">Back to account</a>
+				<a href="/account" class="btn btn-ghost">Back to account</a>
 			</div>
-		</div>
-	{:else if submitted}
-		<div class="success">
-			<div class="success-icon">
-				<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-			</div>
-			<h2>Plan changed.</h2>
-			<p>
-				Your plan changes to {selected?.name} from {data.effectiveDate}. Your {thisMonth} delivery continues
-				as normal.
+		{:else}
+			<p class="lead">
+				You have {data.plansList.length} active
+				{data.plansList.length === 1 ? 'plan' : 'plans'}. Cancelling one leaves the rest untouched.
 			</p>
-			<a href="/account" class="btn" style="max-width:240px;margin:0 auto">Back to account</a>
-		</div>
-	{:else}
-		<div class="card-body">
-			{#if data.pending}
-				<div class="pending-banner">
-					A change to <strong>{data.pending.plan}</strong> is already scheduled for {data.pending.at}.
-					Confirming below will replace it.
-				</div>
-			{/if}
 
-			<div class="plans">
-				{#each data.plans as plan (plan.id)}
+			<form method="POST" use:enhance class="form">
+				<!-- Choose which subscription to cancel -->
+				<fieldset class="plan-list">
+					<legend>Which plan?</legend>
+					{#each data.plansList as p (p.id)}
+						<label
+							class="plan-row"
+							class:active={$form.subscriptionId === p.id}
+							class:disabled={p.cancelAtPeriodEnd}
+						>
+							<input
+								type="radio"
+								name="subscriptionId"
+								value={p.id}
+								bind:group={$form.subscriptionId}
+								disabled={p.cancelAtPeriodEnd}
+							/>
+							<div class="plan-info">
+								<div class="plan-top">
+									<span class="plan-name">{p.planName}</span>
+									<span class="plan-price">£{p.price.toFixed(2)}</span>
+								</div>
+								<div class="plan-meta">
+									{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> · {/if}{p.freq}
+								</div>
+								{#if p.cancelAtPeriodEnd}
+									<span class="plan-flag"
+										>Already cancelling{p.periodEndLabel ? ` — ends ${p.periodEndLabel}` : ''}</span
+									>
+								{/if}
+							</div>
+						</label>
+					{/each}
+				</fieldset>
+				{#if $errors.subscriptionId}<span class="form-error">{$errors.subscriptionId}</span>{/if}
+
+				{#if selected && !selected.cancelAtPeriodEnd}
+					<div class="keep-note">
+						{#if selected.periodEndLabel}
+							This plan stays active until <strong>{selected.periodEndLabel}</strong>. You'll keep
+							any delivery already paid for and won't be charged again after that.
+						{:else}
+							Cancelling stops future charges. You'll keep anything already paid for.
+						{/if}
+					</div>
+
+					<fieldset class="reasons">
+						<legend>Mind telling us why? <span class="opt">(optional)</span></legend>
+						{#each reasons as r (r.value)}
+							<label class="reason" class:active={$form.reason === r.value}>
+								<input type="radio" name="reason" value={r.value} bind:group={$form.reason} />
+								<span>{r.label}</span>
+							</label>
+						{/each}
+					</fieldset>
+
+					<div class="field">
+						<label class="field-label" for="feedback"
+							>Anything we could do better? <span class="opt">(optional)</span></label
+						>
+						<textarea
+							id="feedback"
+							name="feedback"
+							class="textarea"
+							rows="3"
+							bind:value={$form.feedback}
+						></textarea>
+					</div>
+
+					<label class="confirm">
+						<input type="checkbox" name="confirm" bind:checked={$form.confirm} />
+						<span
+							>I understand my <strong>{selected.planName}</strong> plan will end{selected.periodEndLabel
+								? ` on ${selected.periodEndLabel}`
+								: ''}.</span
+						>
+					</label>
+					{#if $errors.confirm}<span class="form-error">{$errors.confirm}</span>{/if}
+				{/if}
+
+				<div class="actions">
+					<a href="/account" class="btn btn-ghost">Keep all my plans</a>
 					<button
-						type="button"
-						class="plan"
-						class:current={plan.id === data.currentPlanId}
-						class:selected={plan.id === selectedPlanId && isDifferent}
-						onclick={() => select(plan.id)}
-						disabled={plan.id === data.currentPlanId}
+						type="submit"
+						class="btn btn-danger"
+						disabled={$submitting || !selected || selected.cancelAtPeriodEnd || !$form.confirm}
 					>
-						<div class="plan-head">
-							{#if plan.id === data.currentPlanId}
-								<span class="current-tag">Your current plan</span>
-							{:else if plan.id === selectedPlanId}
-								<span class="selected-tag">Selected</span>
-							{/if}
-
-							<h3>{plan.name}</h3>
-							<p class="plan-desc">{plan.desc}</p>
-							<div class="price">{plan.price}</div>
-							<span class="freq">{plan.freq}</span>
-						</div>
-						<div class="plan-details">
-							{#each plan.details as detail}
-								<div class="plan-detail">{detail}</div>
-							{/each}
-						</div>
+						{$submitting ? 'Cancelling…' : 'Cancel this plan'}
 					</button>
-				{/each}
-			</div>
-
-			{#if isDifferent && current && selected}
-				<div class="change-summary">
-					<span class="change-summary-label">Your change</span>
-					<div class="change-row">
-						<span class="change-row-label">From</span>
-						<span class="change-row-val">{current.label}</span>
-					</div>
-					<div class="change-row">
-						<span class="change-row-label">To</span>
-						<span class="change-row-val">{selected.label}</span>
-					</div>
-					<div class="change-row">
-						<span class="change-row-label">Takes effect</span>
-						<span class="change-row-val">{data.effectiveDate} · next billing cycle</span>
-					</div>
-					<div class="change-row">
-						<span class="change-row-label">This month</span>
-						<span class="change-row-val">No change · {thisMonth} delivery continues as normal</span>
-					</div>
-					{#if changeNote}
-						<p class="change-note">{changeNote}</p>
-					{/if}
 				</div>
-			{/if}
-
-			<form method="POST" action="?/changePlan" use:enhance class="actions">
-				<input type="hidden" name="plan" bind:value={$form.plan} />
-				<button class="btn" disabled={!isDifferent || $submitting}>
-					{$submitting ? 'Confirming…' : 'Confirm plan change'}
-				</button>
-				<a href="/account" class="btn-soft">Cancel</a>
 			</form>
-		</div>
-	{/if}
+		{/if}
+	</div>
 </div>
 
 <style>
+	:global(:root) {
+		--cream: #faf8f4;
+		--ink: #1a1a1a;
+		--copper: #b5622a;
+		--taupe: #7a746e;
+		--border: #e8e4e0;
+		--panel: #f5f2ed;
+	}
+	.wrap {
+		min-height: 100vh;
+		display: grid;
+		place-items: center;
+		padding: 40px 16px;
+		background: linear-gradient(180deg, #fcfbf8 0%, var(--cream) 100%);
+		font-family: 'Jost', sans-serif;
+		color: var(--ink);
+	}
+	.card {
+		width: min(540px, 100%);
+		background: #fff;
+		border: 1px solid var(--border);
+		padding: 40px 36px;
+	}
 	.eyebrow {
 		display: block;
 		margin-bottom: 10px;
-		font-size: .7rem;
+		font-size: 0.7rem;
 		font-weight: 500;
-		letter-spacing: .18em;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
 		color: var(--copper);
 	}
-
-	.card { background: #fff; border: 1px solid var(--border); overflow: hidden; }
-	.card-head { padding: 28px 28px 22px; border-bottom: 1px solid var(--border); }
-	.card-head h1 { font-size: 2rem; font-style: italic; margin-bottom: 6px; }
-	.card-head p { font-size: .88rem; color: var(--taupe); }
-	.card-body { padding: 28px; }
-
-	.empty-copy { font-size: .9rem; color: var(--taupe); margin-bottom: 20px; }
-
-	.pending-banner {
-		background: rgba(181, 98, 42, .08);
-		border: 1px solid rgba(181, 98, 42, .2);
-		color: #6f4420;
-		font-size: .82rem;
-		line-height: 1.5;
-		padding: 12px 16px;
-		margin-bottom: 20px;
+	h1 {
+		font-family: 'Cormorant Garamond', serif;
+		font-weight: 600;
+		font-style: italic;
+		font-size: clamp(1.9rem, 5vw, 2.5rem);
+		line-height: 1.02;
+		margin-bottom: 14px;
 	}
-
-	/* Plan Layout Options */
-	.plans { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
-	.plan {
-		border: 1px solid var(--border);
-		background: var(--cream);
+	.lead {
+		font-size: 0.9rem;
+		color: #433e39;
+		line-height: 1.65;
+		margin-bottom: 24px;
+	}
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+	}
+	fieldset {
+		border: none;
 		padding: 0;
-		cursor: pointer;
-		transition: all .15s;
-		overflow: hidden;
-		position: relative;
-		text-align: left;
-		font-family: inherit;
+		margin: 0;
 	}
-	.plan:hover:not(:disabled) { border-color: rgba(181, 98, 42, .3); }
-	.plan.current { border-color: var(--border); cursor: default; }
-	.plan.selected { border-color: var(--copper); background: #fbf4ee; }
-
-	.plan-head { padding: 20px 20px 0; }
-
-	.current-tag {
-		display: inline-block;
-		font-size: .6rem;
-		letter-spacing: .12em;
+	legend {
+		font-size: 0.66rem;
 		text-transform: uppercase;
-		font-weight: 600;
-		background: rgba(46, 125, 50, .1);
-		border: 1px solid rgba(46, 125, 50, .2);
-		color: #2E7D32;
-		padding: 3px 8px;
-		margin-bottom: 10px;
-	}
-	.selected-tag {
-		display: inline-block;
-		font-size: .6rem;
-		letter-spacing: .12em;
-		text-transform: uppercase;
-		font-weight: 600;
-		background: rgba(181, 98, 42, .12);
-		border: 1px solid rgba(181, 98, 42, .3);
+		letter-spacing: 0.12em;
 		color: var(--copper);
-		padding: 3px 8px;
+		font-weight: 500;
 		margin-bottom: 10px;
+		padding: 0;
 	}
-
-	.plan h3 { font-size: 1.4rem; margin-bottom: 4px; }
-	.plan-desc { font-size: .8rem; color: var(--taupe); margin-bottom: 12px; }
-	.price { font-family: 'Cormorant Garamond', serif; font-size: 2.4rem; color: var(--copper); line-height: 1; }
-	.freq { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--taupe); margin: 3px 0 14px; display: block; }
-
-	.plan-details { padding: 0 20px 20px; display: grid; gap: 6px; }
-	.plan-detail { font-size: .8rem; color: #463f39; padding-left: 12px; position: relative; }
-	.plan-detail::before { content: '—'; position: absolute; left: 0; color: rgba(181, 98, 42, .4); font-size: .7rem; }
-
-	/* Change Summary */
-	.change-summary { background: var(--panel); border: 1px solid var(--border); padding: 18px 20px; margin-bottom: 24px; }
-	.change-summary-label { font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--taupe); font-weight: 500; margin-bottom: 10px; display: block; }
-	.change-row { display: flex; justify-content: space-between; align-items: baseline; font-size: .88rem; padding: 5px 0; }
-	.change-row-label { color: var(--taupe); }
-	.change-row-val { color: var(--ink); font-weight: 500; }
-	.change-note { font-size: .78rem; color: var(--taupe); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-
-	/* Actions */
-	.actions { display: grid; gap: 8px; }
-	.btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 46px;
-		padding: 0 22px;
-		border-radius: 2px;
-		font-size: .72rem;
-		letter-spacing: .12em;
-		text-transform: uppercase;
-		font-weight: 500;
-		background: var(--copper);
-		color: #fff;
-		border: 1px solid var(--copper);
-		cursor: pointer;
-		transition: all .15s;
-		width: 100%;
-		text-decoration: none;
-		font-family: inherit;
+	.opt {
+		text-transform: none;
+		letter-spacing: 0;
+		color: rgba(122, 116, 110, 0.7);
+		font-weight: 400;
 	}
-	.btn:hover:not(:disabled) { background: #9a4f22; border-color: #9a4f22; }
-	.btn:disabled { opacity: .4; cursor: not-allowed; }
-
-	.btn-soft {
+	/* Plan chooser */
+	.plan-list {
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 46px;
-		padding: 0 22px;
-		border-radius: 2px;
-		font-size: .72rem;
-		letter-spacing: .12em;
-		text-transform: uppercase;
-		font-weight: 500;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.plan-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 14px;
 		border: 1px solid var(--border);
-		color: var(--taupe);
-		background: var(--panel);
 		cursor: pointer;
-		width: 100%;
-		text-decoration: none;
-		font-family: inherit;
+		transition:
+			border-color 0.12s,
+			background 0.12s;
 	}
-	.btn-soft:hover { background: var(--border); color: var(--ink); }
-
-	/* Success */
-	.success { text-align: center; padding: 40px 28px; }
-	.success-icon {
-		width: 44px;
-		height: 44px;
-		border-radius: 999px;
-		background: rgba(46, 125, 50, .1);
-		border: 1px solid rgba(46, 125, 50, .2);
+	.plan-row:hover:not(.disabled) {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.plan-row.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.plan-row.disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.plan-row input {
+		margin-top: 3px;
+		accent-color: var(--copper);
+		flex-shrink: 0;
+	}
+	.plan-info {
+		flex: 1;
+	}
+	.plan-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+	}
+	.plan-name {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.15rem;
+		font-weight: 500;
+		color: var(--ink);
+	}
+	.plan-price {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.1rem;
+		color: var(--copper);
+	}
+	.plan-meta {
+		font-size: 0.76rem;
+		color: var(--taupe);
+		margin-top: 2px;
+	}
+	.plan-addr {
+		color: var(--ink);
+		font-weight: 500;
+	}
+	.plan-flag {
+		display: inline-block;
+		margin-top: 6px;
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: #b23a2a;
+	}
+	/* Keep note */
+	.keep-note {
+		font-size: 0.85rem;
+		color: #433e39;
+		line-height: 1.6;
+		padding: 14px;
+		background: var(--panel);
+		border: 1px solid var(--border);
+	}
+	.keep-note strong {
+		color: var(--ink);
+	}
+	/* Reasons */
+	.reasons {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.reason {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		margin: 0 auto 16px;
+		gap: 10px;
+		padding: 12px 14px;
+		border: 1px solid var(--border);
+		cursor: pointer;
+		font-size: 0.88rem;
+		color: #433e39;
+		transition:
+			border-color 0.12s,
+			background 0.12s;
 	}
-	.success-icon svg { width: 20px; height: 20px; stroke: #2E7D32; stroke-width: 2; fill: none; }
-	.success h2 { font-size: 1.8rem; margin-bottom: 8px; }
-	.success p { font-size: .88rem; color: var(--taupe); margin-bottom: 20px; line-height: 1.65; }
-
-	@media(max-width: 560px) { .plans { grid-template-columns: 1fr; } }
+	.reason:hover {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.reason.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.reason input {
+		accent-color: var(--copper);
+	}
+	.field {
+		display: flex;
+		flex-direction: column;
+	}
+	.field-label {
+		font-size: 0.66rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: var(--copper);
+		font-weight: 500;
+		margin-bottom: 8px;
+	}
+	.textarea {
+		width: 100%;
+		border: 1px solid rgba(122, 116, 110, 0.22);
+		background: #fff;
+		padding: 10px 12px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.9rem;
+		color: var(--ink);
+		resize: vertical;
+		line-height: 1.5;
+	}
+	.textarea:focus {
+		outline: none;
+		border-color: var(--copper);
+	}
+	.confirm {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		font-size: 0.85rem;
+		color: #433e39;
+		cursor: pointer;
+		line-height: 1.5;
+	}
+	.confirm input {
+		margin-top: 2px;
+		width: 16px;
+		height: 16px;
+		accent-color: var(--copper);
+		flex-shrink: 0;
+	}
+	.confirm strong {
+		color: var(--ink);
+	}
+	.form-error {
+		display: block;
+		font-size: 0.76rem;
+		color: #b23a2a;
+	}
+	.actions {
+		display: flex;
+		gap: 10px;
+		margin-top: 6px;
+		flex-wrap: wrap;
+	}
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 46px;
+		padding: 0 20px;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		font-weight: 500;
+		border-radius: 2px;
+		cursor: pointer;
+		font-family: 'Jost', sans-serif;
+		text-decoration: none;
+		border: 1px solid transparent;
+		flex: 1;
+	}
+	.btn-ghost {
+		border-color: var(--border);
+		background: #fff;
+		color: var(--ink);
+	}
+	.btn-ghost:hover {
+		background: var(--panel);
+	}
+	.btn-danger {
+		background: #fff;
+		border-color: #b23a2a;
+		color: #b23a2a;
+	}
+	.btn-danger:hover:not([disabled]) {
+		background: #b23a2a;
+		color: #fff;
+	}
+	.btn-danger[disabled] {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 </style>
