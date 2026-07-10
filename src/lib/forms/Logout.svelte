@@ -32,6 +32,7 @@
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
+		
 			aria-labelledby="logout-title"
 		>
 			<div class="dialog-header">

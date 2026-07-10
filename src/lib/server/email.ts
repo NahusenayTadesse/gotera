@@ -105,3 +105,21 @@ export const sendAdminTest = () => {
 	const { subject, html } = t.adminTest();
 	return sendEmail(SMTP_USER, subject, html);
 };
+
+import { customerOrderConfirmed, adminNewOrder } from './emailTemplates';
+ 
+ 
+export async function sendOrderConfirmed(
+	to: string,
+	data: Parameters<typeof customerOrderConfirmed>[0]
+) {
+	const { subject, html } = customerOrderConfirmed(data);
+	return sendEmail( to, subject, html );
+}
+ 
+export async function notifyAdminOrder(data: Parameters<typeof adminNewOrder>[0]) {
+	const { subject, html } = adminNewOrder(data);
+	return sendEmail(SMTP_USER, subject, html );
+}
+
+ 

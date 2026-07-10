@@ -84,7 +84,7 @@
 				Real injera on a monthly subscription. Made in Ethiopia. Delivered to your door.
 			</p>
 			<div class="hero-actions">
-				<a href="/subscribe" class="btn">Choose Your Plan{subFrom ? ` — from ${fmtPrice(subFrom)}` : ''}</a>
+				<a href="/subscribe/?slug" class="btn">Choose Your Plan{subFrom ? ` — from ${fmtPrice(subFrom)}` : ''}</a>
 				<a href="/about" class="btn-outline">About GOTERA</a>
 			</div>
 		</div>
@@ -204,7 +204,7 @@
 						<ul>
 							{#each card.bullets as b}<li>{b}</li>{/each}
 						</ul>
-						<a href="/subscribe" class={card.featured ? 'btn plan-featured-btn' : 'btn-outline'}>{card.cta}</a>
+						<a href="/subscribe?plan={card.slug}" class={card.featured ? 'btn plan-featured-btn' : 'btn-outline'}>{card.cta}</a>
 					</div>
 				{/each}
 			</div>

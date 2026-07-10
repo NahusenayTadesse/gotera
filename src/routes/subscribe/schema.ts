@@ -20,7 +20,7 @@ export const GIFT_PLANS = ['single-gift', 'double-gift'] as const;
 export const DELIVERY_DAYS = ['Saturday'] as const;
 export const FREQUENCIES = ['Monthly'] as const;
 
-const ALL_PLANS = [...SUB_PLANS, ...GIFT_PLANS] as const;
+export const ALL_PLANS = [...SUB_PLANS, ...GIFT_PLANS] as const;
 
 /** Flash message shape returned via superforms `message()` and shown by sonner. */
 export type FormMessage = { type: 'success' | 'error' | 'redirect'; text?: string; url?: string };

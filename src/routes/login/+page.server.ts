@@ -13,10 +13,17 @@ export const load: PageServerLoad = async ({ locals, parent, url }) => {
 
 		if (roleName === 'Admin') {
 			return redirect(302, '/dashboard');
-		} else redirect(
+		}else {
+			 if(url.pathname === '/login'){
+				redirect(302, '/account');
+			 }
+			 else {
+			redirect(
 			303,
-			`/auth/signup?redirectTo=${encodeURIComponent(url.pathname + url.search)}`
+			`/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`
 		);
+	}
+}
 	}
 	const form = await superValidate(zod4(loginSchema));
 

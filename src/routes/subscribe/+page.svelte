@@ -72,6 +72,9 @@
 	);
 	const giftFromPrice = $derived(giftPlans.length ? Math.min(...giftPlans.map((p) => p.price)) : 8.5);
 
+	const preselected = $derived(data?.preselected ?? null);
+	const skipIntro = $derived(!!preselected && (!onlyMode || preselected.recipient === onlyMode));
+
 	// ── Wizard state ──
 	type StepId = 'who' | 'plan' | 'extras' | 'details' | 'review';
 	// Drop the 'who' step when only one mode is available.
@@ -91,12 +94,16 @@
 		'details'
 	]);
 	const stepNo = (key: string) => String(DESKTOP_STEPS.indexOf(key) + 1).padStart(2, '0');
-	let stepIdx = $state(0);
+	
 	let animating = $state(false);
 	let stepError = $state<string | null>(null);
+		let stepIdx = $derived(
+	skipIntro ? Math.max(STEPS.indexOf(hasAddons ? 'extras' : 'details'), 0) : 0
+);
 
 	const step = $derived(STEPS[Math.min(stepIdx, STEPS.length - 1)]);
 	const progress = $derived(((stepIdx + 1) / STEPS.length) * 100);
+	
 
 	function next() {
 		stepError = null;
@@ -161,7 +168,7 @@
 			? $submitting
 				? 'Processing…'
 				: $form.recipient === 'me'
-					? `Subscribe — £${finalTotalPrice.toFixed(2)} / month`
+					? `${data?.subscriptionPlans.find(sub => sub.id === $form.plan).kind === 'order' ? 'Order' : "Subscribe"} — £${finalTotalPrice.toFixed(2)} / month`
 					: `Continue as gift — £${finalTotalPrice.toFixed(2)}`
 			: step === 'extras'
 				? $form.addonIds.length > 0
@@ -640,7 +647,7 @@
 					</div>
 					<div class="sum-actions">
 						{#if $form.recipient === 'me'}
-							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : 'Start Subscription'}</Button>
+							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan).kind === 'order' ? 'Order' : "Subscribe"}</Button>
 						{:else}
 							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
 						{/if}

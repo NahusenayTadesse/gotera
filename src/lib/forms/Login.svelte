@@ -9,20 +9,35 @@
 	import { toast } from 'svelte-sonner';
 	import { zodClient } from 'sveltekit-superforms/adapters';
 
+	import { onMount } from 'svelte';
+
+    onMount(() => {
+        if (window.opener) {
+            // Tell the parent window we are done
+            window.opener.postMessage({ type: 'oauth-complete' }, window.location.origin);
+            // Close this popup window
+            window.close();
+        }
+    });
+
 	// `onSuccess` lets the parent (the dialog) close itself after in-place login.
 	let {
 		data,
+		action="?/login",
 		callBack = '/account',
 		onSuccess
 	}: {
 		data: SuperValidated<Infer<LoginSchema>>;
 		callBack?: string;
+		action?: string;
 		onSuccess?: () => void;
 	} = $props();
 
 	// No server action now — we validate client-side and sign in via authClient,
 	// so the page never navigates and the subscribe form keeps its state.
-	const { form, errors, action, enhance  } = superForm(data, {});
+	const { form, errors,  enhance  } = superForm(data, {
+	
+	});
 	 
 
 	let loading = $state(false);
@@ -40,7 +55,9 @@ async function signInWithGoogle() {
 	// Ask Better Auth for the Google authorization URL WITHOUT redirecting.
 	const { data: social, error } = await authClient.signIn.social({
 		provider: 'google',
-		callbackURL: callBack, // where Google returns to (inside popup)
+		callbackURL: "/auth/popup-callback", // where Google returns to (inside popup)
+		disableRedirect: true,
+	
 	});
 
 	if (error || !social?.url) {

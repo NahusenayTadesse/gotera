@@ -273,54 +273,66 @@ export const customerChangeEmail = (url: string) => ({
 	})
 });
 
-export const customerGiftReceived = (data: {
-	buyerName: string;
-	recipientName: string;
+
+
+export const customerOrderConfirmed = (data: {
+	name: string;
 	amountLabel: string;
+	deliveryLabel: string;
+	addressLines: string[];
+	addonNames?: string[];
 }) => ({
-	subject: `Your GOTERA gift for ${data.recipientName} is confirmed`,
+	subject: 'Your GOTERA order is confirmed',
 	html: layout({
-		heading: 'Gift confirmed',
-		preheader: `Your gift for ${data.recipientName} is on its way to being prepared.`,
+		heading: 'Order confirmed',
+		preheader: `Your injera is booked in for ${data.deliveryLabel}.`,
 		body: `
-			<p style="margin:0 0 14px;">Hi ${data.buyerName},</p>
-			<p style="margin:0 0 6px;">Thank you — your gift is confirmed and paid. We'll prepare real injera, made in Ethiopia, and get it ready for ${data.recipientName}.</p>
+			<p style="margin:0 0 14px;">Hi ${data.name},</p>
+			<p style="margin:0 0 6px;">Thank you — your payment has gone through and your order is confirmed. This is a one-time order: there's no subscription, and nothing will renew.</p>
 			${detailTable(
-				detailRow('Recipient', data.recipientName) +
+				detailRow('Delivery', data.deliveryLabel) +
 					detailRow('Total paid', data.amountLabel) +
+					(data.addonNames?.length ? detailRow('Extras', data.addonNames.join(', ')) : '') +
 					detailRow('Status', 'Confirmed')
 			)}
-			<p style="margin:0 0 6px;">We'll follow up with delivery details. There's nothing more you need to do.</p>
-			${button('Send another gift', `${SITE}/subscribe`)}
-			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Questions about this gift? Just reply to this email.</p>
+			<p style="margin:0 0 6px;">Delivering to:</p>
+			<p style="margin:0 0 14px; color:${C.taupe}; font-size:14px; line-height:1.6;">
+				${data.addressLines.filter(Boolean).join('<br />')}
+			</p>
+			<p style="margin:0 0 6px;">We deliver on Saturdays across London. There's nothing more you need to do.</p>
+			${button('View your order', `${SITE}/account`)}
+			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Address wrong? Reply to this email and we'll fix it before dispatch.</p>
 		`
 	})
 });
 
-export const adminTest = () => ({
-	subject: 'GOTERA Admin Email Test',
+export const adminNewOrder = (data: {
+	buyerName: string;
+	buyerEmail: string;
+	amountLabel: string;
+	deliveryLabel: string;
+	addressLines: string[];
+	addonNames?: string[];
+}) => ({
+	subject: `New one-off order — ${data.buyerName} (${data.amountLabel})`,
 	html: layout({
-		heading: 'Email Test',
-		preheader: 'Your email system is working.',
+		heading: 'New one-off order',
+		preheader: `${data.buyerName} ordered ${data.amountLabel} for ${data.deliveryLabel}.`,
 		body: `
-			<p style="margin:0 0 14px;">
-				Hello,
-			</p>
-
-			<p style="margin:0 0 14px;">
-				If you're reading this, the GOTERA email system is working correctly.
-			</p>
-
+			<p style="margin:0 0 14px;">A one-off order has been paid.</p>
 			${detailTable(
-				detailRow('Status', 'Success') +
-				detailRow('Server Time', new Date().toUTCString())
+				detailRow('Customer', data.buyerName) +
+					detailRow('Email', data.buyerEmail) +
+					detailRow('Amount', data.amountLabel) +
+					detailRow('Delivery', data.deliveryLabel) +
+					(data.addonNames?.length ? detailRow('Extras', data.addonNames.join(', ')) : '') +
+					detailRow('Type', 'One-off (no subscription)')
 			)}
-
-			<p style="margin:18px 0 0;">
-				This email was sent from the application using Nodemailer.
+			<p style="margin:0 0 6px;">Ship to:</p>
+			<p style="margin:0 0 14px; color:${C.taupe}; font-size:14px; line-height:1.6;">
+				${data.addressLines.filter(Boolean).join('<br />')}
 			</p>
-
-			${button('Open GOTERA', `${SITE}`)}
+			${button('Open admin', `${SITE}/admin`)}
 		`
 	})
 });

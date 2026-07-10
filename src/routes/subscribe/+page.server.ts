@@ -10,7 +10,7 @@ import { db } from '$lib/server/db';
 import {
 	subscribers,
 	subscriptions,
-	subscriptionAddons,
+	subscriberAddons as subscriptionAddons,
 	addresses,
 	giftOrders,
 	addons as addonsTable,
@@ -20,7 +20,8 @@ import {
 	checkoutSchema,
 	updateSubscriptionSchema,
 	cancelSubscriptionSchema,
-	type FormMessage
+	type FormMessage,
+	ALL_PLANS
 } from './schema';
 
 type PlanRow = typeof plans.$inferSelect;
@@ -107,25 +108,52 @@ const toPlan = (p: PlanRow) => ({
 	price: p.pricePence / 100,
 	freq: p.freqLabel ?? '',
 	bullet: p.bullets,
+	kind: p.kind,
 	featured: p.featured
 });
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
 	const catalogue = await db.select().from(addonsTable).orderBy(addonsTable.sortOrder);
-	const form = await superValidate(zod4(checkoutSchema));
 	const loginForm = await superValidate(zod4(loginSchema));
 	const signupForm = await superValidate(zod4(addUser));
 
 	const rows = await db.select().from(plans).where(eq(plans.active, true)).orderBy(asc(plans.sortOrder));
 	const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
 	const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
-	return { form, subscriptionPlans, giftPlans, addons: catalogue, loginForm, signupForm };
+
+	// ?plan=<slug> from the homepage cards. Must be (a) a real active plan and
+	// (b) known to the zod enum, or superValidate would reject the default.
+	const requested = url.searchParams.get('plan');
+	const match =
+		requested && (ALL_PLANS as readonly string[]).includes(requested)
+			? rows.find((p) => p.slug === requested)
+			: undefined;
+
+	const recipient = match ? (match.kind === 'gift' ? 'gift' : 'me') : undefined;
+
+	const form = await superValidate(
+		match ? { plan: match.slug as PlanSlug, recipient } : undefined,
+		zod4(checkoutSchema),
+		// Don't surface "postcode is required" before they've typed anything.
+		{ errors: false }
+	);
+
+	return {
+		form,
+		subscriptionPlans,
+		giftPlans,
+		addons: catalogue,
+		loginForm,
+		signupForm,
+		preselected: match ? { slug: match.slug, recipient: recipient! } : null
+	};
 };
 
 export const actions: Actions = {
 	/* SUBSCRIBE — "For me": subscription plans OR one-off (kind 'order'). */
 	subscribe: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
+		console.log(form.data)
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'me') {
@@ -156,6 +184,7 @@ export const actions: Actions = {
 			city: form.data.city || 'London',
 			postcode: form.data.postcode
 		};
+		console.log(plan.kind)
 
 		// One-off → one-time payment
 		if (plan.kind === 'order') {
@@ -217,6 +246,9 @@ export const actions: Actions = {
 			console.error('subscribe (db) failed', e);
 			return message(form, { type: 'error', text: 'Something went wrong starting your subscription.' } satisfies FormMessage, { status: 500 });
 		}
+
+
+		
 
 		let session;
 		try {

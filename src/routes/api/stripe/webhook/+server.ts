@@ -14,7 +14,8 @@ import {
     subscriberAddons,
     deliveries,
     addresses,
-    giftOrders
+    giftOrders,
+    addons
 } from '$lib/server/db/schema';
 import {
     sendSubscriptionConfirmed,
@@ -22,7 +23,8 @@ import {
     sendPaymentFailed,
     notifyAdminPaymentFailed,
     sendGiftReceived,
-    notifyAdminGiftOrder
+    notifyAdminGiftOrder,
+    sendOrderConfirmed, notifyAdminOrder
 } from '$lib/server/email';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
@@ -109,40 +111,125 @@ export const POST: RequestHandler = async ({ request }) => {
                 const session = event.data.object as Stripe.Checkout.Session;
 
                 /* ── One-time orders (one-off + gift): mode 'payment' ── */
-                if (session.mode === 'payment') {
-                    const giftOrderId = session.metadata?.giftOrderId;
-                    const kind = session.metadata?.kind;
-                    if (!giftOrderId) break;
+                // if (session.mode === 'payment') {
+                //     const giftOrderId = session.metadata?.giftOrderId;
+                //     const kind = session.metadata?.kind;
+                //     if (!giftOrderId) break;
 
-                    await db
-                        .update(giftOrders)
-                        .set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
-                        .where(eq(giftOrders.id, giftOrderId));
+                //     await db
+                //         .update(giftOrders)
+                //         .set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
+                //         .where(eq(giftOrders.id, giftOrderId));
 
-                    try {
-                        const [order] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
-                        if (order) {
-                            const amountLabel = money(session.amount_total ?? 0);
-                            if (kind === 'gift') {
-                                await sendGiftReceived(order.buyerEmail, {
-                                    buyerName: order.buyerName ?? 'there',
-                                    recipientName: order.recipientName,
-                                    amountLabel
-                                });
-                                await notifyAdminGiftOrder({
-                                    buyerName: order.buyerName ?? 'Guest',
-                                    buyerEmail: order.buyerEmail,
-                                    recipientName: order.recipientName,
-                                    amountLabel
-                                });
-                            }
-                            // one-off (kind 'order'): add a self-order confirmation email here
-                        }
-                    } catch (e) {
-                        console.error('one-time order emails failed', e);
-                    }
-                    break;
-                }
+                //     try {
+                //         const [order] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
+                //         if (order) {
+                //             const amountLabel = money(session.amount_total ?? 0);
+                //             if (kind === 'gift') {
+                //                 await sendGiftReceived(order.buyerEmail, {
+                //                     buyerName: order.buyerName ?? 'there',
+                //                     recipientName: order.recipientName,
+                //                     amountLabel
+                //                 });
+                //                 await notifyAdminGiftOrder({
+                //                     buyerName: order.buyerName ?? 'Guest',
+                //                     buyerEmail: order.buyerEmail,
+                //                     recipientName: order.recipientName,
+                //                     amountLabel
+                //                 });
+                //             }
+                //             // one-off (kind 'order'): add a self-order confirmation email here
+                //         }
+                //     } catch (e) {
+                //         console.error('one-time order emails failed', e);
+                //     }
+                //     break;
+                // }
+            
+if (session.mode === 'payment') {
+	const giftOrderId = session.metadata?.giftOrderId;
+	const kind = session.metadata?.kind;
+	if (!giftOrderId) break;
+ 
+	// Idempotency: Stripe redelivers events. Only send email on the
+	// pending → paid transition, not on every replay.
+	const [before] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
+	const alreadyPaid = before?.status === 'paid' || before?.status === 'fulfilled';
+ 
+	await db
+		.update(giftOrders)
+		.set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
+		.where(eq(giftOrders.id, giftOrderId));
+ 
+	if (alreadyPaid) break;
+ 
+	try {
+		const [order] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
+		if (order) {
+			const amountLabel = money(session.amount_total ?? 0);
+ 
+			// Resolve add-on names for the email (metadata carries the ids).
+			const addonIds = (session.metadata?.addonIds ?? '').split(',').filter(Boolean);
+			const addonNames = addonIds.length
+				? (await db.select().from(addons))
+						.filter((a) => addonIds.includes(a.id))
+						.map((a) => a.name)
+				: [];
+ 
+			const addr = order.recipientAddress as {
+				line1: string;
+				line2: string | null;
+				city: string;
+				postcode: string;
+			};
+			const addressLines = [
+				order.recipientName,
+				addr.line1,
+				addr.line2 ?? '',
+				addr.city,
+				addr.postcode
+			];
+			const deliveryLabel = deliveryFmt.format(nextSaturday());
+ 
+			if (kind === 'gift') {
+				await sendGiftReceived(order.buyerEmail, {
+					buyerName: order.buyerName ?? 'there',
+					recipientName: order.recipientName,
+					amountLabel
+				});
+				await notifyAdminGiftOrder({
+					buyerName: order.buyerName ?? 'Guest',
+					buyerEmail: order.buyerEmail,
+					recipientName: order.recipientName,
+					amountLabel
+				});
+			} else {
+				// kind === 'order' — a one-off for the buyer themselves.
+				await sendOrderConfirmed(order.buyerEmail, {
+					name: order.buyerName ?? 'there',
+					amountLabel,
+					deliveryLabel,
+					addressLines,
+					addonNames
+				});
+				await notifyAdminOrder({
+					buyerName: order.buyerName ?? 'Guest',
+					buyerEmail: order.buyerEmail,
+					amountLabel,
+					deliveryLabel,
+					addressLines,
+					addonNames
+				});
+			}
+		}
+	} catch (e) {
+		console.error('one-time order emails failed', e);
+	}
+	break;
+}
+ 
+
+                
 
                 /* ── New subscription: mode 'subscription' ── */
                 if (session.mode !== 'subscription') break;
@@ -244,7 +331,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
             // Recurring payment succeeded — new period; schedule next delivery.
             case 'invoice.paid': {
-                const invoice = event.data.object as Stripe.Invoice;
+                const invoice = event.data.object as Stripe.Invoice & { subscription?: string };
                 if (invoice.subscription) {
                     const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
                     await syncSubscription(sub);
@@ -263,7 +350,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
             // Payment failed — notify customer + admin (first attempt only).
             case 'invoice.payment_failed': {
-                const invoice = event.data.object as Stripe.Invoice;
+                const invoice = event.data.object as Stripe.Invoice & { subscription?: string };
                 if (invoice.subscription && (invoice.attempt_count ?? 1) <= 1) {
                     try {
                         const [subRow] = await db
