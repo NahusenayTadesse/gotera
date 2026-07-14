@@ -132,7 +132,7 @@ export const customerSubscriptionConfirmed = (data: {
 }) => ({
 	subject: 'Your GOTERA subscription is live',
 	html: layout({
-		heading: 'Subscription confirmed',
+		heading: 'Subscription Confirmed',
 		preheader: `Your ${data.planName} plan is active. First delivery on ${data.nextDeliveryLabel}.`,
 		body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>

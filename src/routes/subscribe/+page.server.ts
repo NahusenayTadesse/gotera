@@ -113,7 +113,7 @@ const toPlan = (p: PlanRow) => ({
 });
 
 export const load: PageServerLoad = async ({ url }) => {
-	const catalogue = await db.select().from(addonsTable).orderBy(addonsTable.sortOrder);
+	const catalogue = await db.select().from(addonsTable).orderBy(asc(addonsTable.sortOrder));
 	const loginForm = await superValidate(zod4(loginSchema));
 	const signupForm = await superValidate(zod4(addUser));
 

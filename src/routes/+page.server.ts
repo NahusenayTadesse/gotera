@@ -4,6 +4,33 @@ import { count, countDistinct, eq, asc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { plans, subscriptions, deliveries, addresses } from '$lib/server/db/schema';
 
+const toCard = (p: (typeof planRows)[number]) => {
+  let bullets: string[] = [];
+
+  if (Array.isArray(p.bullets)) {
+    bullets = p.bullets;
+  } else if (typeof p.bullets === 'string') {
+    try {
+      const parsed = JSON.parse(p.bullets);
+      bullets = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      bullets = [];
+    }
+  }
+
+  return {
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    subtitle: p.subtitle ?? '',
+    price: p.pricePence / 100,
+    freq: p.freqLabel ?? '',
+    bullets,
+    featured: p.featured,
+    kind: p.kind
+  };
+};
+
 export const load: PageServerLoad = async () => {
 	try {
 		const [planRows, subsRes, delsRes, cityRes] = await Promise.all([
@@ -37,17 +64,17 @@ export const load: PageServerLoad = async () => {
 		]);
 
 		// Shape each plan the way the page consumes it (pounds, not pence).
-		const toCard = (p: (typeof planRows)[number]) => ({
-			id: p.id,
-			slug: p.slug,
-			name: p.name,
-			subtitle: p.subtitle ?? '',
-			price: p.pricePence / 100,
-			freq: p.freqLabel ?? '',
-			bullets: p.bullets ?? [],
-			featured: p.featured,
-			kind: p.kind
-		});
+		// const toCard = (p: (typeof planRows)[number]) => ({
+		// 	id: p.id,
+		// 	slug: p.slug,
+		// 	name: p.name,
+		// 	subtitle: p.subtitle ?? '',
+		// 	price: p.pricePence / 100,
+		// 	freq: p.freqLabel ?? '',
+		// 	bullets: p.bullets ?? [],
+		// 	featured: p.featured,
+		// 	kind: p.kind
+		// });
 
 		const subscriptionPlans = planRows.filter((p) => p.kind !== 'gift').map(toCard);
 		const giftPlans = planRows.filter((p) => p.kind === 'gift').map(toCard);
@@ -58,6 +85,9 @@ export const load: PageServerLoad = async () => {
 		// Real "from" prices — the actual lowest active price in each group.
 		const lowest = (arr: { price: number }[]) =>
 			arr.length ? Math.min(...arr.map((p) => p.price)) : null;
+
+
+
 
 		return {
 			subscriptionPlans,
@@ -72,6 +102,7 @@ export const load: PageServerLoad = async () => {
 				cities: Number(cityRes[0]?.n ?? 0)
 			}
 		};
+		
 	} catch (err) {
 		console.error('Error loading homepage data:', err);
 		// Return a safe empty shape so the page never renders on undefined.

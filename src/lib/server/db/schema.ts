@@ -196,13 +196,7 @@ export const honeyOrders = mysqlTable('honey_orders', {
 });
 
 
-// ── Plans (Catalogue — drives the subscribe page + server pricing) ──
-// Add this to schema.ts. Uses imports already present in your file
-// (mysqlTable, varchar, text, int, boolean, mysqlEnum, json, index, secureFields).
-//
-// ALIGNMENT CONSTRAINT: for kind === 'subscription', `slug` must be one of the
-// subscribers.plan enum values ('starter' | 'regular') — the server writes
-// plan.slug directly into subscribers.plan. The admin form enforces this.
+
 export const plans = mysqlTable(
 	'plans',
 	{

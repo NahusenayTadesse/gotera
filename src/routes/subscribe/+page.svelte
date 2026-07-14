@@ -332,10 +332,10 @@
 							<input id="m-giftMessage" type="text" placeholder="A short note" bind:value={$form.giftMessage} />
 						</div>
 					{:else}
-						<div class="sub-field">
+						<!-- <div class="sub-field">
 							<label for="m-addressLabel">Label <span class="opt">(optional · e.g. Home)</span></label>
 							<input id="m-addressLabel" type="text" bind:value={$form.addressLabel} />
-						</div>
+						</div> -->
 						<div class="sub-field">
 							<label for="m-line1b">Address line 1</label>
 							<input id="m-line1b" type="text" placeholder="Street address" bind:value={$form.line1} />
@@ -674,11 +674,11 @@
 
 <style>
 	/* ═══════════ MOBILE WIZARD ═══════════ */
-	.sub-page { min-height: 100dvh; background: #1a1a1a; display: flex; flex-direction: column; font-family: 'Jost', sans-serif; }
-	.sub-bg { flex: 1; display: flex; flex-direction: column; padding: 32px 24px 0; position: relative; min-height: 0; }
-	.sub-plan-hero { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 24px; min-height: 260px; }
-	.sub-plan-eyebrow { font-family: 'Jost', sans-serif; font-size: .6rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: #9a4f22; margin-bottom: 8px; display: block; }
-	.sub-plan-name { font-family: 'Cormorant Garamond', serif; font-size: clamp(2.6rem, 10vw, 3.6rem); font-style: italic; font-weight: 400; color: rgba(250,248,244,.9); line-height: .95; margin-bottom: 12px; display: block; }
+	.sub-page { min-height: 20dvh; background: #1a1a1a; display: flex; flex-direction: column; font-family: 'Jost', sans-serif; }
+	.sub-bg { flex: 1; display: flex; flex-direction: column; padding: 48px 24px 0; padding-bottom: 6px; position: relative; min-height: 0; }
+	.sub-plan-hero { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 12px; min-height: 150px; }
+	.sub-plan-eyebrow { font-family: 'Jost', sans-serif; font-size: .6rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: #9a4f22;  display: block; }
+	.sub-plan-name { font-family: 'Cormorant Garamond', serif; font-size: 36px; font-style: italic; font-weight: 400; color: rgba(250,248,244,.9); line-height: .95; margin-bottom: 12px; display: block; }
 	.sub-plan-name em { font-style: italic; }
 	.sub-plan-price { font-family: 'Jost', sans-serif; font-size: .88rem; color: rgba(250,248,244,.45); letter-spacing: .04em; }
 	.sub-plan-price strong { color: rgba(250,248,244,.75); font-weight: 500; }
@@ -696,7 +696,7 @@
 	.sub-cta__btn:active { background: #2d2d2d; }
 	.sub-cta__btn:disabled { opacity: .5; cursor: not-allowed; }
 	.plan-sel { display: flex; flex-direction: column; gap: 8px; }
-	.plan-sel-card { border: 1px solid #e8e4e0; padding: 16px; display: flex; align-items: center; cursor: pointer; transition: border-color .12s; position: relative; background: #fff; width: 100%; text-align: left; font-family: inherit; }
+	.plan-sel-card { border: 1px solid #e8e4e0; padding: 8px; display: flex; align-items: center; cursor: pointer; transition: border-color .12s; position: relative; background: #fff; width: 100%; text-align: left; font-family: inherit; }
 	.plan-sel-card.active { border-color: #1a1a1a; }
 	.plan-sel-card__badge { position: absolute; top: -1px; left: 12px; background: #1a1a1a; color: #faf8f4; font-size: .58rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; }
 	.plan-sel-card__name { flex: 1; }
@@ -733,7 +733,7 @@
 	.sub-field { margin-bottom: 14px; }
 	.sub-field label { display: block; font-size: .62rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: #7a746e; margin-bottom: 6px; }
 	.sub-field label .opt { text-transform: none; letter-spacing: 0; font-weight: 400; }
-	.sub-field input { display: block; width: 100%; border: 1px solid #e8e4e0; background: #fff; padding: 13px 14px; font-family: 'Jost', sans-serif; font-size: 16px; color: #1a1a1a; outline: none; -webkit-appearance: none; }
+	.sub-field input { display: block; width: 100%; border: 1px solid #e8e4e0; background: #fff; padding: 6px 14px; font-family: 'Jost', sans-serif; font-size: 16px; color: #1a1a1a; outline: none; -webkit-appearance: none; }
 	.sub-field input:focus { border-color: #1a1a1a; }
 	.sub-field input::placeholder { color: rgba(122,116,110,.4); }
 	.sub-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

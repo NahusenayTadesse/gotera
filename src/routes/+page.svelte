@@ -84,13 +84,19 @@
 				Real injera on a monthly subscription. Made in Ethiopia. Delivered to your door.
 			</p>
 			<div class="hero-actions">
-				<a href="/subscribe/?slug" class="btn">Choose Your Plan{subFrom ? ` — from ${fmtPrice(subFrom)}` : ''}</a>
+				<a href="/subscribe/?slug" class="btn"
+					>Choose Your Plan{subFrom ? ` — from ${fmtPrice(subFrom)}` : ''}</a
+				>
 				<a href="/about" class="btn-outline">About GOTERA</a>
 			</div>
 		</div>
 		<div class="hero-card">
 			<div class="hero-card-img">
-				<img src="/hero.jpeg" alt="GOTERA injera" style="width:100%;height:100%;object-fit:cover;object-position:center" />
+				<img
+					src="/hero.jpeg"
+					alt="GOTERA injera"
+					style="width:100%;height:100%;object-fit:cover;object-position:center"
+				/>
 			</div>
 			<div class="hero-card-body">
 				<h3>Injera</h3>
@@ -103,7 +109,11 @@
 <section class="hero-mobile flex! lg:hidden!" aria-label="Hero">
 	<div class="hero__img">
 		<div class="img-ph" style="width:100%;height:100%">
-			<img src="/hero.jpeg" alt="GOTERA injera" style="width:100%;height:100%;object-fit:cover;object-position:center" />
+			<img
+				src="/hero.jpeg"
+				alt="GOTERA injera"
+				style="width:100%;height:100%;object-fit:cover;object-position:center"
+			/>
 		</div>
 	</div>
 	<div class="hero__gradient"></div>
@@ -112,8 +122,12 @@
 			<div class="hero__tag-line"></div>
 			<span>Made &amp; packed in Ethiopia</span>
 		</div>
-		<h1 class="hero__h1">Injera,<br /><em>Delivered 
-<br />To your door.</em></h1>
+		<h1 class="hero__h1">
+			Injera,<br /><em
+				>Delivered
+				<br />To your door.</em
+			>
+		</h1>
 		{#if subFrom}
 			<div class="hero__price-row">
 				<span class="hero__price-from">From</span>
@@ -121,7 +135,9 @@
 				<span class="hero__price-note">/ month · London delivery</span>
 			</div>
 		{/if}
-		<a href="/subscribe" class="btn btn--primary" style="margin-bottom:12px">Choose your plan. Order Now</a>
+		<a href="/subscribe" class="btn btn--primary" style="margin-bottom:12px"
+			>Order Now</a
+		>
 		<div class="hero__claims">
 			<span class="hero__claim">Gluten free</span>
 			<span class="hero__claim">Vegan</span>
@@ -196,15 +212,28 @@
 		{#if cards.length}
 			<div class="plans-grid">
 				{#each cards as card (card.slug)}
+
+						{@const bullets = Array.isArray(card.bullets)
+							? card.bullets
+							: card.bullets
+								? [card.bullets]
+								: []}
 					<div class="plan" class:plan-featured={card.featured}>
 						<h3>{card.title}</h3>
 						<p class="plan-desc">{card.desc}</p>
 						<div class="price">{fmtPrice(card.price)}</div>
 						<div class="freq">{card.freq}</div>
+
+
 						<ul>
-							{#each card.bullets as b}<li>{b}</li>{/each}
+							{#each bullets as b}
+								<li>{b}</li>
+							{/each}
 						</ul>
-						<a href="/subscribe?plan={card.slug}" class={card.featured ? 'btn plan-featured-btn' : 'btn-outline'}>{card.cta}</a>
+						<a
+							href="/subscribe?plan={card.slug}"
+							class={card.featured ? 'btn plan-featured-btn' : 'btn-outline'}>{card.cta}</a
+						>
 					</div>
 				{/each}
 			</div>
@@ -225,7 +254,10 @@
 			<div class="origin-panel">
 				<span class="eyebrow">Delivery</span>
 				<h3>Delivered with clarity</h3>
-				<p>One delivery date per month. Cold-chain packaging. Clear cut-off dates. Nothing complicated.</p>
+				<p>
+					One delivery date per month. Cold-chain packaging. Clear cut-off dates. Nothing
+					complicated.
+				</p>
 			</div>
 		</div>
 	</div>
@@ -244,7 +276,9 @@
 					<span class="ph-label">Subscriber photo</span>
 					<span class="ph-sub">Optional · square crop</span>
 				</div>
-				<div class="proof-card-quote">"Diaspora subscriber quote — authenticity, taste, delivery experience."</div>
+				<div class="proof-card-quote">
+					"Diaspora subscriber quote — authenticity, taste, delivery experience."
+				</div>
 				<div class="proof-card-attr">Name · City · Subscriber since —</div>
 			</div>
 			<div class="proof-card proof-card-placeholder">
@@ -252,7 +286,9 @@
 					<span class="ph-label">Subscriber photo</span>
 					<span class="ph-sub">Optional · square crop</span>
 				</div>
-				<div class="proof-card-quote">"Health or vegan audience quote — gluten-free, nutrition, convenience."</div>
+				<div class="proof-card-quote">
+					"Health or vegan audience quote — gluten-free, nutrition, convenience."
+				</div>
 				<div class="proof-card-attr">Name · City · Subscriber since —</div>
 			</div>
 			<div class="proof-card proof-card-placeholder">
@@ -260,34 +296,37 @@
 					<span class="ph-label">Subscriber photo</span>
 					<span class="ph-sub">Optional · square crop</span>
 				</div>
-				<div class="proof-card-quote">"Gifting experience quote — recipient reaction, presentation, quality."</div>
+				<div class="proof-card-quote">
+					"Gifting experience quote — recipient reaction, presentation, quality."
+				</div>
 				<div class="proof-card-attr">Name · City · Gift sender</div>
 			</div>
 		</div>
 	</div>
 </section>
 {#if data?.giftPlans?.length > 0}
-
-<section class="gift">
-	<div class="container gift-grid">
-		<div class="gift-text">
-			<span class="eyebrow">Gifting</span>
-			<h2>Send GOTERA to someone's door.</h2>
-			<p>Something they will actually use. One purchase, no subscription required.</p>
-			<a href="/subscribe" class="btn">Send a Gift{giftFrom ? ` — from ${fmtPrice(giftFrom)}` : ''}</a>
-		</div>
-		<div class="gift-card">
-			<div class="gift-card-img">
-				<span class="ph-label">Gift photography</span>
-				<span class="ph-sub">Packaging · warm tone · 4:3</span>
+	<section class="gift">
+		<div class="container gift-grid">
+			<div class="gift-text">
+				<span class="eyebrow">Gifting</span>
+				<h2>Send GOTERA to someone's door.</h2>
+				<p>Something they will actually use. One purchase, no subscription required.</p>
+				<a href="/subscribe" class="btn"
+					>Send a Gift{giftFrom ? ` — from ${fmtPrice(giftFrom)}` : ''}</a
+				>
 			</div>
-			<div class="gift-card-body">
-				<h3>{data?.giftPlans[0]?.name}</h3>
-				<p>{data?.giftPlans[0]?.subtitle}</p>
+			<div class="gift-card">
+				<div class="gift-card-img">
+					<span class="ph-label">Gift photography</span>
+					<span class="ph-sub">Packaging · warm tone · 4:3</span>
+				</div>
+				<div class="gift-card-body">
+					<h3>{data?.giftPlans[0]?.name}</h3>
+					<p>{data?.giftPlans[0]?.subtitle}</p>
+				</div>
 			</div>
 		</div>
-	</div>
-</section>
+	</section>
 {/if}
 
 <style>
@@ -845,7 +884,12 @@
 		left: 0;
 		right: 0;
 		height: 70%;
-		background: linear-gradient(0deg, rgba(26, 26, 26, 0.92) 0%, rgba(26, 26, 26, 0.55) 50%, transparent 100%);
+		background: linear-gradient(
+			0deg,
+			rgba(26, 26, 26, 0.92) 0%,
+			rgba(26, 26, 26, 0.55) 50%,
+			transparent 100%
+		);
 	}
 	.hero__content {
 		position: relative;

@@ -88,7 +88,7 @@
       <a href="/account"   onclick={closeDrawer} class="drawer-link">My account</a>
     </nav>
     <div class="drawer-bottom">
-      <a href="/subscribe" onclick={closeDrawer} class="drawer-cta">Subscribe from £12 →</a>
+      <a href="/subscribe" onclick={closeDrawer} class="drawer-cta">Subscribe from £6.50 →</a>
     </div>
   </div>
 
