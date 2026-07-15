@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 // Adjust to your project's paths.

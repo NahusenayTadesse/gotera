@@ -45,6 +45,7 @@ export const checkoutSchema = z
 		line2: z.string().max(255).optional(),
 		city: z.string().max(255).default('London'),
 		postcode: z.string().max(32).default(''),
+		guestCheckout: z.boolean().default(false),
 
 		// ── Gift-only ──
 		buyerName: z.string().max(255).optional(),

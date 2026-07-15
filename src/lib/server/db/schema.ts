@@ -11,13 +11,13 @@ import {
 	index,
 	timestamp
 } from 'drizzle-orm/mysql-core';
-import { secureFields, user } from './auth.schema';
+import { secureFields } from './auth.schema';
 
 export * from './auth.schema';
 
 export const subscribers = mysqlTable('subscribers', {
 	id: varchar('id', { length: 36 }).primaryKey(),
-	userId: varchar('user_id', { length: 36 }).notNull().unique(),
+	userId: varchar('user_id', { length: 36 }).unique(),
 	email: varchar('email', { length: 255 }).notNull(),
 	fullName: varchar('full_name', { length: 255 }),
 	phone: varchar('phone', { length: 40 }),

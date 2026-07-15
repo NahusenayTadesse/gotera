@@ -69,7 +69,7 @@ async function ensureSubscriber(
 async function oneTimeCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
-	buyerEmail: string;
+	buyerEmail: string | null;
 	buyerName: string | null;
 	recipientName: string;
 	recipientAddress: { line1: string; line2: string | null; city: string; postcode: string };
@@ -192,7 +192,7 @@ export const actions: Actions = {
 			try {
 				checkoutUrl = await oneTimeCheckout({
 					plan,
-					addons: chosenAddons,
+					addons: chosenAddons4,
 					buyerEmail: user.email,
 					buyerName: user.name ?? null,
 					recipientName: user.name ?? 'Me',
@@ -385,5 +385,52 @@ export const actions: Actions = {
 		}
 
 		return message(form, { type: 'success', text: 'Subscription cancelled.' } satisfies FormMessage);
+	},
+	guestOrder: async ({ request, url }) => {
+	const form = await superValidate(request, zod4(checkoutSchema));
+	console.log(form.data)
+	if (!form.valid) return fail(400, { form });
+		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
+		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
+
+
+
+		const [plan] = await db
+			.select()
+			.from(plans)
+			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
+		if(plan.kind !== 'order') {
+			   return message(form, { type:"error", text: "Guest Order is not allowed for non one type orders."})
+		}
+		
+
+	const { recipientName } = form.data;
+
+	let checkoutUrl: string;
+		try {
+			checkoutUrl = await oneTimeCheckout({
+				plan,
+				addons: chosenAddons,
+				buyerEmail: null,          // null → Stripe asks
+				buyerName: null,
+				recipientName: recipientName ?? 'Me',
+				recipientAddress: {
+					line1: form.data.line1,
+					line2: form.data.line2 || null,
+					city: form.data.city || 'London',
+					postcode: form.data.postcode
+				},
+				giftMessage: form.data.giftMessage || null,
+				durationMonths: form.data.durationMonths,
+				successUrl: `${url.origin}/?checkout=gift-success`,
+				cancelUrl: `${url.origin}/subscribe`
+			});
+		} catch (e) {
+			console.error('one-off checkout failed', e);
+			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
+		}
+		redirect(303, checkoutUrl);
 	}
+	
+
 };
