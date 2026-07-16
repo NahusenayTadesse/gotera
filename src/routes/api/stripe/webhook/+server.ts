@@ -15,7 +15,8 @@ import {
     deliveries,
     addresses,
     giftOrders,
-    addons
+    addons,
+    guestOrders
 } from '$lib/server/db/schema';
 import {
     sendSubscriptionConfirmed,
@@ -96,6 +97,13 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
 export const POST: RequestHandler = async ({ request }) => {
     const sig = request.headers.get('stripe-signature');
     const body = await request.text(); // RAW body — required for signature verification
+    // console.log("SIG ", sig)
+    // console.log("BODY ", body)
+
+    const payload = JSON.parse(body);
+  
+  // 2. Safely extract the email and name using optional chaining
+
 
     let event: Stripe.Event;
     try {
@@ -148,11 +156,16 @@ export const POST: RequestHandler = async ({ request }) => {
             
 if (session.mode === 'payment') {
 	const giftOrderId = session.metadata?.giftOrderId;
+    const guestOrderId = session.metadata?.guestOrderId;
 	const kind = session.metadata?.kind;
-	if (!giftOrderId) break;
+    const email = session.customer_details?.email;
+  const name  = session.customer_details?.name;
+  console.log(name, email)
+    
+
+	if (!giftOrderId && !guestOrderId) break;
  
-	// Idempotency: Stripe redelivers events. Only send email on the
-	// pending → paid transition, not on every replay.
+	if(giftOrderId) {
 	const [before] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
 	const alreadyPaid = before?.status === 'paid' || before?.status === 'fulfilled';
  
@@ -226,10 +239,74 @@ if (session.mode === 'payment') {
 		console.error('one-time order emails failed', e);
 	}
 	break;
-}
- 
+} 
 
-                
+	if(guestOrderId) {
+	const [before] = await db.select().from(guestOrders).where(eq(guestOrders.id, guestOrderId));
+	const alreadyPaid = before?.status === 'paid' || before?.status === 'fulfilled';
+ 
+	await db
+		.update(guestOrders)
+		.set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
+		.where(eq(guestOrders.id, guestOrderId));
+ 
+	if (alreadyPaid) break;
+ 
+	try {
+		const [order] = await db.select().from(guestOrders).where(eq(guestOrders.id, guestOrderId));
+		if (order) {
+			const amountLabel = money(session.amount_total ?? 0);
+ 
+			// Resolve add-on names for the email (metadata carries the ids).
+			const addonIds = (session.metadata?.addonIds ?? '').split(',').filter(Boolean);
+			const addonNames = addonIds.length
+				? (await db.select().from(addons))
+						.filter((a) => addonIds.includes(a.id))
+						.map((a) => a.name)
+				: [];
+ 
+			const addr = order.recipientAddress as {
+				line1: string;
+				line2: string | null;
+				city: string;
+				postcode: string;
+			};
+			const addressLines = [
+				order.recipientName,
+				addr.line1,
+				addr.line2 ?? '',
+				addr.city,
+				addr.postcode
+			];
+			const deliveryLabel = deliveryFmt.format(nextSaturday());
+ 
+			
+				// kind === 'order' — a one-off for the buyer themselves.
+				await sendOrderConfirmed(email, {
+					name: name ?? 'there',
+					amountLabel,
+					deliveryLabel,
+					addressLines,
+					addonNames
+				});
+				await notifyAdminOrder({
+					buyerName: name ?? 'Guest',
+					buyerEmail: email ?? 'Unknown',
+					amountLabel,
+					deliveryLabel,
+					addressLines,
+					addonNames
+				});
+			}
+		
+	} catch (e) {
+		console.error('one-time order emails failed', e);
+	}
+	break;
+} 
+            }
+        
+    
 
                 /* ── New subscription: mode 'subscription' ── */
                 if (session.mode !== 'subscription') break;

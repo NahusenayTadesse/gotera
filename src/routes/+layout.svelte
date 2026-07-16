@@ -101,7 +101,7 @@
       <div class="footer-grid">
         <div>
           <div class="footer-logo">G O T E R A</div>
-          <p class="footer-tagline">Premium Ethiopian food built on authenticity, clarity, and restraint.</p>
+          <p class="footer-tagline">Premium Ethiopian food · Delivered in London</p>
         </div>
         <div>
           <h4>Site</h4>

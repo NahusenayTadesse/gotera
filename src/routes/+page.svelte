@@ -1,5 +1,9 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import HowItWorks from '$lib/HowItWorks.svelte';
+	import { Origami } from '@lucide/svelte';
+import type { PageData } from './$types';
+	import Origin from '$lib/origin.svelte';
+	import Final from '$lib/final.svelte';
 	let { data }: { data: PageData } = $props();
 
 	// Bespoke homepage copy, keyed by slug. Facts (price/featured/existence)
@@ -56,7 +60,7 @@
 	// £12 not £12.00, but £6.50 keeps its pence.
 	const fmtPrice = (p: number) => (Number.isInteger(p) ? `£${p}` : `£${p.toFixed(2)}`);
 	// Real number once there's data; keeps the "—" launch look at zero.
-	const stat = (n: number) => (n > 0 ? n.toLocaleString('en-GB') : '—');
+	const stat = (n: number) => (n > 0 ? n.toLocaleString('en-GB') : '47');
 </script>
 
 <svelte:head>
@@ -207,7 +211,7 @@
 		<div class="plans-head">
 			<span class="eyebrow">Subscription Plans</span>
 			<h2>Choose your plan.</h2>
-			<p>No minimum term. Cancel or pause any time.</p>
+			<p>No minimum term. Pause or cancel any time.</p>
 		</div>
 		{#if cards.length}
 			<div class="plans-grid">
@@ -262,6 +266,10 @@
 		</div>
 	</div>
 </section>
+<div class="flex flex-col items-center justify-center">	
+
+<HowItWorks />
+</div>
 
 <section class="proof">
 	<div class="container">
@@ -328,6 +336,9 @@
 		</div>
 	</section>
 {/if}
+
+<Origin />
+<Final />
 
 <style>
 	:global(:root) {

@@ -413,11 +413,7 @@
 				{#if !data?.user}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
 					   {#if isOrder}
-					      	<div class="field full">
-									<label class="field-label" for="recipientName">Your Name</label>
-									<input id="recipientName" placeholder="Enter Your Full Name" class="input" type="text" bind:value={$form.recipientName} />
-									{#if $errors.recipientName}<span class="form-error">{$errors.recipientName}</span>{/if}
-								</div>
+					    
 					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestCheckout" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
 						 {/if}
 						<DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
@@ -665,11 +661,8 @@
 
 						{#if !data?.user}
 						{#if isOrder}
-					      	<div class="field full">
-									<label class="field-label" for="recipientName">Your Name</label>
-									<input id="recipientName" placeholder="Enter Your Full Name" class="input" type="text" bind:value={$form.recipientName} />
-									{#if $errors.recipientName}<span class="form-error">{$errors.recipientName}</span>{/if}
-								</div>
+					      
+
 					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
 						 {/if}
 							<DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>

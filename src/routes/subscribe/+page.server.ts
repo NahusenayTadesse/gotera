@@ -14,7 +14,8 @@ import {
 	addresses,
 	giftOrders,
 	addons as addonsTable,
-	plans
+	plans,
+	guestOrders
 } from '$lib/server/db/schema';
 import {
 	checkoutSchema,
@@ -69,7 +70,7 @@ async function ensureSubscriber(
 async function oneTimeCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
-	buyerEmail: string | null;
+	buyerEmail: string;
 	buyerName: string | null;
 	recipientName: string;
 	recipientAddress: { line1: string; line2: string | null; city: string; postcode: string };
@@ -97,6 +98,38 @@ async function oneTimeCheckout(opts: {
 		cancel_url: opts.cancelUrl,
 		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
 		metadata: { giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(',') }
+	});
+	return session.url!;
+}
+
+
+async function guestCheckout(opts: {
+	plan: PlanRow;
+	addons: AddonRow[];
+	buyerEmail: string | null;
+	buyerName: string | null;
+	recipientName: string;
+	recipientAddress: { line1: string; line2: string | null; city: string; postcode: string };
+	successUrl: string;
+	cancelUrl: string;
+}): Promise<string> {
+	const giftOrderId = crypto.randomUUID();
+	await db.insert(guestOrders).values({
+		id: giftOrderId,
+		buyerEmail: opts.buyerEmail ?? null,
+		buyerName: opts.buyerName ?? opts.recipientName,
+		recipientName: opts.recipientName,
+		recipientAddress: opts.recipientAddress,
+		status: 'pending'
+	});
+	const session = await stripe.checkout.sessions.create({
+		mode: 'payment',
+		billing_address_collection: 'required', 
+		line_items: [{ price: opts.plan.stripePriceId!, quantity: 1 }, ...addonLineItems(opts.addons)],
+		success_url: opts.successUrl,
+		cancel_url: opts.cancelUrl,
+		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
+		metadata: { guestOrderId: giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(',') }
 	});
 	return session.url!;
 }
@@ -408,20 +441,16 @@ export const actions: Actions = {
 
 	let checkoutUrl: string;
 		try {
-			checkoutUrl = await oneTimeCheckout({
+			checkoutUrl = await guestCheckout({
 				plan,
 				addons: chosenAddons,
-				buyerEmail: null,          // null → Stripe asks
-				buyerName: null,
-				recipientName: recipientName ?? 'Me',
+				recipientName: recipientName,
 				recipientAddress: {
 					line1: form.data.line1,
 					line2: form.data.line2 || null,
 					city: form.data.city || 'London',
 					postcode: form.data.postcode
 				},
-				giftMessage: form.data.giftMessage || null,
-				durationMonths: form.data.durationMonths,
 				successUrl: `${url.origin}/?checkout=gift-success`,
 				cancelUrl: `${url.origin}/subscribe`
 			});

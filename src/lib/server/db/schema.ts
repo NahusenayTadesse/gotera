@@ -176,6 +176,19 @@ export const giftOrders = mysqlTable('gift_orders', {
 	...secureFields
 });
 
+
+export const guestOrders = mysqlTable('guest_orders', {
+	id: varchar('id', { length: 36 })
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	buyerEmail: varchar('buyer_email', { length: 255 }),
+	recipientName: varchar('recipient_name', { length: 255 }),
+	recipientAddress: json('recipient_address').notNull(),
+	stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }).unique(),
+	status: mysqlEnum('status', ['pending', 'paid', 'fulfilled']).default('pending').notNull(),
+	...secureFields
+});
+
 // ── Honey Orders ──
 export const honeyOrders = mysqlTable('honey_orders', {
 	id: varchar('id', { length: 36 })
