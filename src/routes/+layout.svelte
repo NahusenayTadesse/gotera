@@ -4,6 +4,7 @@
   import { Toaster } from 'svelte-sonner';
   import { ProgressBar } from '@prgm/sveltekit-progress-bar';
   import { page } from '$app/state';
+	import { Hamburger, Menu } from '@lucide/svelte';
 
   let { data, children } = $props();
 
@@ -22,6 +23,8 @@
   function handleScroll() {
     isScrolled = window.scrollY > 20;
   }
+
+  const nonWhiteBG = $derived(page.url.pathname === '/' || page.url.pathname.startsWith('/subscribe'))
 </script>
 
 <svelte:window onscroll={handleScroll} />
@@ -59,16 +62,17 @@
     </div>
   </nav>
 
-  <nav class="nav--hero mobile-only" class:nav--scrolled={isScrolled} aria-label="Site navigation">
-    <a href="/" class="nav-logo" aria-label="GOTERA home">GOTERA</a>
+  <nav class="nav--hero mobile-only"  class:nav--scrolled={isScrolled} aria-label="Site navigation">
+    <a href="/" class="nav-logo {nonWhiteBG && !isScrolled ? 'text-white!': ''}" aria-label="GOTERA home">GOTERA</a>
     <button 
-      class="hamburger" 
+      class="hamburger {nonWhiteBG && !isScrolled ? 'text-white!': 'text-primary!'}" 
       class:open={isDrawerOpen} 
       onclick={toggleDrawer} 
       aria-label="Open menu" 
       aria-expanded={isDrawerOpen}
     >
-      <span></span><span></span><span></span>
+      <!-- <span></span><span></span><span></span> -->
+       <Menu  />
     </button>
   </nav>
 
@@ -239,12 +243,12 @@
   }
   
   .nav--hero .nav-logo { 
-    color: #fff; 
+    color: #B5622A; 
     font-family: 'Cormorant Garamond', serif;
     letter-spacing: .18em;
     font-weight: 600;
   } 
-  .nav--hero .hamburger span { background: #fff; }
+  .nav--hero .hamburger span { background: #B5622A; }
 
   .nav--scrolled {
     background: rgba(250,248,244,.96) !important;
@@ -271,6 +275,7 @@
   }
   .hamburger span {
     display: block;
+
     width: 22px;
     height: 1.5px;
     background: var(--copper);

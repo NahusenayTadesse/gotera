@@ -117,8 +117,6 @@ async function guestCheckout(opts: {
 	await db.insert(guestOrders).values({
 		id: giftOrderId,
 		buyerEmail: opts.buyerEmail ?? null,
-		buyerName: opts.buyerName ?? opts.recipientName,
-		recipientName: opts.recipientName,
 		recipientAddress: opts.recipientAddress,
 		status: 'pending'
 	});
@@ -225,7 +223,7 @@ export const actions: Actions = {
 			try {
 				checkoutUrl = await oneTimeCheckout({
 					plan,
-					addons: chosenAddons4,
+					addons: chosenAddons,
 					buyerEmail: user.email,
 					buyerName: user.name ?? null,
 					recipientName: user.name ?? 'Me',

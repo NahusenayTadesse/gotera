@@ -7,6 +7,8 @@
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	import { UserCheck, UserRoundPlus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
+	import Google from '$lib/forms/Google.svelte';
+	import AuthSheet from '$lib/AuthSheet.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -154,6 +156,8 @@
 			review: 'Review & pay.'
 		}[step]
 	);
+		let isOrder = $derived(data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order')
+
 	const cardSub = $derived(
 		{
 			who: 'For me or as a gift.',
@@ -168,7 +172,7 @@
 			? $submitting
 				? 'Processing…'
 				: $form.recipient === 'me'
-					? `${data?.subscriptionPlans.find(sub => sub.id === $form.plan).kind === 'order' ? 'Order' : "Subscribe"} — £${finalTotalPrice.toFixed(2)} / month`
+					? `${data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"} — £${finalTotalPrice.toFixed(2)}  ${isOrder ? '' : '/month'}`
 					: `Continue as gift — £${finalTotalPrice.toFixed(2)}`
 			: step === 'extras'
 				? $form.addonIds.length > 0
@@ -180,7 +184,6 @@
 	let loginOpen = $state(false);
 	let signupOpen = $state(false);
 
-	let isOrder = $derived(data?.subscriptionPlans.find(sub => sub.id === $form.plan).kind === 'order')
 </script>
 
 <svelte:head>
@@ -373,7 +376,7 @@
 					<div class="pay-summary">
 						<div class="pay-row">
 							<span class="pay-row__label">{currentPlanDetails?.name} {$form.recipient === 'me' ? 'subscription' : 'gift'}</span>
-							<span class="pay-row__val">£{(currentPlanDetails?.price ?? 0).toFixed(2)}{$form.recipient === 'me' ? ' / mo' : ''}</span>
+							<span class="pay-row__val">£{(currentPlanDetails?.price ?? 0).toFixed(2)}</span>
 						</div>
 						{#each activeAddons as a (a.id)}
 							<div class="pay-row">
@@ -413,16 +416,11 @@
 				{#if !data?.user}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
 					   {#if isOrder}
-					    
-					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestCheckout" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
+					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
 						 {/if}
-						<DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
-							<Login data={data?.loginForm} callBack="/subscribe" onSuccess={() => (loginOpen = false)} />
-						</DialogComp>
-						<DialogComp variant="default" title="Register if you don't have an account" IconComp={UserRoundPlus} bind:open={signupOpen}>
-							<Signup data={data?.signupForm} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
-						</DialogComp>
-					</div>
+						<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
+						</div>
+
 				{/if}
 			{:else}
 				<button type="button" class="sub-cta__btn" onclick={handleCta}>{ctaLabel}</button>
@@ -654,7 +652,7 @@
 					</div>
 					<div class="sum-actions">
 						{#if $form.recipient === 'me'}
-							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan).kind === 'order' ? 'Order' : "Subscribe"}</Button>
+							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
 						{:else}
 							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
 						{/if}
@@ -665,12 +663,15 @@
 
 					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
 						 {/if}
-							<DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
+							<!-- <DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
 								<Login data={data?.loginForm} callBack="/subscribe" onSuccess={() => (loginOpen = false)} />
-							</DialogComp>
+							</DialogComp> -->
+							<!-- <Google onSuccess={() => (loginOpen = false)} />
 							<DialogComp variant="default" title="Register if you don't have an account" IconComp={UserRoundPlus} bind:open={signupOpen}>
 								<Signup data={data?.signupForm} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
-							</DialogComp>
+							</DialogComp> -->
+													<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
+
 						{/if}
 					</div>
 					<p class="sum-note">Pause, skip, or cancel any time from your account.</p>
@@ -868,4 +869,43 @@
 		.mobile-view { display: none !important; }
 		.desktop-view { display: block !important; }
 	}
+
+	.auth-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		width: min(380px, 100%);
+		margin: 0 auto;
+	}
+
+	.auth-divider {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		color: var(--taupe);
+		font-family: 'Jost', sans-serif;
+		font-size: 0.62rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+	}
+	.auth-divider::before,
+	.auth-divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--border);
+	}
+
+	.auth-fine {
+		margin: 2px 0 0;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.68rem;
+		font-weight: 300;
+		line-height: 1.5;
+		color: var(--taupe);
+		text-align: center;
+	}
+	.auth-fine a { color: var(--taupe); text-decoration: underline; text-underline-offset: 2px; }
+	.auth-fine a:hover { color: var(--copper); }
 </style>

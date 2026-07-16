@@ -1,4 +1,6 @@
 <script>
+	import Testimonial from "$lib/testimonial.svelte";
+
   // Structured content matrices for sections to keep the markup completely DRY
   const originPanels = [
     {
@@ -50,8 +52,10 @@
 
 <!-- BRAND IMAGERY MODULE -->
 <div class="img-band">
-  <span class="ph-label">Brand photography — full width</span>
-  <span class="ph-sub">Injera being made · teff grain · or product in situ · warm natural light · 21:6 crop</span>
+  <!-- <span class="ph-label">Brand photography — full width</span>
+  <span class="ph-sub">Injera being made · teff grain · or product in situ · warm natural light · 21:6 crop</span> -->
+
+  <img src="/injera.avif" alt="Injera with wot" />
 </div>
 
 <!-- COMPONENT PILLARS BLOCK (ORIGIN & INGREDIENT) -->
@@ -100,7 +104,7 @@
 </section>
 
 <!-- SOCIAL PROOF MATRICES -->
-<section class="proof">
+<!-- <section class="proof">
   <div class="container">
     <div class="proof-inner">
       {#each testimonialCards as card}
@@ -115,7 +119,8 @@
       {/each}
     </div>
   </div>
-</section>
+</section> -->
+<Testimonial />
 
 <!-- CALL TO ACTION (CTA) -->
 <section class="cta">
