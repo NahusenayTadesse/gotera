@@ -2,12 +2,8 @@
 	import { superForm } from 'sveltekit-superforms';
 	import { toast } from 'svelte-sonner';
 	import type { PageData, Snapshot } from './$types';
-	import Signup from '$lib/forms/Signup.svelte';
-	import Login from '$lib/forms/Login.svelte';
-	import DialogComp from '$lib/formComponents/DialogComp.svelte';
-	import { UserCheck, UserRoundPlus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
-	import Google from '$lib/forms/Google.svelte';
+
 	import AuthSheet from '$lib/AuthSheet.svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -184,6 +180,53 @@
 	let loginOpen = $state(false);
 	let signupOpen = $state(false);
 
+
+
+	import { untrack } from 'svelte';
+
+// ── Address persistence (localStorage-backed autofill) ──
+const ADDR_KEY = (who: 'me' | 'gift') => `gotera:address:${who}`;
+const ADDR_FIELDS = {
+	me: ['addressLabel', 'line1', 'line2', 'city', 'postcode'],
+	gift: ['buyerEmail', 'recipientName', 'line1', 'line2', 'city', 'postcode']
+} as const;
+
+let loadedFor = $state<'me' | 'gift' | null>(null);
+
+// Load: runs once per recipient mode, and again if the user switches modes.
+$effect(() => {
+	const who = $form.recipient as 'me' | 'gift' | undefined;
+	if (!who || loadedFor === who) return;
+	loadedFor = who;
+	untrack(() => {
+		try {
+			const raw = localStorage.getItem(ADDR_KEY(who));
+			if (!raw) return;
+			const saved = JSON.parse(raw) as Record<string, string>;
+			for (const k of ADDR_FIELDS[who]) {
+				if (saved[k]) ($form as any)[k] = saved[k];
+			}
+		} catch {
+			/* corrupt entry — ignore */
+		}
+	});
+});
+
+// Save: tracks every field, so any edit overwrites the bucket immediately.
+$effect(() => {
+	const who = $form.recipient as 'me' | 'gift' | undefined;
+	if (!who || loadedFor !== who) return; // don't clobber storage before hydration
+	const snapshot = Object.fromEntries(
+		ADDR_FIELDS[who].map((k) => [k, ($form as any)[k] ?? ''])
+	);
+	if (!Object.values(snapshot).some(Boolean)) return; // never save an all-empty record
+	try {
+		localStorage.setItem(ADDR_KEY(who), JSON.stringify(snapshot));
+	} catch {
+		/* quota / private mode — non-fatal */
+	}
+});
+
 </script>
 
 <svelte:head>
@@ -219,7 +262,7 @@
 		<div class="sub-progress__fill" style="width:{progress}%"></div>
 	</div>
 
-	<form class="sub-card-wrap" method="POST" use:enhance>
+	<form class="sub-card-wrap" method="POST" id="start" use:enhance>
 		<div class="sub-card" class:animating>
 			<div class="sub-card__head">
 				<span class="sub-card__title">{cardTitle}</span>
@@ -410,13 +453,13 @@
 
 		<div class="sub-cta">
 			{#if step === 'review'}
-				<button type="submit" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' ? '?/subscribe' : '?/gift'} class="sub-cta__btn" disabled={$submitting && !data?.user}>
+				<button type="submit" form="start" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' ? '?/subscribe' : '?/gift'} class="sub-cta__btn" disabled={$submitting && !data?.user}>
 					{ctaLabel}
 				</button>
 				{#if !data?.user}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
 					   {#if isOrder}
-					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
+					     <button  form="start" title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
 						 {/if}
 						<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
 						</div>
@@ -652,16 +695,16 @@
 					</div>
 					<div class="sum-actions">
 						{#if $form.recipient === 'me'}
-							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
+							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
 						{:else}
-							<Button type="submit" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
+							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
 						{/if}
 
 						{#if !data?.user}
 						{#if isOrder}
 					      
 
-					     <button title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
+					     <button form="start" title="Checkout Without an account"  class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
 						 {/if}
 							<!-- <DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
 								<Login data={data?.loginForm} callBack="/subscribe" onSuccess={() => (loginOpen = false)} />
@@ -675,10 +718,10 @@
 						{/if}
 					</div>
 					<p class="sum-note">Pause, skip, or cancel any time from your account.</p>
-					<div class="trust-panel-strip">
+					<!-- <div class="trust-panel-strip">
 						<div class="trust-quote">"Subscriber quote placeholder — one sentence, high trust."</div>
 						<div class="trust-attr">Name · GOTERA subscriber</div>
-					</div>
+					</div> -->
 				</div>
 			</aside>
 		</form>
