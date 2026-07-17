@@ -4,6 +4,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getRequestEvent } from '$app/server';
 import { magicLink } from 'better-auth/plugins';
+import { oneTap } from "better-auth/plugins"; 
+
 import { eq } from 'drizzle-orm';
 
 import { db } from '$lib/server/db';
@@ -85,6 +87,7 @@ export const auth = betterAuth({
 				await sendMagicLink(email, url);
 			}
 		}),
+		 oneTap(), 
 		sveltekitCookies(getRequestEvent) // keep last
 	]
 });

@@ -23,66 +23,83 @@
 			.join('')
 	);
 
-	async function signInWithGoogle() {
-		googleLoading = true;
+	// async function signInWithGoogle() {
+	// 	googleLoading = true;
 
-		const { data: social, error } = await authClient.signIn.social({
-			provider: 'google',
-			callbackURL: '/auth/popup-callback',
-			disableRedirect: true
-		});
+	// 	const { data: social, error } = await authClient.signIn.social({
+	// 		provider: 'google',
+	// 		callbackURL: '/auth/popup-callback',
+	// 		disableRedirect: true
+	// 	});
 
-		if (error || !social?.url) {
-			toast.error(error?.message ?? 'Google sign-in is unavailable right now. Try again.');
-			googleLoading = false;
-			return;
-		}
+	// 	if (error || !social?.url) {
+	// 		toast.error(error?.message ?? 'Google sign-in is unavailable right now. Try again.');
+	// 		googleLoading = false;
+	// 		return;
+	// 	}
 
-		const w = 500,
-			h = 640;
-		const left = window.screenX + (window.outerWidth - w) / 2;
-		const top = window.screenY + (window.outerHeight - h) / 2;
-		const popup = window.open(social.url, 'gotera-google', `width=${w},height=${h},left=${left},top=${top}`);
+	// 	const w = 500,
+	// 		h = 640;
+	// 	const left = window.screenX + (window.outerWidth - w) / 2;
+	// 	const top = window.screenY + (window.outerHeight - h) / 2;
+	// 	const popup = window.open(social.url, 'gotera-google', `width=${w},height=${h},left=${left},top=${top}`);
 
-		if (!popup) {
-			toast.error('Your browser blocked the sign-in window. Allow popups for this site, then try again.');
-			googleLoading = false;
-			return;
-		}
+	// 	if (!popup) {
+	// 		toast.error('Your browser blocked the sign-in window. Allow popups for this site, then try again.');
+	// 		googleLoading = false;
+	// 		return;
+	// 	}
 
-		const done = await new Promise<boolean>((resolve) => {
-			function onMessage(e: MessageEvent) {
-				if (e.origin !== window.location.origin) return;
-				if (e.data?.type === 'oauth-complete') {
-					cleanup();
-					resolve(true);
-				}
-			}
-			const poll = setInterval(() => {
-				if (popup.closed) {
-					cleanup();
-					resolve(false);
-				}
-			}, 500);
-			function cleanup() {
-				clearInterval(poll);
-				window.removeEventListener('message', onMessage);
-			}
-			window.addEventListener('message', onMessage);
-		});
+	// 	const done = await new Promise<boolean>((resolve) => {
+	// 		function onMessage(e: MessageEvent) {
+	// 			if (e.origin !== window.location.origin) return;
+	// 			if (e.data?.type === 'oauth-complete') {
+	// 				cleanup();
+	// 				resolve(true);
+	// 			}
+	// 		}
+	// 		const poll = setInterval(() => {
+	// 			if (popup.closed) {
+	// 				cleanup();
+	// 				resolve(false);
+	// 			}
+	// 		}, 500);
+	// 		function cleanup() {
+	// 			clearInterval(poll);
+	// 			window.removeEventListener('message', onMessage);
+	// 		}
+	// 		window.addEventListener('message', onMessage);
+	// 	});
 
-		if (done) {
-			await invalidateAll();
-			toast.success('Signed in.');
-			onSuccess?.();
-		}
-		googleLoading = false;
-	}
+	// 	if (done) {
+	// 		await invalidateAll();
+	// 		toast.success('Signed in.');
+	// 		onSuccess?.();
+	// 	}
+	// 	googleLoading = false;
+	// }
+
+
+	// In your component
+
+async function signInWithGoogle() {
+await authClient.oneTap({
+  button: {
+    container: "#google-signin-button", // CSS selector or HTMLElement
+    config: {
+      theme: "outline",
+      size: "large",
+      type: "standard",
+      text: "signin_with"
+    }
+  }
+});}
 </script>
 
 <button
 	type="button"
 	class="btn-google"
+	id="google-signin-button"
 	onclick={signInWithGoogle}
 	disabled={googleLoading}
 	aria-busy={googleLoading}
