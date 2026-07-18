@@ -7,7 +7,6 @@
 	import { invalidateAll } from '$app/navigation';
 	import { Eye, EyeOff } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
-	import { zodClient } from 'sveltekit-superforms/adapters';
 
 	import { onMount } from 'svelte';
 

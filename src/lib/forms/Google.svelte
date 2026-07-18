@@ -45,7 +45,6 @@
 			await authClient.oneTap({
 				fetchOptions: {
 					onSuccess: async () => {
-						await invalidateAll();
 						toast.success('Signed in.');
 						onSuccess?.();
 					},
@@ -140,7 +139,11 @@
 		width: 100%;
 		min-height: 56px;
 		border-radius: 999px;
-		background: var(--cream);
+		border-width: 1px;
+		border-color: #14130f;
+		  background:#fff;border:1px solid #dcdcdc;border-radius:999px;
+    padding:5px 18px;cursor:pointer;
+	
 		transition: background 0.15s;
 	}
 	.google-shell:hover {

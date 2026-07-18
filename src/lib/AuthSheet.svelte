@@ -1,133 +1,229 @@
 <script lang="ts">
-  import { UserRoundPlus } from '@lucide/svelte';
-  import * as Drawer from '$lib/components/ui/drawer/index.js';
-  import DialogComp from './formComponents/DialogComp.svelte';
-  import Google from './forms/Google.svelte';
-  import Signup from './forms/Signup.svelte';
-	import Button from './components/ui/button/button.svelte';
+	import { UserRoundPlus } from '@lucide/svelte';
+	import DialogComp from './formComponents/DialogComp.svelte';
+	import Google from './forms/Google.svelte';
+	import Signup from './forms/Signup.svelte';
+	import * as Drawer from '$lib/components/ui/drawer/index.js';
 
-  let { data, loginOpen = $bindable(false), signupOpen = $bindable(false)} = $props();
+	import Button from './components/ui/button/button.svelte';
+	import { invalidate } from '$app/navigation';
+
+	let { data, loginOpen = $bindable(false), signupOpen = $bindable(false) } = $props();
+
+	async function onSuccess() {
+		loginOpen = false;
+		await invalidate('app:session');
+	}
 </script>
 
-<Drawer.Root bind:open={loginOpen}>
 
-	 <!-- <Drawer.Trigger class="order">Order — £6.50</Drawer.Trigger> -->
+<div class="auth">
+	<div>
+		<div class="auth-title">Sign in to place your order</div>
+		<div class="auth-sub">So we can send your confirmation and let you track delivery.</div>
+	</div>
 
-  <p class="secondary text-sm">
-    Already have an account?
-    <Drawer.Trigger class="link text-primary" 		>
-			{#snippet child({ props })}
-			<Button type="button" {...props}  variant="ghost" > 
-		
-		 Log in </Button>
-		 {/snippet}
-		 </Drawer.Trigger>
-  </p>
-  <Drawer.Content class="gotera-sheet">
-    <section class="auth-sheet" aria-labelledby="auth-heading">
-      <span class="grabber" aria-hidden="true"></span>
+	<h3 id="auth-heading" class="sr-only">Sign in to Gotera</h3>
 
-      <Drawer.Title id="auth-heading" class="sr-only">Sign in to Gotera</Drawer.Title>
+	<!-- Continue with Google -->
+   <div class="google-slot">
+	<Google {onSuccess} hint={data?.lastAccount} />
+  </div>
 
-      <Google onSuccess={() => (loginOpen = false)} hint={data?.lastAccount} />
+	<p class="tagline">One tap — fastest way in</p>
 
-      <div class="rule" role="separator"><span>or</span></div>
+	<!-- Divider -->
+	<div class="rule" role="separator"><span>or use email</span></div>
 
-      <DialogComp
-        variant="pill"
-        eyebrow="New here"
-        title="Create an account"
-        IconComp={UserRoundPlus}
-        bind:open={signupOpen}
-      >
-        <Signup {data} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
-      </DialogComp>
-    </section>
-  </Drawer.Content>
-</Drawer.Root>
+	<!-- Continue with email -->
+	<div class="email-slot">
+		<DialogComp
+			variant="outline"
+			title="Continue with email"
+			IconComp={UserRoundPlus}
+			bind:open={signupOpen}
+		>
+			<Signup {data} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
+		</DialogComp>
+	</div>
+
+
+	<div class="terms">
+		By continuing you agree to our <a href="/terms">Terms</a> and
+		<a href="/privacy">Privacy Policy</a>.
+	</div>
+
+
+</div>
 
 <style>
-  /* --- shadcn/vaul chrome overrides: match the mockup exactly --- */
-  :global(.gotera-sheet) {
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    width: auto;
-    max-width: 496px;
-    margin: 0 auto;
-    background: #111010;
-    border: 0;
-    border-radius: 0; /* mockup sheet is square */
-    padding: 0;
-  }
-  /* kills shadcn's default pill handle + anything else it injects */
-  :global(.gotera-sheet > :not(.auth-sheet)) {
-    display: none;
-  }
-  :global([data-vaul-overlay]) {
-    background: rgba(17, 16, 16, 0.3);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    :global(.gotera-sheet),
-    :global([data-vaul-overlay]) {
-      transition: none;
-    }
-  }
+	:root {
+		--cream: #f5f1ea;
+		--cream-card: #faf8f3;
+		--ink: #16130f;
+		--ink-soft: #2a2620;
+		--copper: #b0622f;
+		--muted: #8b8578;
+		--line: #e2ddd2;
+		--serif: Georgia, 'Times New Roman', serif;
+		--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+	}
+	.auth {
+		margin-top: 22px;
+		border: 1px solid var(--line);
+		background: var(--cream-card);
+		padding: 20px 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.auth-title {
+		font-family: var(--serif);
+		font-size: 19px;
+		font-weight: 600;
+		margin-bottom: 4px;
+	}
+	.auth-sub {
+		font-size: 12.5px;
+		color: var(--muted);
+		margin-bottom: 16px;
+		line-height: 1.45;
+	}
 
-  .auth-sheet {
-    width: 100%;
-    padding: 26px 20px 20px;
-    background: #111010;
-    color: #fbf7f2;
-    font-family: 'Jost', sans-serif;
-    font-weight: 300;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
 
-  .grabber {
-    width: 34px;
-    height: 3px;
-    border-radius: 999px;
-    background: rgba(250, 248, 244, 0.16);
-    margin: -8px auto 2px;
-  }
+	.terms {
+		margin-top: 14px;
+		font-size: 12.5px;
+		color: var(--muted);
+		line-height: 1.5;
+		text-align: center;
+	}
+	.terms a {
+		color: var(--copper);
+		text-decoration: none;
+	}
+	:global(.gotera-sheet) {
+		left: 12px;
+		right: 12px;
+		bottom: 12px;
+		width: auto;
+		max-width: 496px;
+		margin: 0 auto;
 
-  .rule {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 0 4px;
-    font-size: 0.62rem;
-    font-weight: 500;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: #b9b2aa;
-  }
-  .rule::before,
-  .rule::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: rgba(250, 248, 244, 0.14);
-  }
+		border: 0;
+		border-radius: 18px;
+		padding: 0;
+		box-shadow: 0 24px 60px rgba(40, 33, 22, 0.18);
+	}
 
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
+	/* kills shadcn's default pill handle + anything else it injects */
+	:global(.gotera-sheet > :not(.auth-sheet)) {
+		display: none;
+	}
+	:global([data-vaul-overlay]) {
+		background: rgba(43, 37, 27, 0.16);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		:global(.gotera-sheet),
+		:global([data-vaul-overlay]) {
+			transition: none;
+		}
+	}
 
-  @media (max-width: 480px) {
-    :global(.gotera-sheet) {
-      left: 12px;
-      right: 12px;
-    }
-  }
+
+	/* ---- Google pill (styles the button rendered inside <Google/>) ---- */
+
+  
+
+	.tagline {
+		margin: -6px 0 0;
+		text-align: center;
+		font-size: 1.05rem;
+		font-weight: 400;
+		color: #8a8175;
+	}
+
+	/* ---- OR USE EMAIL divider ---- */
+	.rule {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		margin: 6px 2px;
+		font-size: 0.8rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: #9a9184;
+	}
+	.rule::before,
+	.rule::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: #d9d2c6;
+	}
+
+	/* ---- Outlined "Continue with email" (styles the DialogComp trigger) ---- */
+	.email-slot :global(button) {
+		width: 100%;
+		min-height: 64px;
+		border: 1px solid #cec6b8;
+		border-radius: 4px;
+		background: transparent;
+		color: #7d7568;
+		font-size: 1.05rem;
+		font-weight: 500;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		cursor: pointer;
+		transition:
+			background 0.12s ease,
+			border-color 0.12s ease,
+			color 0.12s ease;
+	}
+	.email-slot :global(button:hover) {
+		background: rgba(28, 26, 23, 0.03);
+		border-color: #b9b0a0;
+		color: #5c554a;
+	}
+
+	/* ---- Footer ---- */
+	.footer {
+		margin: 8px 0 0;
+		text-align: center;
+		font-size: 1.05rem;
+		color: #6f665a;
+	}
+	.login-link {
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		color: #2f2b24;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	@media (max-width: 480px) {
+		:global(.gotera-sheet) {
+			left: 12px;
+			right: 12px;
+		}
+	}
 </style>

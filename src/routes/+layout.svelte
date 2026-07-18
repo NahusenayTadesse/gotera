@@ -88,8 +88,7 @@
       <a href="/subscribe" onclick={closeDrawer} class="drawer-link">Subscribe</a>
       <a href="/about"     onclick={closeDrawer} class="drawer-link">About</a>
       <a href="/faq"       onclick={closeDrawer} class="drawer-link">FAQ</a>
-      <a href="/gift"      onclick={closeDrawer} class="drawer-link">Give a gift</a>
-      <a href="/account"   onclick={closeDrawer} class="drawer-link">My account</a>
+      <a href="/account"   onclick={closeDrawer} class="drawer-link">{data?.user ? "My account" : "Signin"}</a>
     </nav>
     <div class="drawer-bottom">
       <a href="/subscribe" onclick={closeDrawer} class="drawer-cta">Subscribe from £6.50 →</a>

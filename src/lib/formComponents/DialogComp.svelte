@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { Dialog } from 'bits-ui';
 	import { X } from '@lucide/svelte';
 	import type { Snippet, Component } from 'svelte';
 	import type { IconProps } from '@lucide/svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
 
 	let {
 		title,
@@ -18,57 +20,73 @@
 		label?: string;
 		eyebrow?: string;
 		children: Snippet;
-		variant?: 'default' | 'destructive' | 'pill';
+		variant?: 'default' | 'destructive' | 'outline' | 'ghost';
 		IconComp?: Component<IconProps>;
 		open?: boolean;
 	} = $props();
 
-	const triggerClass = $derived(
-		{
-			default: 'trigger-default',
-			destructive: 'trigger-destructive',
-			pill: 'trigger-pill'
-		}[variant]
-	);
-
-	function close() {
-		open = false;
-	}
-
-	function onKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && open) close();
-	}
+	// const triggerClass = $derived(
+	// 	{
+	// 		default: 'trigger-default',
+	// 		destructive: 'trigger-destructive',
+	// 		pill: 'trigger-pill',
+	// 		outline: 'trigger-outline'
+	// 	}[variant] ?? 'trigger-default'
+	// );
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Dialog.Root bind:open>
+	<!-- We render every element via the `child` snippet, so Svelte's scoped
+	     styles still apply and the design is unchanged — bits-ui just wires
+	     up layering, focus, escape, scroll-lock and outside-click. -->
+	<Dialog.Trigger>
+		{#snippet child({ props })}
+			<Button {...props} type="button" {variant} class="px-4! text-[12px]!">
+				{#if IconComp}
+					<IconComp  />
+				{/if}
+				{label ?? title}
+			</Button>
+		{/snippet}
+	</Dialog.Trigger>
 
-<button type="button" class="dialog-trigger {triggerClass}" onclick={() => (open = true)}>
-	{#if IconComp}
-		<IconComp size={variant === 'pill' ? 17 : 16} />
-	{/if}
-	{label ?? title}
-</button>
+	<Dialog.Portal>
+		<Dialog.Overlay>
+			{#snippet child({ props })}
+				<div {...props} class="dialog-overlay"></div>
+			{/snippet}
+		</Dialog.Overlay>
 
-{#if open}
-	<div class="dialog-overlay" onclick={close} role="presentation">
-		<div class="dialog-box" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-			<div class="dialog-header">
-				<span class="eyebrow">{eyebrow}</span>
-				<button type="button" class="dialog-close" onclick={close} aria-label="Close">
-					<X size={16} />
-				</button>
-			</div>
+		<Dialog.Content>
+			{#snippet child({ props })}
+				<div {...props} class="dialog-box">
+					<div class="dialog-header">
+						<span class="eyebrow">{eyebrow}</span>
+						<Dialog.Close>
+							{#snippet child({ props: closeProps })}
+								<button {...closeProps} type="button" class="dialog-close" aria-label="Close">
+									<X size={16} />
+								</button>
+							{/snippet}
+						</Dialog.Close>
+					</div>
 
-			<h3 class="dialog-title">{title}</h3>
+					<Dialog.Title>
+						{#snippet child({ props: titleProps })}
+							<h3 {...titleProps} class="dialog-title">{title}</h3>
+						{/snippet}
+					</Dialog.Title>
 
-			<div class="dialog-scroll-wrapper">
-				<div class="dialog-content">
-					{@render children()}
+					<div class="dialog-scroll-wrapper">
+						<div class="dialog-content">
+							{@render children()}
+						</div>
+					</div>
 				</div>
-			</div>
-		</div>
-	</div>
-{/if}
+			{/snippet}
+		</Dialog.Content>
+	</Dialog.Portal>
+</Dialog.Root>
 
 <style>
 	/* ── Trigger: shared ── */
@@ -123,24 +141,54 @@
 		box-shadow: 0 0 0 2px #14130f, 0 0 0 4px var(--copper, #b5622a);
 	}
 
+	/* ── Trigger: outline — the cream AuthSheet "Continue with email" ── */
+	.trigger-outline {
+		width: 100%;
+		min-height: 64px;
+		padding: 0 22px;
+		justify-content: center;
+		gap: 10px;
+		border-radius: 4px;
+		background: transparent;
+		border-color: #cec6b8;
+		color: #7d7568;
+		font-size: 1.05rem;
+		font-weight: 500;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+	}
+	.trigger-outline :global(svg) { flex-shrink: 0; }
+	.trigger-outline:hover {
+		background: rgba(28, 26, 23, 0.03);
+		border-color: #b9b0a0;
+		color: #5c554a;
+	}
+	.trigger-outline:focus-visible {
+		outline: 2px solid var(--copper, #b5622a);
+		outline-offset: 2px;
+	}
+
 	/* ── Overlay + box ── */
 	.dialog-overlay {
 		position: fixed;
 		inset: 0;
 		background: rgba(26, 26, 26, 0.45);
-		display: grid;
-		place-items: center;
-		padding: 20px;
-		z-index: 100;
+		z-index: 1000;
 		animation: fade-in 0.15s ease-out;
 	}
 	.dialog-box {
-		width: min(440px, 100%);
+		position: fixed;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: min(440px, calc(100% - 40px));
+		max-height: calc(100dvh - 40px);
 		background: #fff;
 		border: 1px solid var(--border, #e8e4e0);
 		padding: 28px 28px 24px;
 		font-family: 'Jost', sans-serif;
 		color: var(--ink, #1a1a1a);
+		z-index: 1001;
 		animation: rise-in 0.16s ease-out;
 		display: flex;
 		flex-direction: column;
@@ -151,8 +199,8 @@
 		to { opacity: 1; }
 	}
 	@keyframes rise-in {
-		from { opacity: 0; transform: translateY(6px) scale(0.98); }
-		to { opacity: 1; transform: translateY(0) scale(1); }
+		from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(0.98); }
+		to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 	}
 
 	/* ── Header ── */
