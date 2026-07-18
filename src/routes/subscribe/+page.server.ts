@@ -184,7 +184,7 @@ export const actions: Actions = {
 	/* SUBSCRIBE — "For me": subscription plans OR one-off (kind 'order'). */
 	subscribe: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
-		console.log(form.data)
+		console.log("subscribe")
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'me') {
@@ -306,6 +306,8 @@ export const actions: Actions = {
 	/* GIFT — one-time payment; redirects to Stripe. */
 	gift: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
+				console.log('gift')
+
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'gift') {
@@ -418,6 +420,7 @@ export const actions: Actions = {
 		return message(form, { type: 'success', text: 'Subscription cancelled.' } satisfies FormMessage);
 	},
 	guestOrder: async ({ request, url }) => {
+		console.log('guest')
 	const form = await superValidate(request, zod4(checkoutSchema));
 	console.log(form.data)
 	if (!form.valid) return fail(400, { form });

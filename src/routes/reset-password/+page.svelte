@@ -54,7 +54,7 @@
 <div class="auth-wrap">
 	<div class="auth-card">
 		<div class="logo-row">
-			<img src="/logo.webp" class="logo logo-light" alt="GOTERA" />
+			<img src="/logo192.jpg" class="logo logo-light" alt="GOTERA" />
 			<img src="/logoWhite.webp" class="logo logo-dark" alt="GOTERA" />
 		</div>
 

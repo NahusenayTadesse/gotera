@@ -5,6 +5,8 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getRequestEvent } from '$app/server';
 import { magicLink } from 'better-auth/plugins';
 import { oneTap } from "better-auth/plugins"; 
+import { admin } from "better-auth/plugins"
+
 
 import { eq } from 'drizzle-orm';
 
@@ -82,6 +84,7 @@ export const auth = betterAuth({
 	},
 
 	plugins: [
+		admin(),
 		magicLink({
 			sendMagicLink: async ({ email, url }) => {
 				await sendMagicLink(email, url);

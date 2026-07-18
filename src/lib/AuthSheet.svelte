@@ -6,7 +6,7 @@
   import Signup from './forms/Signup.svelte';
 	import Button from './components/ui/button/button.svelte';
 
-  let { data, loginOpen = $bindable(false), signupOpen = $bindable(false) } = $props();
+  let { data, loginOpen = $bindable(false), signupOpen = $bindable(false)} = $props();
 </script>
 
 <Drawer.Root bind:open={loginOpen}>

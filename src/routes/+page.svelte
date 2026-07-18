@@ -127,10 +127,9 @@ import type { PageData } from './$types';
 			<span>Made &amp; packed in Ethiopia</span>
 		</div>
 		<h1 class="hero__h1">
-			Injera,<br /><em
-				>Delivered
-				<br />To your door.</em
-			>
+			Injera,<br />
+				Delivered
+				<br />To your door.
 		</h1>
 		{#if subFrom}
 			<div class="hero__price-row">

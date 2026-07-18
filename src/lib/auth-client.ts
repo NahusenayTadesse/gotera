@@ -1,6 +1,8 @@
 import { createAuthClient } from 'better-auth/svelte';
 import { oneTapClient } from "better-auth/client/plugins"; 
 import { PUBLIC_CLIENTID as CLIENTID } from '$env/static/public';
+import { adminClient } from "better-auth/client/plugins"
+
 
 
 
@@ -8,11 +10,12 @@ import { PUBLIC_CLIENTID as CLIENTID } from '$env/static/public';
 
 export const authClient = createAuthClient({
   plugins: [
+    adminClient(),
     oneTapClient({
       clientId: CLIENTID,
       autoSelect: false,
       cancelOnTapOutside: true,
-      context: "signin",
+      context: "use",
       additionalOptions: {
         use_fedcm_for_prompt: true,   // One Tap → native widget
         use_fedcm_for_button: true,   // button click → native modal

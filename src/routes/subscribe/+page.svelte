@@ -102,7 +102,8 @@
 	const step = $derived(STEPS[Math.min(stepIdx, STEPS.length - 1)]);
 	const progress = $derived(((stepIdx + 1) / STEPS.length) * 100);
 	
-
+	let loginOpen = $state(false);
+	let signupOpen = $state(false);
 	function next() {
 		stepError = null;
 		animating = true;
@@ -177,8 +178,7 @@
 				: 'Continue'
 	);
 
-	let loginOpen = $state(false);
-	let signupOpen = $state(false);
+
 
 
 
@@ -226,6 +226,16 @@ $effect(() => {
 		/* quota / private mode — non-fatal */
 	}
 });
+
+$effect(()=>{
+	 if(step ===  'review'){
+		 loginOpen = true;
+	 }
+
+
+})
+
+  
 
 </script>
 
@@ -453,14 +463,14 @@ $effect(() => {
 
 		<div class="sub-cta">
 			{#if step === 'review'}
-				<button type="submit" form="start" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' ? '?/subscribe' : '?/gift'} class="sub-cta__btn" disabled={$submitting && !data?.user}>
+				<button type="submit" form="start" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' && data?.user ? '?/subscribe' : isOrder && !data?.user ? '?/guestOrder' : '?/gift' } class="sub-cta__btn" disabled={$submitting || (!data?.user && !isOrder)}>
 					{ctaLabel}
 				</button>
 				{#if !data?.user}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
-					   {#if isOrder}
-					     <button  form="start" title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
-						 {/if}
+					   <!-- {#if isOrder}
+					     <button  form="start" title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Order</button>
+						 {/if} -->
 						<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
 						</div>
 
@@ -498,7 +508,7 @@ $effect(() => {
 								<button type="button" class="choice" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
 									<h3>As a gift</h3>
 									<p>One-time order. Different address. No subscription.</p>
-									<span class="choice-tag">One-time · From £8.50</span>
+									<span class="choice-tag">One-time · From £6.50</span>
 								</button>
 							</div>
 						</div>
@@ -695,24 +705,18 @@ $effect(() => {
 					</div>
 					<div class="sum-actions">
 						{#if $form.recipient === 'me'}
-							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to subscribe'} formaction="?/subscribe" class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
+							<Button type="submit" form="start" disabled={!data?.user && $submitting && !isOrder} title={data?.user ? undefined : 'Please log in to subscribe'} formaction={isOrder && !data?.user ? "?/guestOrder": "?/subscribe"} class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
 						{:else}
 							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
 						{/if}
 
 						{#if !data?.user}
-						{#if isOrder}
+						<!-- {#if isOrder}
 					      
 
 					     <button form="start" title="Checkout Without an account"  class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
-						 {/if}
-							<!-- <DialogComp variant="default" title="Already have an account?" IconComp={UserCheck} bind:open={loginOpen}>
-								<Login data={data?.loginForm} callBack="/subscribe" onSuccess={() => (loginOpen = false)} />
-							</DialogComp> -->
-							<!-- <Google onSuccess={() => (loginOpen = false)} />
-							<DialogComp variant="default" title="Register if you don't have an account" IconComp={UserRoundPlus} bind:open={signupOpen}>
-								<Signup data={data?.signupForm} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
-							</DialogComp> -->
+						 {/if} -->
+					
 													<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
 
 						{/if}

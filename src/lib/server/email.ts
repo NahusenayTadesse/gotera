@@ -18,7 +18,7 @@ const FROM = `GOTERA <${SMTP_USER}>`;
 
 /** Low-level send. */
 export const sendEmail = async (to: string, subject: string, html: string) => {
-	await transporter.sendMail({ from: FROM, to, subject, html });
+ await transporter.sendMail({ from: FROM, to, subject, html });	
 };
 
 /* ── Customer sends ── */
@@ -84,6 +84,7 @@ export const notifyAdminPaymentFailed = (data: { name: string; email: string }) 
 
 export const sendMagicLink = (to: string, url: string) => {
 	const { subject, html } = t.customerMagicLink(url);
+
 	return sendEmail(to, subject, html);
 };
 

@@ -16,7 +16,8 @@ import {
     addresses,
     giftOrders,
     addons,
-    guestOrders
+    guestOrders,
+    user
 } from '$lib/server/db/schema';
 import {
     sendSubscriptionConfirmed,
@@ -27,6 +28,7 @@ import {
     notifyAdminGiftOrder,
     sendOrderConfirmed, notifyAdminOrder
 } from '$lib/server/email';
+import { auth } from '$lib/server/auth';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
 
@@ -94,13 +96,41 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
     });
 }
 
+
+ async function sendMagicLink(email: string, name: string, request: Request) {
+const randomPassword = Math.random().toString(36).slice(2, 10);
+
+console.log(randomPassword);    
+
+    const [existingUser] = await db.select({ id: user.id}).from(user).where(eq(user.email, email)).limit(1);
+
+    if(existingUser) return;
+
+ await auth.api.createUser({
+    body: {
+        email: email, 
+        name: name, // required,
+        password: randomPassword,
+        role: "user",
+    },
+});
+
+
+	await auth.api.signInMagicLink({
+				body: {
+					email: email,
+					callbackURL: '/account' 
+				},
+				headers: request.headers
+			});
+ }
+
 export const POST: RequestHandler = async ({ request }) => {
     const sig = request.headers.get('stripe-signature');
     const body = await request.text(); // RAW body — required for signature verification
     // console.log("SIG ", sig)
     // console.log("BODY ", body)
 
-    const payload = JSON.parse(body);
   
   // 2. Safely extract the email and name using optional chaining
 
@@ -249,6 +279,8 @@ if (session.mode === 'payment') {
 		.update(guestOrders)
 		.set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
 		.where(eq(guestOrders.id, guestOrderId));
+
+    
  
 	if (alreadyPaid) break;
  
@@ -279,7 +311,11 @@ if (session.mode === 'payment') {
 				addr.postcode
 			];
 			const deliveryLabel = deliveryFmt.format(nextSaturday());
- 
+
+             
+               
+
+
 			
 				// kind === 'order' — a one-off for the buyer themselves.
 				await sendOrderConfirmed(email, {
@@ -297,6 +333,10 @@ if (session.mode === 'payment') {
 					addressLines,
 					addonNames
 				});
+                 
+
+                await sendMagicLink(email, name, request)
+
 			}
 		
 	} catch (e) {
