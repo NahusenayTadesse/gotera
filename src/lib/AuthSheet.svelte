@@ -3,58 +3,61 @@
 	import DialogComp from './formComponents/DialogComp.svelte';
 	import Google from './forms/Google.svelte';
 	import Signup from './forms/Signup.svelte';
-	import * as Drawer from '$lib/components/ui/drawer/index.js';
-
-	import Button from './components/ui/button/button.svelte';
 	import { invalidate } from '$app/navigation';
 
-	let { data, loginOpen = $bindable(false), signupOpen = $bindable(false) } = $props();
+	let {
+		data,
+		loginOpen = $bindable(false),
+		title = 'Log In',
+		variant = 'ghost',
+		signupOpen = $bindable(false),
+		onAuthenticated    
+	} = $props();
 
 	async function onSuccess() {
 		loginOpen = false;
 		await invalidate('app:session');
+		onAuthenticated?.();  
 	}
 </script>
 
+<DialogComp {variant} class={variant !== 'ghost'? 'w-full! p-6! rounded-none! bg-[#1a1a1a] text-white' : ''}  {title}>
+	<div class="auth">
+		<div>
+			<div class="auth-title">Sign in to place your order</div>
+			<div class="auth-sub">So we can send your confirmation and let you track delivery.</div>
+		</div>
 
-<div class="auth">
-	<div>
-		<div class="auth-title">Sign in to place your order</div>
-		<div class="auth-sub">So we can send your confirmation and let you track delivery.</div>
+		<h3 id="auth-heading" class="sr-only">Sign in to Gotera</h3>
+
+		<!-- Continue with Google -->
+		<div class="google-slot">
+			<Google {onSuccess} hint={data?.lastAccount} />
+		</div>
+
+		<p class="tagline">One tap — fastest way in</p>
+
+		<!-- Divider -->
+		<div class="rule" role="separator"><span>or use email</span></div>
+
+		<!-- Continue with email -->
+		<div class="email-slot">
+			<DialogComp
+				variant="outline"
+				title="Continue with email"
+				IconComp={UserRoundPlus}
+				bind:open={signupOpen}
+			>
+				<Signup {data} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
+			</DialogComp>
+		</div>
+
+		<div class="terms">
+			By continuing you agree to our <a href="/terms">Terms</a> and
+			<a href="/privacy">Privacy Policy</a>.
+		</div>
 	</div>
-
-	<h3 id="auth-heading" class="sr-only">Sign in to Gotera</h3>
-
-	<!-- Continue with Google -->
-   <div class="google-slot">
-	<Google {onSuccess} hint={data?.lastAccount} />
-  </div>
-
-	<p class="tagline">One tap — fastest way in</p>
-
-	<!-- Divider -->
-	<div class="rule" role="separator"><span>or use email</span></div>
-
-	<!-- Continue with email -->
-	<div class="email-slot">
-		<DialogComp
-			variant="outline"
-			title="Continue with email"
-			IconComp={UserRoundPlus}
-			bind:open={signupOpen}
-		>
-			<Signup {data} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
-		</DialogComp>
-	</div>
-
-
-	<div class="terms">
-		By continuing you agree to our <a href="/terms">Terms</a> and
-		<a href="/privacy">Privacy Policy</a>.
-	</div>
-
-
-</div>
+</DialogComp>
 
 <style>
 	:root {
@@ -69,8 +72,7 @@
 		--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 	}
 	.auth {
-		margin-top: 22px;
-		border: 1px solid var(--line);
+
 		background: var(--cream-card);
 		padding: 20px 18px;
 		display: flex;
@@ -78,10 +80,10 @@
 		gap: 16px;
 	}
 	.auth-title {
-		font-family: var(--serif);
-		font-size: 19px;
-		font-weight: 600;
-		margin-bottom: 4px;
+		font-family: 'Cormorant Garamond', serif;
+		font-weight: 500;
+		font-size: 1.9rem;
+		margin: 0 0 0.3rem;
 	}
 	.auth-sub {
 		font-size: 12.5px;
@@ -89,7 +91,6 @@
 		margin-bottom: 16px;
 		line-height: 1.45;
 	}
-
 
 	.terms {
 		margin-top: 14px;
@@ -130,10 +131,7 @@
 		}
 	}
 
-
 	/* ---- Google pill (styles the button rendered inside <Google/>) ---- */
-
-  
 
 	.tagline {
 		margin: -6px 0 0;
@@ -226,4 +224,7 @@
 			right: 12px;
 		}
 	}
+
+		.sub-cta__btn { width: 100%; background: #1a1a1a; color: #faf8f4; border: none; padding: 16px; font-family: 'Jost', sans-serif; font-size: .8rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: background .15s; }
+
 </style>

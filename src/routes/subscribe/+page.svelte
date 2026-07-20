@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { superForm } from 'sveltekit-superforms';
+    import { superForm } from 'sveltekit-superforms';
 	import { toast } from 'svelte-sonner';
 	import type { PageData, Snapshot } from './$types';
 	import { Button } from '$lib/components/ui/button';
@@ -20,7 +20,6 @@
 			else toast.warning(m.text);
 		}
 	});
-	export const snapshot: Snapshot = { capture, restore };
 
 	// ── Dynamic data ──
 	const subscriptionPlans = $derived(data?.subscriptionPlans ?? []);
@@ -92,16 +91,36 @@
 		'details'
 	]);
 	const stepNo = (key: string) => String(DESKTOP_STEPS.indexOf(key) + 1).padStart(2, '0');
-	
 	let animating = $state(false);
 	let stepError = $state<string | null>(null);
-		let stepIdx = $derived(
-	skipIntro ? Math.max(STEPS.indexOf(hasAddons ? 'extras' : 'details'), 0) : 0
-);
+
+	// Compute the wizard's starting position. Extracted so both the initial
+	// $state value and any reset logic can share it.
+	function initialStepIdx() {
+		return skipIntro ? Math.max(STEPS.indexOf(hasAddons ? 'extras' : 'details'), 0) : 0;
+	}
+
+	// stepIdx is real component state (not derived) so it survives a snapshot
+	// restore when the user hits the browser back button from Stripe.
+	let stepIdx = $state(initialStepIdx());
+
+	// ── Snapshot ──
+	// SvelteKit persists this per history entry. We capture the Superforms data
+	// AND the current step, so returning from an external redirect (e.g. Stripe)
+	// via the back button lands the user back where they left off instead of at
+	// step one.
+	export const snapshot: Snapshot = {
+		capture: () => ({ form: capture(), stepIdx }),
+		restore: (value) => {
+			restore(value?.form);
+			if (typeof value?.stepIdx === 'number') {
+				stepIdx = Math.min(Math.max(value.stepIdx, 0), STEPS.length - 1);
+			}
+		}
+	};
 
 	const step = $derived(STEPS[Math.min(stepIdx, STEPS.length - 1)]);
 	const progress = $derived(((stepIdx + 1) / STEPS.length) * 100);
-	
 	let loginOpen = $state(false);
 	let signupOpen = $state(false);
 	function next() {
@@ -153,7 +172,7 @@
 			review: 'Review & pay.'
 		}[step]
 	);
-		let isOrder = $derived(data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order')
+	let isOrder = $derived(data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order')
 
 	const cardSub = $derived(
 		{
@@ -178,68 +197,85 @@
 				: 'Continue'
 	);
 
-
-
-
-
 	import { untrack } from 'svelte';
 
-// ── Address persistence (localStorage-backed autofill) ──
-const ADDR_KEY = (who: 'me' | 'gift') => `gotera:address:${who}`;
-const ADDR_FIELDS = {
-	me: ['addressLabel', 'line1', 'line2', 'city', 'postcode'],
-	gift: ['buyerEmail', 'recipientName', 'line1', 'line2', 'city', 'postcode']
-} as const;
+	// ── Address persistence (localStorage-backed autofill) ──
+	const ADDR_KEY = (who: 'me' | 'gift') => `gotera:address:${who}`;
+	const ADDR_FIELDS = {
+		me: ['addressLabel', 'line1', 'line2', 'city', 'postcode'],
+		gift: ['buyerEmail', 'recipientName', 'line1', 'line2', 'city', 'postcode']
+	} as const;
 
-let loadedFor = $state<'me' | 'gift' | null>(null);
+	let loadedFor = $state<'me' | 'gift' | null>(null);
 
-// Load: runs once per recipient mode, and again if the user switches modes.
-$effect(() => {
-	const who = $form.recipient as 'me' | 'gift' | undefined;
-	if (!who || loadedFor === who) return;
-	loadedFor = who;
-	untrack(() => {
-		try {
-			const raw = localStorage.getItem(ADDR_KEY(who));
-			if (!raw) return;
-			const saved = JSON.parse(raw) as Record<string, string>;
-			for (const k of ADDR_FIELDS[who]) {
-				if (saved[k]) ($form as any)[k] = saved[k];
+	// Load: runs once per recipient mode, and again if the user switches modes.
+	$effect(() => {
+		const who = $form.recipient as 'me' | 'gift' | undefined;
+		if (!who || loadedFor === who) return;
+		loadedFor = who;
+		untrack(() => {
+			try {
+				const raw = localStorage.getItem(ADDR_KEY(who));
+				if (!raw) return;
+				const saved = JSON.parse(raw) as Record<string, string>;
+				for (const k of ADDR_FIELDS[who]) {
+					if (saved[k]) ($form as any)[k] = saved[k];
+				}
+			} catch {
+				/* corrupt entry — ignore */
 			}
+		});
+	});
+
+	// Save: tracks every field, so any edit overwrites the bucket immediately.
+	$effect(() => {
+		const who = $form.recipient as 'me' | 'gift' | undefined;
+		if (!who || loadedFor !== who) return; // don't clobber storage before hydration
+		const snapshot = Object.fromEntries(
+			ADDR_FIELDS[who].map((k) => [k, ($form as any)[k] ?? ''])
+		);
+		if (!Object.values(snapshot).some(Boolean)) return; // never save an all-empty record
+		try {
+			localStorage.setItem(ADDR_KEY(who), JSON.stringify(snapshot));
 		} catch {
-			/* corrupt entry — ignore */
+			/* quota / private mode — non-fatal */
 		}
 	});
-});
 
-// Save: tracks every field, so any edit overwrites the bucket immediately.
-$effect(() => {
-	const who = $form.recipient as 'me' | 'gift' | undefined;
-	if (!who || loadedFor !== who) return; // don't clobber storage before hydration
-	const snapshot = Object.fromEntries(
-		ADDR_FIELDS[who].map((k) => [k, ($form as any)[k] ?? ''])
-	);
-	if (!Object.values(snapshot).some(Boolean)) return; // never save an all-empty record
-	try {
-		localStorage.setItem(ADDR_KEY(who), JSON.stringify(snapshot));
-	} catch {
-		/* quota / private mode — non-fatal */
-	}
-});
-
-$effect(()=>{
-	 if(step ===  'review'){
-		 loginOpen = true;
-	 }
+	$effect(() => {
+		if (step === 'review') {
+			loginOpen = true;
+		}
+	});
 
 
-})
+	let checkoutForm = $state<HTMLFormElement | null>(null);
 
-  
+function submitAfterAuth() {
+	if ($submitting) return;
+	const formEl = checkoutForm ?? (document.getElementById('start') as HTMLFormElement | null);
+	if (!formEl) return;
 
+	// same action logic your review buttons already use
+	const action =
+		$form.recipient === 'me' && data?.user
+			? '?/subscribe'
+			: isOrder && !data?.user
+				? '?/guestOrder'
+				: '?/gift';
+
+	const submitter = document.createElement('button');
+	submitter.type = 'submit';
+	submitter.formAction = action;
+	submitter.hidden = true;
+	formEl.appendChild(submitter);
+	formEl.requestSubmit(submitter); // triggers use:enhance → redirects to Stripe
+	submitter.remove();
+}
 </script>
 
 <svelte:head>
+    <title>Subscribe</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -272,7 +308,7 @@ $effect(()=>{
 		<div class="sub-progress__fill" style="width:{progress}%"></div>
 	</div>
 
-	<form class="sub-card-wrap" method="POST" id="start" use:enhance>
+	<form class="sub-card-wrap" method="POST" id="start" use:enhance bind:this={checkoutForm}>
 		<div class="sub-card" class:animating>
 			<div class="sub-card__head">
 				<span class="sub-card__title">{cardTitle}</span>
@@ -391,9 +427,9 @@ $effect(()=>{
 						</div>
 					{:else}
 						<!-- <div class="sub-field">
-							<label for="m-addressLabel">Label <span class="opt">(optional · e.g. Home)</span></label>
-							<input id="m-addressLabel" type="text" bind:value={$form.addressLabel} />
-						</div> -->
+                            <label for="m-addressLabel">Label <span class="opt">(optional · e.g. Home)</span></label>
+                            <input id="m-addressLabel" type="text" bind:value={$form.addressLabel} />
+                        </div> -->
 						<div class="sub-field">
 							<label for="m-line1b">Address line 1</label>
 							<input id="m-line1b" type="text" placeholder="Street address" bind:value={$form.line1} />
@@ -463,17 +499,17 @@ $effect(()=>{
 
 		<div class="sub-cta">
 			{#if step === 'review'}
-				<button type="submit" form="start" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' && data?.user ? '?/subscribe' : isOrder && !data?.user ? '?/guestOrder' : '?/gift' } class="sub-cta__btn" disabled={$submitting || (!data?.user && !isOrder)}>
-					{ctaLabel}
-				</button>
-				{#if !data?.user}
+				{#if !data?.user && !isOrder}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
-					   <!-- {#if isOrder}
-					     <button  form="start" title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Order</button>
-						 {/if} -->
-						<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
-						</div>
-
+						<!-- {#if isOrder}
+                         <button  form="start" title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Order</button>
+                         {/if} -->
+						<AuthSheet  onAuthenticated={submitAfterAuth} title={ctaLabel} variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
+					</div>
+				{:else}
+					<button type="submit" form="start" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' && data?.user ? '?/subscribe' : isOrder && !data?.user ? '?/guestOrder' : '?/gift'} class="sub-cta__btn" disabled={$submitting || (!data?.user && !isOrder)}>
+						{ctaLabel}
+					</button>
 				{/if}
 			{:else}
 				<button type="button" class="sub-cta__btn" onclick={handleCta}>{ctaLabel}</button>
@@ -493,7 +529,7 @@ $effect(()=>{
 	</div>
 
 	<main class="wrap">
-		<form class="container layout" method="POST" use:enhance>
+		<form class="container layout" method="POST" use:enhance bind:this={checkoutForm}>
 			<div class="steps">
 				{#if bothModes}
 					<div class="step">
@@ -578,28 +614,27 @@ $effect(()=>{
 				</div>
 
 				{#if hasAddons}
-				<div class="step">
-					<div class="step-head"><span class="step-num">{stepNo('addons')}</span><h2>Add to your order.</h2></div>
-					<div class="step-body">
-						<div class="addons-grid">
-							{#each data?.addons as item (item.id)}
-								<button type="button" class="{$form.addonIds.includes(item.id) ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
-									<div class="addon-img">
-										<span class="ph-label">{item.name} · product photo</span>
-										<span class="ph-sub">Warm light · minimal styling</span>
-									</div>
-									<div class="addon-top">
-										<div><h3>{item.name}</h3><div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div></div>
-										<div class="check">✓</div>
-									</div>
-									{#if item.description}<p>{item.description}</p>{/if}
-								</button>
-							{/each}
+					<div class="step">
+						<div class="step-head"><span class="step-num">{stepNo('addons')}</span><h2>Add to your order.</h2></div>
+						<div class="step-body">
+							<div class="addons-grid">
+								{#each data?.addons as item (item.id)}
+									<button type="button" class="{$form.addonIds.includes(item.id) ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
+										<div class="addon-img">
+											<span class="ph-label">{item.name} · product photo</span>
+											<span class="ph-sub">Warm light · minimal styling</span>
+										</div>
+										<div class="addon-top">
+											<div><h3>{item.name}</h3><div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div></div>
+											<div class="check">✓</div>
+										</div>
+										{#if item.description}<p>{item.description}</p>{/if}
+									</button>
+								{/each}
+							</div>
+							{#if $errors.addonIds?._errors}<span class="form-error">{$errors.addonIds._errors}</span>{/if}
 						</div>
-						{#if $errors.addonIds?._errors}<span class="form-error">{$errors.addonIds._errors}</span>{/if}
 					</div>
-				</div>
-
 				{/if}
 				<div class="step">
 					<div class="step-head"><span class="step-num">{stepNo('details')}</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
@@ -704,28 +739,30 @@ $effect(()=>{
 						<div class="price-line total"><span>First payment</span><strong>£{finalTotalPrice.toFixed(2)}</strong></div>
 					</div>
 					<div class="sum-actions">
-						{#if $form.recipient === 'me'}
-							<Button type="submit" form="start" disabled={!data?.user && $submitting && !isOrder} title={data?.user ? undefined : 'Please log in to subscribe'} formaction={isOrder && !data?.user ? "?/guestOrder": "?/subscribe"} class="btn btn-full">{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
+						{#if $form.recipient === 'me' && !data.user}
+							<AuthSheet onAuthenticated={submitAfterAuth} title="Subscribe" variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
+						{:else if $form.recipient === 'me'}
+							<Button type="submit" class="w-full! rounded-none! p-6!" form="start" disabled={!data?.user && $submitting && !isOrder} title={data?.user ? undefined : 'Please log in to subscribe'} formaction={isOrder && !data?.user ? "?/guestOrder" : "?/subscribe"}>{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
 						{:else}
 							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
 						{/if}
 
-						{#if !data?.user}
-						<!-- {#if isOrder}
-					      
+						{#if !data?.user && isOrder}
+							<!-- {#if isOrder}
 
-					     <button form="start" title="Checkout Without an account"  class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
-						 {/if} -->
-					
-													<AuthSheet data={data?.signupForm} bind:loginOpen bind:signupOpen />
-
+                         <button form="start" title="Checkout Without an account"  class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
+                         {/if} -->
+						    <div class="flex flex-row gap-2" >
+							 <p>Already have an account?</p>
+							<AuthSheet  onAuthenticated={submitAfterAuth} data={data?.signupForm} bind:loginOpen bind:signupOpen />
+							</div>
 						{/if}
 					</div>
 					<p class="sum-note">Pause, skip, or cancel any time from your account.</p>
 					<!-- <div class="trust-panel-strip">
-						<div class="trust-quote">"Subscriber quote placeholder — one sentence, high trust."</div>
-						<div class="trust-attr">Name · GOTERA subscriber</div>
-					</div> -->
+                        <div class="trust-quote">"Subscriber quote placeholder — one sentence, high trust."</div>
+                        <div class="trust-attr">Name · GOTERA subscriber</div>
+                    </div> -->
 				</div>
 			</aside>
 		</form>

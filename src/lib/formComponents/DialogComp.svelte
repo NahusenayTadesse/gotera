@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Dialog } from 'bits-ui';
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
 	import { X } from '@lucide/svelte';
 	import type { Snippet, Component } from 'svelte';
 	import type { IconProps } from '@lucide/svelte';
@@ -11,6 +11,7 @@
 		eyebrow = 'Manage account',
 		children,
 		variant = 'default',
+		class: className,
 		IconComp,
 		open = $bindable(false)
 	}: {
@@ -19,6 +20,7 @@
 		/** Trigger text, when it should differ from the heading. Defaults to title. */
 		label?: string;
 		eyebrow?: string;
+		class: string;
 		children: Snippet;
 		variant?: 'default' | 'destructive' | 'outline' | 'ghost';
 		IconComp?: Component<IconProps>;
@@ -41,7 +43,7 @@
 	     up layering, focus, escape, scroll-lock and outside-click. -->
 	<Dialog.Trigger>
 		{#snippet child({ props })}
-			<Button {...props} type="button" {variant} class="px-4! text-[12px]!">
+			<Button {...props} type="button" {variant} class={className}>
 				{#if IconComp}
 					<IconComp  />
 				{/if}
@@ -50,42 +52,14 @@
 		{/snippet}
 	</Dialog.Trigger>
 
-	<Dialog.Portal>
-		<Dialog.Overlay>
-			{#snippet child({ props })}
-				<div {...props} class="dialog-overlay"></div>
-			{/snippet}
-		</Dialog.Overlay>
 
-		<Dialog.Content>
-			{#snippet child({ props })}
-				<div {...props} class="dialog-box">
-					<div class="dialog-header">
-						<span class="eyebrow">{eyebrow}</span>
-						<Dialog.Close>
-							{#snippet child({ props: closeProps })}
-								<button {...closeProps} type="button" class="dialog-close" aria-label="Close">
-									<X size={16} />
-								</button>
-							{/snippet}
-						</Dialog.Close>
-					</div>
 
-					<Dialog.Title>
-						{#snippet child({ props: titleProps })}
-							<h3 {...titleProps} class="dialog-title">{title}</h3>
-						{/snippet}
-					</Dialog.Title>
-
-					<div class="dialog-scroll-wrapper">
-						<div class="dialog-content">
+		<Dialog.Content class="bg-[#faf8f3]">
+	
 							{@render children()}
-						</div>
-					</div>
-				</div>
-			{/snippet}
+			
 		</Dialog.Content>
-	</Dialog.Portal>
+
 </Dialog.Root>
 
 <style>
