@@ -70,6 +70,7 @@ async function ensureSubscriber(
 async function oneTimeCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
+	quantity: number;
 	buyerEmail: string;
 	buyerName: string | null;
 	recipientName: string;
@@ -93,11 +94,11 @@ async function oneTimeCheckout(opts: {
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',
 		customer_email: opts.buyerEmail,
-		line_items: [{ price: opts.plan.stripePriceId!, quantity: 1 }, ...addonLineItems(opts.addons)],
+		line_items: [{ price: opts.plan.stripePriceId!, quantity: opts.quantity }, ...addonLineItems(opts.addons)],
 		success_url: opts.successUrl,
 		cancel_url: opts.cancelUrl,
 		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
-		metadata: { giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(',') }
+		metadata: { giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(','), quantity: String(opts.quantity),}
 	});
 	return session.url!;
 }
@@ -106,10 +107,12 @@ async function oneTimeCheckout(opts: {
 async function guestCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
+	quantity: number;
+	addressId: string;
 	buyerEmail: string | null;
 	buyerName: string | null;
 	recipientName: string;
-	recipientAddress: { line1: string; line2: string | null; city: string; postcode: string };
+	recipientAddress: { phone: string | null, line1: string; line2: string | null; city: string; postcode: string };
 	successUrl: string;
 	cancelUrl: string;
 }): Promise<string> {
@@ -117,17 +120,18 @@ async function guestCheckout(opts: {
 	await db.insert(guestOrders).values({
 		id: giftOrderId,
 		buyerEmail: opts.buyerEmail ?? null,
+		quantity: opts.quantity,   
 		recipientAddress: opts.recipientAddress,
 		status: 'pending'
 	});
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',
 		billing_address_collection: 'required', 
-		line_items: [{ price: opts.plan.stripePriceId!, quantity: 1 }, ...addonLineItems(opts.addons)],
+		line_items: [{ price: opts.plan.stripePriceId!, quantity: opts.quantity }, ...addonLineItems(opts.addons)],
 		success_url: opts.successUrl,
 		cancel_url: opts.cancelUrl,
 		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
-		metadata: { guestOrderId: giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(',') }
+		metadata: { guestOrderId: giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(','), quantity: String(opts.quantity), }
 	});
 	return session.url!;
 }
@@ -212,6 +216,7 @@ export const actions: Actions = {
 		const recipientAddress = {
 			line1: form.data.line1,
 			line2: form.data.line2 || null,
+			phone: form.data.phone || '',
 			city: form.data.city || 'London',
 			postcode: form.data.postcode
 		};
@@ -224,6 +229,7 @@ export const actions: Actions = {
 				checkoutUrl = await oneTimeCheckout({
 					plan,
 					addons: chosenAddons,
+					quantity: form.data.quantity ?? 1,
 					buyerEmail: user.email,
 					buyerName: user.name ?? null,
 					recipientName: user.name ?? 'Me',
@@ -256,6 +262,7 @@ export const actions: Actions = {
 				addressId = crypto.randomUUID();
 				await tx.insert(addresses).values({
 					id: addressId,
+					phone: form.data.phone,
 					subscriberId,
 					label: form.data.addressLabel || null,
 					...recipientAddress,
@@ -270,6 +277,7 @@ export const actions: Actions = {
 					planId: plan.id,
 					addressId,
 					status: 'pending',
+					quantity: form.data.quantity ?? 1,
 					cancelAtPeriodEnd: false
 				});
 			});
@@ -426,8 +434,22 @@ export const actions: Actions = {
 	if (!form.valid) return fail(400, { form });
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
 		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
-
-
+		const recipientAddress = {
+			line1: form.data.line1,
+			line2: form.data.line2 || null,
+			phone: form.data.phone || '',
+			city: form.data.city || 'London',
+			postcode: form.data.postcode
+		};
+      
+     let addressId = '';
+	addressId = crypto.randomUUID();
+				await db.insert(addresses).values({
+					id: addressId,
+					label: form.data.addressLabel || null,
+					...recipientAddress,
+					isPrimary: false
+				});
 
 		const [plan] = await db
 			.select()
@@ -444,11 +466,14 @@ export const actions: Actions = {
 		try {
 			checkoutUrl = await guestCheckout({
 				plan,
+				quantity: form.data.quantity, 
 				addons: chosenAddons,
 				recipientName: recipientName,
+				addressId,
 				recipientAddress: {
 					line1: form.data.line1,
 					line2: form.data.line2 || null,
+					phone: form.data.phone,
 					city: form.data.city || 'London',
 					postcode: form.data.postcode
 				},

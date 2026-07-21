@@ -53,10 +53,10 @@ export const addresses = mysqlTable(
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
 		subscriberId: varchar('subscriber_id', { length: 36 })
-			.notNull()
 			.references(() => subscribers.id, { onDelete: 'cascade' }),
 	
 		label: varchar('label', { length: 255 }),
+		phone: varchar('phone', { length: 50}),
 		line1: varchar('line1', { length: 255 }).notNull(),
 		line2: varchar('line2', { length: 255 }),
 		city: varchar('city', { length: 255 }).default('London').notNull(),
@@ -157,6 +157,7 @@ export const referrals = mysqlTable('referrals', {
 	referredEmail: varchar('referred_email', { length: 255 }).notNull(),
 	status: mysqlEnum('status', ['pending', 'subscribed', 'credited']).default('pending').notNull(),
 	creditPence: int('credit_pence').default(500),
+	quantity: int('quantity').default(1).notNull(),
 	...secureFields
 });
 
@@ -173,6 +174,7 @@ export const giftOrders = mysqlTable('gift_orders', {
 	durationMonths: int('duration_months').default(1).notNull(),
 	stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }).unique(),
 	status: mysqlEnum('status', ['pending', 'paid', 'fulfilled']).default('pending').notNull(),
+	quantity: int('quantity').default(1).notNull(),
 	...secureFields
 });
 
@@ -186,6 +188,9 @@ export const guestOrders = mysqlTable('guest_orders', {
 	recipientAddress: json('recipient_address').notNull(),
 	stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }).unique(),
 	status: mysqlEnum('status', ['pending', 'paid', 'fulfilled']).default('pending').notNull(),
+		addressId: varchar('address_id', { length: 36 }).references(() => addresses.id),
+		quantity: int('quantity').default(1).notNull(),
+
 	...secureFields
 });
 
@@ -240,6 +245,8 @@ export const plans = mysqlTable(
 		// ── Admin controls ──
 		active: boolean('active').default(true).notNull(), // hide without deleting
 		sortOrder: int('sort_order').default(0).notNull(),
+		quantity: int('quantity').default(1).notNull(),
+		
 
 		...secureFields
 	},

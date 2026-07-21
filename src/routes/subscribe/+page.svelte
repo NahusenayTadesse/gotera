@@ -55,12 +55,21 @@
 
 	const activeAddons = $derived(data?.addons.filter((a) => $form.addonIds.includes(a.id)) ?? []);
 	const addonsTotal = $derived(activeAddons.reduce((sum, a) => sum + a.pricePence / 100, 0));
-	const currentPlanDetails = $derived(
-		$form.recipient === 'me'
-			? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
-			: giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0]
-	);
-	const finalTotalPrice = $derived((currentPlanDetails?.price ?? 0) + addonsTotal);
+	// const currentPlanDetails = $derived(
+	// 	$form.recipient === 'me'
+	// 		? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
+	// 		: giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0]
+	// );
+const currentPlanDetails = $derived(
+	$form.recipient === 'me'
+		? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
+		: giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0]
+);
+// Coerce quantity (tel/number inputs can hand us a string or empty) to an int ≥ 1.
+const qty = $derived(Math.max(1, Math.floor(Number($form.quantity)) || 1));
+// Plan price × quantity, before add-ons.
+const planLineTotal = $derived((currentPlanDetails?.price ?? 0) * qty);
+const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 
 	const mePrice = $derived(
 		subscriptionPlans.find((p) => p.id === 'regular')?.price ??
@@ -180,7 +189,7 @@
 			plan: 'No minimum term. Cancel any time.',
 			extras: 'Optional. Added to your first payment only.',
 			details: 'Where we deliver every Saturday.',
-			review: `${currentPlanDetails?.name ?? ''} · £${(currentPlanDetails?.price ?? 0).toFixed(2)}`
+			review: `${currentPlanDetails?.name ?? ''}${qty > 1 ? ` × ${qty}` : ''} · £${planLineTotal.toFixed(2)}`
 		}[step]
 	);
 	const ctaLabel = $derived(
@@ -387,6 +396,14 @@ function submitAfterAuth() {
 				{#if step === 'details'}
 					{#if $form.recipient === 'gift'}
 						<div class="sub-field">
+                            <label for="phone">Phone <span class="opt">  </span></label>
+                            <input id="phone" type="tel" bind:value={$form.phone} />
+                        </div>
+						<div class="sub-field">
+                            <label for="quantity">Quantity <span class="opt">  </span></label>
+                            <input id="quantity" type="tel" bind:value={$form.quantity}  />
+                        </div>
+						<div class="sub-field">
 							<label for="m-buyerEmail">Your email</label>
 							<input id="m-buyerEmail" type="email" placeholder="you@example.com" bind:value={$form.buyerEmail} />
 							<span class="sub-field-note">For your confirmation and receipt.</span>
@@ -412,7 +429,7 @@ function submitAfterAuth() {
 							<div class="sub-field-row">
 								<div>
 									<label for="m-city">City</label>
-									<input id="m-city" type="text" placeholder="London" bind:value={$form.city} />
+									<input id="m-city" type="text" disabled placeholder="London" bind:value={$form.city} />
 								</div>
 								<div>
 									<label for="m-postcode">Postcode</label>
@@ -426,10 +443,14 @@ function submitAfterAuth() {
 							<input id="m-giftMessage" type="text" placeholder="A short note" bind:value={$form.giftMessage} />
 						</div>
 					{:else}
-						<!-- <div class="sub-field">
-                            <label for="m-addressLabel">Label <span class="opt">(optional · e.g. Home)</span></label>
-                            <input id="m-addressLabel" type="text" bind:value={$form.addressLabel} />
-                        </div> -->
+						<div class="sub-field">
+                            <label for="phone">Phone for Address</label>
+                            <input id="phone" type="tel" name="address" bind:value={$form.phone} />
+                        </div>
+							<div class="sub-field">
+                            <label for="quantity">Quantity <span class="opt">  </span></label>
+                            <input id="quantity" type="number" bind:value={$form.quantity}  />
+                        </div>
 						<div class="sub-field">
 							<label for="m-line1b">Address line 1</label>
 							<input id="m-line1b" type="text" placeholder="Street address" bind:value={$form.line1} />
@@ -443,7 +464,7 @@ function submitAfterAuth() {
 							<div class="sub-field-row">
 								<div>
 									<label for="m-cityb">City</label>
-									<input id="m-cityb" type="text" placeholder="London" bind:value={$form.city} />
+									<input id="m-cityb" type="text" disabled placeholder="London" bind:value={$form.city} />
 								</div>
 								<div>
 									<label for="m-postcodeb">Postcode</label>
@@ -463,10 +484,13 @@ function submitAfterAuth() {
 
 				{#if step === 'review'}
 					<div class="pay-summary">
-						<div class="pay-row">
-							<span class="pay-row__label">{currentPlanDetails?.name} {$form.recipient === 'me' ? 'subscription' : 'gift'}</span>
-							<span class="pay-row__val">£{(currentPlanDetails?.price ?? 0).toFixed(2)}</span>
-						</div>
+					<div class="pay-row">
+	<span class="pay-row__label">
+		{currentPlanDetails?.name} {$form.recipient === 'me' ? 'subscription' : 'gift'}
+		{#if qty > 1}· £{(currentPlanDetails?.price ?? 0).toFixed(2)} × {qty}{/if}
+	</span>
+	<span class="pay-row__val">£{planLineTotal.toFixed(2)}</span>
+</div>
 						{#each activeAddons as a (a.id)}
 							<div class="pay-row">
 								<span class="pay-row__label">{a.name}</span>
@@ -640,7 +664,15 @@ function submitAfterAuth() {
 					<div class="step-head"><span class="step-num">{stepNo('details')}</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
 					<div class="step-body">
 						{#if $form.recipient === 'gift'}
-							<div class="detail-grid">
+							<div class="field full">
+							   	<div class="sub-field">
+                            <label for="phone">Phone for address</label>
+                            <input id="phone" type="tel" bind:value={$form.phone} required />
+                        </div>
+							<div class="field full">
+                            <label for="quantity">Quantity </label>
+                            <input id="quantity" type="number" bind:value={$form.quantity}  />
+                        </div>
 								<div class="field full">
 									<label class="field-label" for="buyerEmail">Your email</label>
 									<input id="buyerEmail" class="input" type="email" placeholder="you@example.com" bind:value={$form.buyerEmail} />
@@ -663,7 +695,7 @@ function submitAfterAuth() {
 								</div>
 								<div class="field">
 									<label class="field-label" for="city">City</label>
-									<input id="city" class="input" type="text" bind:value={$form.city} />
+									<input id="city" class="input" disabled type="text" bind:value={$form.city} />
 								</div>
 								<div class="field">
 									<label class="field-label" for="postcode">Postcode</label>
@@ -677,6 +709,12 @@ function submitAfterAuth() {
 							</div>
 						{:else}
 							<div class="detail-grid">
+							  <div class="field full">
+							   	<div class="sub-field">
+                            <label for="phone">Phone for address</label>
+                            <input id="phone" type="tel" bind:value={$form.phone} required />
+                        </div>
+						</div>
 								<div class="field full">
 									<label class="field-label" for="addressLabel">Label <span class="opt">optional · e.g. Home</span></label>
 									<input id="addressLabel" class="input" type="text" bind:value={$form.addressLabel} />
@@ -691,8 +729,8 @@ function submitAfterAuth() {
 									<input id="line2d" class="input" type="text" bind:value={$form.line2} />
 								</div>
 								<div class="field">
-									<label class="field-label" for="cityd">City</label>
-									<input id="cityd" class="input" type="text" bind:value={$form.city} />
+									<label class="field-label"  for="cityd">City</label>
+									<input id="cityd" disabled class="input" type="text" bind:value={$form.city} />
 								</div>
 								<div class="field">
 									<label class="field-label" for="postcoded">Postcode</label>
@@ -716,9 +754,9 @@ function submitAfterAuth() {
 				</div>
 				<div class="sum-body">
 					<div class="sum-row">
-						<span class="sum-label">Plan</span>
-						<div class="sum-val">{currentPlanDetails?.name} · {$form.recipient === 'gift' ? 'One-time Pack' : currentPlanDetails?.freq}</div>
-					</div>
+	<span class="sum-label">Plan</span>
+	<div class="sum-val">{currentPlanDetails?.name} · {$form.recipient === 'gift' ? 'One-time Pack' : currentPlanDetails?.freq}{#if qty > 1} · Qty {qty}{/if}</div>
+</div>
 					<div class="sum-row">
 						<span class="sum-label">Delivery</span>
 						<div class="sum-val">{$form.deliveryDay} · {$form.frequency}</div>
@@ -732,8 +770,10 @@ function submitAfterAuth() {
 					{/if}
 					<div class="sum-row">
 						<span class="sum-label">Total</span>
-						<div class="price-line"><span>{currentPlanDetails?.name} product</span><span>£{currentPlanDetails?.price.toFixed(2)}</span></div>
-						{#each activeAddons as item (item.id)}
+<div class="price-line">
+	<span>{currentPlanDetails?.name} product{#if qty > 1} × {qty}{/if}</span>
+	<span>£{planLineTotal.toFixed(2)}</span>
+</div>						{#each activeAddons as item (item.id)}
 							<div class="price-line"><span>{item.name}</span><span>£{(item.pricePence / 100).toFixed(2)}</span></div>
 						{/each}
 						<div class="price-line total"><span>First payment</span><strong>£{finalTotalPrice.toFixed(2)}</strong></div>

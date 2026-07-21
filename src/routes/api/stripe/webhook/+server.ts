@@ -189,6 +189,7 @@ if (session.mode === 'payment') {
     const guestOrderId = session.metadata?.guestOrderId;
 	const kind = session.metadata?.kind;
     const email = session.customer_details?.email;
+    const addressId = session.metadata?.addressId;
   const name  = session.customer_details?.name;
   console.log(name, email)
     
@@ -277,7 +278,7 @@ if (session.mode === 'payment') {
  
 	await db
 		.update(guestOrders)
-		.set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
+		.set({ status: 'paid', addressId, stripePaymentIntentId: session.payment_intent as string })
 		.where(eq(guestOrders.id, guestOrderId));
 
     
@@ -302,11 +303,13 @@ if (session.mode === 'payment') {
 				line2: string | null;
 				city: string;
 				postcode: string;
+                phone: string | null;
 			};
 			const addressLines = [
-				order.recipientName,
+				order.recipientName ?? '',
 				addr.line1,
 				addr.line2 ?? '',
+                addr.phone ?? '',
 				addr.city,
 				addr.postcode
 			];

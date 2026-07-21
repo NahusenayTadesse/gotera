@@ -41,11 +41,13 @@ export const checkoutSchema = z
 		// Reused by both flows (a given submission is either "me" or "gift",
 		// never both, so one address block is enough).
 		addressLabel: z.string().max(255).optional(),
+		phone: z.coerce.string("Phone is required").default(''),
 		line1: z.string().max(255).default(''),
 		line2: z.string().max(255).optional(),
 		city: z.string().max(255).default('London'),
 		postcode: z.string().max(32).default(''),
 		guestCheckout: z.boolean().default(false),
+		quantity: z.number().default(1),
 
 		// ── Gift-only ──
 		buyerName: z.string().max(255).optional(),
