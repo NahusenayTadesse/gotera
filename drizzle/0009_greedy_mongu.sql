@@ -1,0 +1,1 @@
+ALTER TABLE `subscriptions` ADD `quantity` int DEFAULT 1 NOT NULL;

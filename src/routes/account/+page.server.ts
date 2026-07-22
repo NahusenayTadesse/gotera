@@ -58,6 +58,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.select({
 			id: subscriptions.id,
 			status: subscriptions.status,
+			quantity: subscriptions.quantity,
 			currentPeriodEnd: subscriptions.currentPeriodEnd,
 			cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
 			pendingPlanAt: subscriptions.pendingPlanAt,
@@ -126,6 +127,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	const subscriptionCards = rows.map((r) => {
+		// Quantity multiplies the plan price only. Add-ons keep their own quantity
+		// and are NOT scaled by the subscription quantity.
+		const qty = r.quantity ?? 1;
+		const addonsPence = recurringPenceBySub.get(r.id) ?? 0;
+
 		const delivery = nextDeliveryBySub.get(r.id);
 		let nextDelivery = null;
 		if (delivery) {
@@ -144,7 +150,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			id: r.id,
 			planName: r.planName,
 			packsLabel: `${r.packs} packs · ${intervalLabel(r.interval)}`,
-			pricePence: r.pricePence + (recurringPenceBySub.get(r.id) ?? 0),
+			quantity: qty,
+			unitPricePence: r.pricePence,
+			pricePence: r.pricePence * qty + addonsPence,
 			status: r.status, // 'pending' | 'active' | 'paused' | 'cancelled'
 			cancelAtPeriodEnd: r.cancelAtPeriodEnd,
 			nextPaymentDate: r.currentPeriodEnd ? fullDateLabel(new Date(r.currentPeriodEnd)) : null,

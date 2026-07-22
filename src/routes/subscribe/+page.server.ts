@@ -295,11 +295,11 @@ export const actions: Actions = {
 				mode: 'subscription',
 				customer: stripeCustomerId ?? undefined,
 				customer_email: stripeCustomerId ? undefined : user.email,
-				line_items: [{ price: plan.stripePriceId, quantity: 1 }, ...addonLineItems(chosenAddons)],
+				line_items: [{ price: plan.stripePriceId, quantity: form.data.quantity ?? 1 }, ...addonLineItems(chosenAddons)],
 				success_url: `${url.origin}/account?welcome=1`,
 				cancel_url: `${url.origin}/subscribe`,
 				// The webhook keys everything off subscriptionId now.
-				metadata: {     subscriberId,subscriptionId, addressId, addonIds: chosenAddons.map((a) => a.id).join(',') },
+				metadata: {     subscriberId,subscriptionId, addressId, addonIds: chosenAddons.map((a) => a.id).join(','),  quantity: String(form.data.quantity ?? 1) },
 				subscription_data: { metadata: { subscriptionId } }
 			});
 			console.log("Metadata:", session.metadata);

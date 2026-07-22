@@ -65,8 +65,21 @@ const currentPlanDetails = $derived(
 		? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
 		: giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0]
 );
+// Is the selected plan a one-time order (vs a recurring subscription)?
+// Only one-time orders carry a quantity; subscriptions are always 1.
+let isOrder = $derived(data?.subscriptionPlans.find((sub) => sub.id === $form.plan)?.kind === 'order');
+
 // Coerce quantity (tel/number inputs can hand us a string or empty) to an int ≥ 1.
+// Applies to subscriptions, one-time orders, and gifts alike.
 const qty = $derived(Math.max(1, Math.floor(Number($form.quantity)) || 1));
+
+// ── Quantity stepper (orders only) ──
+// Writes back to $form.quantity, which qty derives from — keeps the stepper
+// and every total in sync.
+function setQty(n: number) { $form.quantity = Math.max(1, Math.floor(n) || 1); }
+function incQty() { setQty(qty + 1); }
+function decQty() { setQty(qty - 1); }
+
 // Plan price × quantity, before add-ons.
 const planLineTotal = $derived((currentPlanDetails?.price ?? 0) * qty);
 const finalTotalPrice = $derived(planLineTotal + addonsTotal);
@@ -181,8 +194,6 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 			review: 'Review & pay.'
 		}[step]
 	);
-	let isOrder = $derived(data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order')
-
 	const cardSub = $derived(
 		{
 			who: 'For me or as a gift.',
@@ -320,6 +331,12 @@ function submitAfterAuth() {
 	<form class="sub-card-wrap" method="POST" id="start" use:enhance bind:this={checkoutForm}>
 		<div class="sub-card" class:animating>
 			<div class="sub-card__head">
+				{#if stepIdx > 0}
+					<button type="button" class="sub-back" onclick={back} aria-label="Go back a step">
+						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 18l-6-6 6-6" /></svg>
+						Back
+					</button>
+				{/if}
 				<span class="sub-card__title">{cardTitle}</span>
 				<span class="sub-card__sub">{cardSub}</span>
 			</div>
@@ -400,10 +417,6 @@ function submitAfterAuth() {
                             <input id="phone" type="tel" bind:value={$form.phone} />
                         </div>
 						<div class="sub-field">
-                            <label for="quantity">Quantity <span class="opt">  </span></label>
-                            <input id="quantity" type="tel" bind:value={$form.quantity}  />
-                        </div>
-						<div class="sub-field">
 							<label for="m-buyerEmail">Your email</label>
 							<input id="m-buyerEmail" type="email" placeholder="you@example.com" bind:value={$form.buyerEmail} />
 							<span class="sub-field-note">For your confirmation and receipt.</span>
@@ -447,10 +460,6 @@ function submitAfterAuth() {
                             <label for="phone">Phone for Address</label>
                             <input id="phone" type="tel" name="address" bind:value={$form.phone} />
                         </div>
-							<div class="sub-field">
-                            <label for="quantity">Quantity <span class="opt">  </span></label>
-                            <input id="quantity" type="number" bind:value={$form.quantity}  />
-                        </div>
 						<div class="sub-field">
 							<label for="m-line1b">Address line 1</label>
 							<input id="m-line1b" type="text" placeholder="Street address" bind:value={$form.line1} />
@@ -484,6 +493,14 @@ function submitAfterAuth() {
 
 				{#if step === 'review'}
 					<div class="pay-summary">
+						<div class="pay-row">
+							<span class="pay-row__label">Quantity</span>
+							<div class="qty-stepper">
+								<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label="Decrease quantity">−</button>
+								<span class="qty-value">{qty}</span>
+								<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label="Increase quantity">+</button>
+							</div>
+						</div>
 					<div class="pay-row">
 	<span class="pay-row__label">
 		{currentPlanDetails?.name} {$form.recipient === 'me' ? 'subscription' : 'gift'}
@@ -669,10 +686,6 @@ function submitAfterAuth() {
                             <label for="phone">Phone for address</label>
                             <input id="phone" type="tel" bind:value={$form.phone} required />
                         </div>
-							<div class="field full">
-                            <label for="quantity">Quantity </label>
-                            <input id="quantity" type="number" bind:value={$form.quantity}  />
-                        </div>
 								<div class="field full">
 									<label class="field-label" for="buyerEmail">Your email</label>
 									<input id="buyerEmail" class="input" type="email" placeholder="you@example.com" bind:value={$form.buyerEmail} />
@@ -757,6 +770,14 @@ function submitAfterAuth() {
 	<span class="sum-label">Plan</span>
 	<div class="sum-val">{currentPlanDetails?.name} · {$form.recipient === 'gift' ? 'One-time Pack' : currentPlanDetails?.freq}{#if qty > 1} · Qty {qty}{/if}</div>
 </div>
+					<div class="sum-row sum-row--qty">
+						<span class="sum-label">Quantity</span>
+						<div class="qty-stepper">
+							<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label="Decrease quantity">−</button>
+							<span class="qty-value">{qty}</span>
+							<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label="Increase quantity">+</button>
+						</div>
+					</div>
 					<div class="sum-row">
 						<span class="sum-label">Delivery</span>
 						<div class="sum-val">{$form.deliveryDay} · {$form.frequency}</div>
@@ -825,6 +846,9 @@ function submitAfterAuth() {
 	.sub-card { background: #faf8f4; border-top: 2px solid #9a4f22; -webkit-overflow-scrolling: touch; transition: opacity .18s ease, transform .18s ease; }
 	.sub-card.animating { opacity: 0; transform: translateY(12px); }
 	.sub-card__head { padding: 22px 20px 14px; position: sticky; top: 0; background: #faf8f4; z-index: 1; border-bottom: 1px solid #e8e4e0; }
+	.sub-back { position: absolute; top: 16px; right: 18px; display: inline-flex; align-items: center; gap: 3px; background: none; border: none; padding: 4px 2px; font-family: 'Jost', sans-serif; font-size: .64rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #b3ada7; cursor: pointer; transition: color .15s; }
+	.sub-back:hover, .sub-back:active { color: #9a4f22; }
+	.sub-back svg { stroke: currentColor; display: block; }
 	.sub-card__title { font-family: 'Cormorant Garamond', serif; font-size: 1.55rem; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 2px; line-height: 1.1; }
 	.sub-card__sub { font-family: 'Jost', sans-serif; font-size: .75rem; color: #7a746e; display: block; }
 	.sub-card__body { padding: 16px 20px; }
@@ -893,6 +917,17 @@ function submitAfterAuth() {
 	.terms-note a { color: #9a4f22; }
 	.sub-error { font-size: .78rem; color: #a33a2b; margin-top: 10px; display: block; }
 	.skip-link { display: block; text-align: center; font-size: .75rem; color: #7a746e; padding: 10px 0 2px; cursor: pointer; background: none; border: none; width: 100%; text-decoration: underline; font-family: 'Jost', sans-serif; }
+
+	/* ═══════════ QUANTITY STEPPER ═══════════ */
+	.qty-stepper { display: inline-flex; align-items: stretch; height: 38px; border: 1px solid #e8e4e0; background: #fff; overflow: hidden; user-select: none; }
+	.qty-btn { width: 38px; border: none; cursor: pointer; font-family: 'Jost', sans-serif; font-size: 1.1rem; line-height: 1; display: flex; align-items: center; justify-content: center; transition: opacity .15s, background .15s; padding: 0; }
+	.qty-btn--minus { background: #1a1a1a; color: #faf8f4; }
+	.qty-btn--minus:active { background: #2d2d2d; }
+	.qty-btn--minus:disabled { opacity: .35; cursor: not-allowed; }
+	.qty-btn--plus { background: #9a4f22; color: #fff; }
+	.qty-btn--plus:active { background: #833f18; }
+	.qty-value { min-width: 46px; display: flex; align-items: center; justify-content: center; font-family: 'Jost', sans-serif; font-size: .95rem; font-weight: 500; color: #1a1a1a; background: #fff; }
+	.sum-row--qty { display: flex; align-items: center; justify-content: space-between; }
 
 	/* ═══════════ DESKTOP STACKED ═══════════ */
 	h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; line-height: 1.02; }

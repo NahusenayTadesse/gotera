@@ -80,11 +80,15 @@
 							/>
 							<div class="plan-info">
 								<div class="plan-top">
-									<span class="plan-name">{p.planName}</span>
+									<span class="plan-name"
+										>{p.planName}{#if p.quantity > 1}<span class="qty-pill">×{p.quantity}</span
+											>{/if}</span
+									>
 									<span class="plan-price">£{p.price.toFixed(2)}</span>
 								</div>
 								<div class="plan-meta">
-									{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> · {/if}{p.freq}
+									{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> · {/if}{p.freq}{#if p.quantity > 1}
+										· £{p.unitPrice.toFixed(2)} × {p.quantity}{/if}
 								</div>
 								{#if p.cancelAtPeriodEnd}
 									<span class="plan-flag"
@@ -133,9 +137,8 @@
 					<label class="confirm">
 						<input type="checkbox" name="confirm" bind:checked={$form.confirm} />
 						<span
-							>I understand my <strong>{selected.planName}</strong> plan will end{selected.periodEndLabel
-								? ` on ${selected.periodEndLabel}`
-								: ''}.</span
+							>I understand my <strong>{selected.planName}</strong>{#if selected.quantity > 1} (×{selected.quantity}){/if}
+							plan will end{selected.periodEndLabel ? ` on ${selected.periodEndLabel}` : ''}.</span
 						>
 					</label>
 					{#if $errors.confirm}<span class="form-error">{$errors.confirm}</span>{/if}
@@ -274,6 +277,22 @@
 		font-size: 1.15rem;
 		font-weight: 500;
 		color: var(--ink);
+		display: inline-flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+	/* Quantity pill next to plan name */
+	.qty-pill {
+		font-family: 'Jost', sans-serif;
+		font-size: 0.6rem;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		padding: 3px 8px;
+		border-radius: 20px;
+		border: 1px solid rgba(181, 98, 42, 0.3);
+		color: var(--copper);
+		background: rgba(181, 98, 42, 0.06);
+		transform: translateY(-1px);
 	}
 	.plan-price {
 		font-family: 'Cormorant Garamond', serif;

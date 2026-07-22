@@ -38,6 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const rows = await db
 		.select({
 			id: subscriptions.id,
+			quantity: subscriptions.quantity,
 			cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
 			currentPeriodEnd: subscriptions.currentPeriodEnd,
 			planName: plans.name,
@@ -56,15 +57,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 			)
 		);
 
-	const plansList = rows.map((row) => ({
-		id: row.id,
-		planName: row.planName,
-		price: poundsFromPence(row.pricePence),
-		freq: row.freqLabel ?? '',
-		addressLabel: row.addressLabel ?? row.addressLine1 ?? null,
-		cancelAtPeriodEnd: row.cancelAtPeriodEnd,
-		periodEndLabel: formatPeriodEnd(row.currentPeriodEnd)
-	}));
+	const plansList = rows.map((row) => {
+		const quantity = row.quantity ?? 1;
+		return {
+			id: row.id,
+			planName: row.planName,
+			quantity,
+			// Per-unit price and quantity-inclusive total.
+			unitPrice: poundsFromPence(row.pricePence),
+			price: poundsFromPence(row.pricePence * quantity),
+			freq: row.freqLabel ?? '',
+			addressLabel: row.addressLabel ?? row.addressLine1 ?? null,
+			cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+			periodEndLabel: formatPeriodEnd(row.currentPeriodEnd)
+		};
+	});
 
 	const form = await superValidate(zod4(cancelSchema));
 

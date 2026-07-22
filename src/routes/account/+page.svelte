@@ -13,10 +13,15 @@
 	// Counts for the summary header.
 	const activeCount = $derived(data.subscriptions.filter((s) => s.status === 'active').length);
 	const pausedCount = $derived(data.subscriptions.filter((s) => s.status === 'paused').length);
+	// pricePence already includes each subscription's quantity, so this stays correct.
 	const totalMonthlyPence = $derived(
 		data.subscriptions
 		
 			.reduce((sum, s) => sum + s.pricePence, 0)
+	);
+	// Total units across all subscriptions, for the summary chip.
+	const totalUnits = $derived(
+		data.subscriptions.reduce((sum, s) => sum + (s.quantity ?? 1), 0)
 	);
 
 	// Which subscription's upcoming delivery add-ons should land on.
@@ -88,6 +93,7 @@
 		<div class="summary-breakdown">
 			{#if activeCount}<span class="summary-chip chip-active">{activeCount} active</span>{/if}
 			{#if pausedCount}<span class="summary-chip chip-paused">{pausedCount} paused</span>{/if}
+			{#if totalUnits > data.subscriptions.length}<span class="summary-chip">{totalUnits} units</span>{/if}
 			<span class="summary-total">{gbp(totalMonthlyPence)} <span class="summary-total-label">/ month combined</span></span>
 		</div>
 	</div>
@@ -98,6 +104,7 @@
 			<div class="block-header">
 				<h2>
 					{sub.planName}
+					{#if sub.quantity > 1}<span class="qty-pill">×{sub.quantity}</span>{/if}
 					<span class="status-pill status-{sub.status}">{statusLabel[sub.status] ?? sub.status}</span>
 				</h2>
 				<a href="/account/change-plan?subscriptionId={sub.id}" class="block-action">Change plan →</a>
@@ -105,6 +112,7 @@
 
 			<div class="plan-meta-row">
 				<span>{sub.packsLabel}</span>
+				{#if sub.quantity > 1}<span>· Qty {sub.quantity}</span>{/if}
 				{#if sub.addressLine}<span>· {sub.addressLine}</span>{/if}
 			</div>
 
@@ -174,12 +182,16 @@
 				<div class="stat">
 					<span class="stat-label">Plan</span>
 					<div class="stat-value">{sub.planName}</div>
-					<div class="stat-sub">{sub.packsLabel}</div>
+					<div class="stat-sub">
+						{sub.packsLabel}{#if sub.quantity > 1} · Qty {sub.quantity}{/if}
+					</div>
 				</div>
 				<div class="stat">
 					<span class="stat-label">Next Payment</span>
 					<div class="stat-value">{gbp(sub.pricePence)}</div>
-					<div class="stat-sub">{sub.nextPaymentDate ?? '—'}</div>
+					<div class="stat-sub">
+						{#if sub.quantity > 1}{gbp(sub.unitPricePence)} × {sub.quantity} · {/if}{sub.nextPaymentDate ?? '—'}
+					</div>
 				</div>
 				<div class="stat">
 					<span class="stat-label">Status</span>
@@ -275,6 +287,9 @@
 
   /* PLAN META (packs/frequency/address, shown per card) */
   .plan-meta-row { display: flex; gap: 6px; flex-wrap: wrap; font-size: .78rem; color: var(--taupe); margin-bottom: 14px; }
+
+  /* QUANTITY PILL (next to plan name) */
+  .qty-pill { font-family: 'Jost', sans-serif; font-size: .62rem; font-weight: 600; letter-spacing: .06em; padding: 4px 9px; border-radius: 20px; border: 1px solid rgba(181,98,42,.3); color: var(--copper); background: rgba(181,98,42,.06); }
 
   .block { margin-bottom: 44px; }
   .block-header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }

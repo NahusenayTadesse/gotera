@@ -35,12 +35,14 @@ export const subscriptions = mysqlTable('subscriptions', {
 	planId: varchar('plan_id', { length: 36 })
 		.notNull()
 		.references(() => plans.id),
+	
 	stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }),
 	status: mysqlEnum('status', ['pending', 'active', 'paused', 'cancelled']).default('pending').notNull(),
 	currentPeriodEnd: timestamp('current_period_end'),
 	cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
 	pendingPlanId: varchar('pending_plan_id', { length: 36 }).references(() => plans.id),
 	pendingPlanAt: timestamp('pending_plan_at'),
+	quantity: int('quantity').default(1).notNull(),
 	addressId: varchar('address_id', { length: 36 }).references(() => addresses.id),
 	...secureFields
 });

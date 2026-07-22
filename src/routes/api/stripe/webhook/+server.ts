@@ -57,12 +57,14 @@ async function syncSubscription(sub: Stripe.Subscription) {
     const priceId = sub.items.data[0]?.price.id;
     const [plan] = priceId ? await db.select().from(plans).where(eq(plans.stripePriceId, priceId)) : [];
 
- const periodEnd = sub.items.data[0]?.current_period_end;
+    const quantity = sub.items.data[0]?.quantity ?? subRow.quantity ?? 1;
+    const periodEnd = sub.items.data[0]?.current_period_end;
     await db
         .update(subscriptions)
         .set({
             status: mapStatus(sub.status),
             planId: plan?.id ?? subRow.planId,
+            quantity,
             currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             pendingPlanId: null,
