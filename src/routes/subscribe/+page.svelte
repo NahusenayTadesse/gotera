@@ -4,6 +4,30 @@
 	import type { PageData, Snapshot } from './$types';
 	import { Button } from '$lib/components/ui/button';
 
+	import { onMount } from 'svelte';
+
+const WIZARD_KEY = 'goteraStep';
+
+onMount(() => {
+    // Baseline entry for step 0, replacing whatever's already there
+    if (!history.state?.[WIZARD_KEY] && history.state?.[WIZARD_KEY] !== 0) {
+        history.replaceState({ ...history.state, [WIZARD_KEY]: stepIdx }, '');
+    }
+
+    function onPopState(e: PopStateEvent) {
+        const targetStep = e.state?.[WIZARD_KEY];
+        if (typeof targetStep === 'number') {
+            stepError = null;
+            stepIdx = Math.min(Math.max(targetStep, 0), STEPS.length - 1);
+        } else {
+            // No wizard state on this entry — let the browser actually leave the page
+        }
+    }
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+});
+
 	import AuthSheet from '$lib/AuthSheet.svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -151,6 +175,7 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 		setTimeout(() => {
 			stepIdx = Math.min(stepIdx + 1, STEPS.length - 1);
 			animating = false;
+			 history.pushState({ [WIZARD_KEY]: stepIdx }, '');
 		}, 180);
 	}
 	function back() {
@@ -160,6 +185,7 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 			return;
 		}
 		stepIdx -= 1;
+		 history.back();
 	}
 	function handleCta() {
 		stepError = null;
