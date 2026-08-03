@@ -36,7 +36,7 @@
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h2 class="text-2xl font-bold text-foreground">Today's Report</h2>
+				<h2 class="dash-heading text-2xl font-semibold text-foreground">Today's Report</h2>
 				<p class="text-sm text-muted-foreground">Real-time business metrics</p>
 			</div>
 			<Badge variant="outline" class="text-xs">Live</Badge>
@@ -45,7 +45,7 @@
 		<!-- Main Metrics Grid -->
 		<div class="grid grid-cols-1 gap-4 lg:gap-8 md:grid-cols-2 lg:grid-cols-2">
 			<!-- Daily Income -->
-			<Card class="border-l-4 border-l-emerald-500 hover:shadow-lg-lg transition-shadow-lg duration-200">
+			<Card class="border-l-4 border-l-emerald-500 transition-colors duration-200 hover:border-primary/40">
 				<CardHeader class="pb-2">
 					<CardTitle class="flex items-center justify-between text-sm font-medium text-muted-foreground">
 						<span>Daily Income</span>
@@ -59,7 +59,7 @@
 			</Card>
 
 			<!-- Daily Expenses -->
-			<Card class="border-l-4 border-l-red-500 hover:shadow-lg-lg transition-shadow-lg duration-200">
+			<Card class="border-l-4 border-l-red-500 transition-colors duration-200 hover:border-primary/40">
 				<CardHeader class="pb-2">
 					<CardTitle class="flex items-center justify-between text-sm font-medium text-muted-foreground">
 						<span>Daily Expenses</span>
@@ -73,7 +73,7 @@
 			</Card>
 
 			<!-- Staff Paid -->
-			<Card class="border-l-4 border-l-blue-500 hover:shadow-lg-lg transition-shadow-lg duration-200">
+			<Card class="border-l-4 border-l-blue-500 transition-colors duration-200 hover:border-primary/40">
 				<CardHeader class="pb-2">
 					<CardTitle class="flex items-center justify-between text-sm font-medium text-muted-foreground">
 						<span>Staff Paid</span>
@@ -87,7 +87,7 @@
 			</Card>
 
 			<!-- Net Income -->
-			<Card class={["border-l-4 hover:shadow-lg-lg transition-shadow-lg duration-200", isPositive ? "border-l-green-500" : "border-l-orange-500"]}>
+			<Card class={["border-l-4 transition-colors duration-200 hover:border-primary/40", isPositive ? "border-l-green-500" : "border-l-orange-500"]}>
 				<CardHeader class="pb-2">
 					<CardTitle class="flex items-center justify-between text-sm font-medium text-muted-foreground">
 						<span>Net Income</span>
@@ -104,7 +104,7 @@
 		<!-- Secondary Metrics -->
 		<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 			<!-- Booked Appointments -->
-			<Card class="hover:shadow-lg-lg transition-shadow-lg duration-200">
+			<Card class="transition-colors duration-200 hover:border-primary/40">
 				<CardHeader class="pb-2">
 					<CardTitle class="flex items-center justify-between text-sm font-medium text-muted-foreground">
 						<span>Appointments</span>
@@ -118,7 +118,7 @@
 			</Card>
 
 			<!-- Products Sold -->
-			<Card class="hover:shadow-lg-lg transition-shadow-lg duration-200">
+			<Card class="transition-colors duration-200 hover:border-primary/40">
 				<CardHeader class="pb-2">
 					<CardTitle class="flex items-center justify-between text-sm font-medium text-muted-foreground">
 						<span>Products Sold</span>

@@ -317,7 +317,7 @@
 						</div>
 					</ScrollArea>
 				{/if}
-				<div class="max-h-[45vh] rounded-md border">
+				<div class="rounded-md border">
 					<Table.Root id={uniqueTableId} class="relative overflow-x-auto">
 						<Table.Header>
 							{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}

@@ -34,7 +34,7 @@
 </script>
 
 <Card
-	class="group hover:shadow-lg-xl hover:shadow-lg-primary/10 relative overflow-hidden border-border/50 transition-all duration-300"
+	class="group relative overflow-hidden border-border shadow-none transition-colors duration-300 hover:border-primary/40"
 >
 	<!-- Gradient Background -->
 	<div

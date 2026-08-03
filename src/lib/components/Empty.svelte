@@ -5,12 +5,10 @@
 </script>
 
 <div
-	class="my-8 flex h-64 w-full items-center justify-center rounded-md p-6 shadow-sm dark:bg-black"
+	class="my-8 flex h-64 w-full flex-col items-center justify-center gap-3 rounded-md border border-border bg-card p-6"
 >
-	<h1
-		aria-live="assertive"
-		class="text-center text-5xl font-extrabold text-red-600 uppercase md:text-6xl dark:text-red-400"
-	>
-		<Frown class="h-32 w-32 animate-bounce justify-self-center text-center" /> No {title} Found
+	<Frown class="size-10 text-muted-foreground" />
+	<h1 aria-live="assertive" class="dash-heading text-center text-2xl font-semibold text-foreground">
+		No {title} Found
 	</h1>
 </div>

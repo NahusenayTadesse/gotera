@@ -16,7 +16,9 @@ import { secureFields } from './auth.schema';
 export * from './auth.schema';
 
 export const subscribers = mysqlTable('subscribers', {
-	id: varchar('id', { length: 36 }).primaryKey(),
+	id: varchar('id', { length: 36 })
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
 	userId: varchar('user_id', { length: 36 }).unique(),
 	email: varchar('email', { length: 255 }).notNull(),
 	fullName: varchar('full_name', { length: 255 }),
@@ -28,7 +30,9 @@ export const subscribers = mysqlTable('subscribers', {
 
 // NEW: one row per plan the person subscribes to
 export const subscriptions = mysqlTable('subscriptions', {
-	id: varchar('id', { length: 36 }).primaryKey(),
+	id: varchar('id', { length: 36 })
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
 	subscriberId: varchar('subscriber_id', { length: 36 })
 		.notNull()
 		.references(() => subscribers.id, { onDelete: 'cascade' }),

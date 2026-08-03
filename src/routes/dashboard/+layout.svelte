@@ -1,4 +1,5 @@
 <script lang="ts">
+	import './dashboard-theme.css';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import DarkMode from '$lib/components/DarkMode.svelte';
@@ -9,24 +10,25 @@
 	let { children, data } = $props();
 </script>
 
-<Sidebar.Provider>
-	<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
-	<main class="min-w-0 flex-1 px-2">
-		<div
-			class="absolute top-2 left-2 z-10 flex w-[95%] flex-row
-			justify-between rounded-lg p-2 pr-4 align-middle
-		 shadow-lg backdrop-blur-md lg:sticky lg:w-full lg:pr-0"
-		>
-			<Sidebar.Trigger class="rounded-lg bg-white p-4 dark:bg-black" />
-			<div class="flex flex-row items-center gap-4">
-				<Search />
-				<DarkMode />
-				<AvatarSettings data={data?.name} />
+<div class="dashboard-theme bg-background text-foreground">
+	<Sidebar.Provider>
+		<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
+		<main class="min-w-0 flex-1 px-4">
+			<div
+				class="absolute top-3 left-3 z-10 flex w-[95%] flex-row
+				justify-between rounded-lg border border-border bg-background/90 p-3 pr-5 align-middle
+			 backdrop-blur-md lg:sticky lg:w-full lg:pr-4"
+			>
+				<Sidebar.Trigger class="rounded-lg border border-border bg-card p-4" />
+				<div class="flex flex-row items-center gap-4">
+					<Search />
+					<AvatarSettings data={data?.name} />
+				</div>
 			</div>
-		</div>
-		<div class="p-2 pt-24 pb-24 lg:pt-4 lg:pb-4">
-			{@render children?.()}
-			<!-- <BottomMenu /> -->
-		</div>
-	</main>
-</Sidebar.Provider>
+			<div class="p-4 pt-28 pb-24 lg:pt-8 lg:pb-8">
+				{@render children?.()}
+				<!-- <BottomMenu /> -->
+			</div>
+		</main>
+	</Sidebar.Provider>
+</div>

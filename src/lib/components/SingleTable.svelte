@@ -18,16 +18,14 @@
 {#await singleTable}
 	<h1 class="m-2 flex flex-row">Loading <LoaderCircle class="animate-spin" /></h1>
 {:then table}
-	<table id="table" class="w-full table-fixed text-left lg:w-full">
-		<thead
-			class="bg-gray-100 font-semibold tracking-wider text-gray-700 uppercase dark:bg-gray-700 dark:text-gray-300"
-		>
+	<table id="table" class="w-full table-fixed border border-border text-left lg:w-full">
+		<thead class="bg-muted font-semibold tracking-wider text-muted-foreground uppercase">
 			<tr>
 				<th class="px-4 py-3">Detail</th>
 				<th class="px-4 py-3">Value</th>
 			</tr>
 		</thead>
-		<tbody class="text-gray-900 dark:text-gray-100">
+		<tbody class="divide-y divide-border text-foreground">
 			{#each singleTable as value}
 				<tr>
 					<td class="px-4 py-3 font-semibold">{value.name}</td>

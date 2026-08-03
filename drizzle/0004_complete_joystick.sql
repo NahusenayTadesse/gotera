@@ -15,11 +15,11 @@ CREATE TABLE `guest_orders` (
 	CONSTRAINT `guest_orders_id` PRIMARY KEY(`id`),
 	CONSTRAINT `guest_orders_stripe_payment_intent_id_unique` UNIQUE(`stripe_payment_intent_id`)
 );
---> statement-breakpoint
-ALTER TABLE `gift_orders` MODIFY COLUMN `buyer_email` varchar(255) NOT NULL;--> statement-breakpoint
-ALTER TABLE `gift_orders` ADD `buyer_name` varchar(255);--> statement-breakpoint
-ALTER TABLE `gift_orders` ADD `gift_message` text;--> statement-breakpoint
-ALTER TABLE `gift_orders` ADD `duration_months` int DEFAULT 1 NOT NULL;--> statement-breakpoint
-ALTER TABLE `guest_orders` ADD CONSTRAINT `guest_orders_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `guest_orders` ADD CONSTRAINT `guest_orders_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+
+ALTER TABLE `gift_orders` MODIFY COLUMN `buyer_email` varchar(255) NOT NULL;
+ALTER TABLE `gift_orders` ADD `buyer_name` varchar(255);
+ALTER TABLE `gift_orders` ADD `gift_message` text;
+ALTER TABLE `gift_orders` ADD `duration_months` int DEFAULT 1 NOT NULL;
+ALTER TABLE `guest_orders` ADD CONSTRAINT `guest_orders_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `guest_orders` ADD CONSTRAINT `guest_orders_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
 ALTER TABLE `guest_orders` ADD CONSTRAINT `guest_orders_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;

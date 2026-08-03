@@ -1,32 +1,17 @@
 <script lang="ts">
 	import StatCard from './stat-card.svelte';
-	import {
-		ShoppingCartIcon,
-		PackageIcon,
-		TrendingUpIcon,
-		DollarSignIcon,
-		CreditCardIcon
-	} from '@lucide/svelte';
+	import { formatGBP } from './format';
+	import { TruckIcon, PackageIcon, UserPlusIcon, UsersIcon, CreditCardIcon } from '@lucide/svelte';
 
 	interface DailyStats {
 		totalOrders: number;
 		totalItemsSold: number;
-		totalRevenue: number;
-		averageOrderValue: number;
 		totalPaymentsCollected: number;
+		newSubscribers: number;
+		newUsers: number;
 	}
 
-	const { stats }: { stats: DailyStats } = $props();
-
-	/** Format currency */
-	const formatCurrency = (value: number): string => {
-		return new Intl.NumberFormat('en-US', {
-			style: 'currency',
-			currency: 'ETB',
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 2
-		}).format(value);
-	};
+	const { stats = {} as Partial<DailyStats> }: { stats?: Partial<DailyStats> } = $props();
 
 	/** Format number with commas */
 	const formatNumber = (value: number): string => {
@@ -36,62 +21,64 @@
 
 <div class="w-full">
 	<div class="mb-8">
-		<h2 class="text-3xl font-bold text-foreground">Daily Statistics</h2>
+		<h2 class="dash-heading text-3xl font-semibold text-foreground">Daily Statistics</h2>
 		<p class="mt-2 text-muted-foreground">Today's performance overview</p>
 	</div>
 
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-		<!-- Total Orders -->
+		<!-- Deliveries Made -->
 		<StatCard
-			title="Total Orders"
+			title="Deliveries Made"
 			value={formatNumber(stats.totalOrders || 0)}
-			description="Delivered orders"
-			measure="Orders"
+			description="Delivered today"
+			measure="Deliveries"
 		>
 			{#snippet icon()}
-				<ShoppingCartIcon class="size-6" />
+				<TruckIcon class="size-6" />
 			{/snippet}
 		</StatCard>
 
-		<!-- Total Items Sold -->
+		<!-- Items Delivered -->
 		<StatCard
-			title="Items Sold"
+			title="Items Delivered"
 			value={formatNumber(stats.totalItemsSold || 0)}
 			description="Total quantity"
-			measure="Sold"
+			measure="Items"
 		>
 			{#snippet icon()}
 				<PackageIcon class="size-6" />
 			{/snippet}
 		</StatCard>
 
-		<!-- Total Revenue -->
+		<!-- New Subscribers -->
 		<StatCard
-			title="Total Revenue"
-			value={formatCurrency(stats.totalRevenue || 0)}
-			description="Today's earnings"
+			title="New Subscribers"
+			value={formatNumber(stats.newSubscribers || 0)}
+			description="Signed up today"
+			measure="Subscribers"
 		>
 			{#snippet icon()}
-				<TrendingUpIcon class="size-6" />
+				<UserPlusIcon class="size-6" />
 			{/snippet}
 		</StatCard>
 
-		<!-- Average Order Value -->
+		<!-- New Users -->
 		<StatCard
-			title="Avg Order Value"
-			value={formatCurrency(stats.averageOrderValue || 0)}
-			description="Per order"
+			title="New Users"
+			value={formatNumber(stats.newUsers || 0)}
+			description="Accounts created today"
+			measure="Users"
 		>
 			{#snippet icon()}
-				<DollarSignIcon class="size-6" />
+				<UsersIcon class="size-6" />
 			{/snippet}
 		</StatCard>
 
 		<!-- Payments Collected -->
 		<StatCard
 			title="Payments Collected"
-			value={formatCurrency(stats.totalPaymentsCollected || 0)}
-			description="Confirmed payments"
+			value={formatGBP(stats.totalPaymentsCollected || 0)}
+			description="From today's deliveries"
 		>
 			{#snippet icon()}
 				<CreditCardIcon class="size-6" />

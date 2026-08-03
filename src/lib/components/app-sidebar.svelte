@@ -18,7 +18,11 @@
 		Building2,
 		BookDown,
 		MapPin,
-		Truck
+		Truck,
+		PackageSearch,
+		RefreshCw,
+		Gift,
+		UserX
 	} from '@lucide/svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import type { ComponentProps } from 'svelte';
@@ -33,33 +37,42 @@
 		{ title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
-
+		{
+			title: 'Orders',
+			url: '/dashboard/orders',
+			icon: PackageSearch,
+			items: [
+				{ title: 'Subscriptions', url: '/dashboard/orders/subscriptions', icon: RefreshCw },
+				{ title: 'One-Time & Gift', url: '/dashboard/orders/one-time', icon: Gift },
+				{ title: 'Guest Orders', url: '/dashboard/orders/guest', icon: UserX }
+			]
+		},
 		{
 			title: 'Deliveries',
 			url: '/dashboard/deliveries',
 			icon: Truck
 		},
-		
 
 
 
 		{
 			title: 'Reports',
 			url: '/dashboard/reports',
-			icon: ChartArea
+			icon: ChartArea,
+			items: [
+				{ title: 'Subscriptions', url: '/dashboard/reports/subscriptions', icon: RefreshCw },
+				{ title: 'Deliveries', url: '/dashboard/reports/deliveries', icon: Truck },
+				{ title: 'Orders', url: '/dashboard/reports/orders', icon: Gift }
+			]
 		},
 		{
 			title: 'Admin Panel',
 			url: '/dashboard/admin-panel',
 			icon: UserRoundCog,
 			items: [
-				{
-					title: 'Payment Methods',
-					url: '/dashboard/admin-panel/payment-methods',
-					icon: Banknote
-				},
 				{ title: 'Users', url: '/dashboard/admin-panel/users', icon: Users },
-				{ title: 'Roles', url: '/dashboard/admin-panel/roles', icon: Users }
+				{ title: 'Roles', url: '/dashboard/admin-panel/roles', icon: Users },
+				{ title: 'Add-ons', url: '/dashboard/admin-panel/addons', icon: Sheet }
 			]
 		}
 	];

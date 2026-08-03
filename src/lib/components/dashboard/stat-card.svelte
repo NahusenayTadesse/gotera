@@ -16,7 +16,7 @@
 
 <Card
 	class={[
-		'group border-0 bg-linear-to-br from-card to-card/80 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
+		'group border border-border bg-card shadow-none transition-colors duration-200 hover:border-primary/40',
 		className
 	]}
 >

@@ -31,11 +31,10 @@
 	const formatEthiopianDate = (date: CalendarDate | undefined): string => {
 		if (!date) return '';
 
-		const formatter = new Intl.DateTimeFormat('am-ET', {
+		const formatter = new Intl.DateTimeFormat('en-US', {
 			year: 'numeric',
 			month: 'long',
 			day: 'numeric',
-			calendar: 'ethiopic'
 		});
 
 		return formatter.format(date.toDate(getLocalTimeZone()));
@@ -65,7 +64,6 @@
 		</div>
 
 		<Calendar
-			locale="am-ET"
 			type="single"
 			captionLayout={year ? 'dropdown-years' : 'label'}
 			minValue={todayDate}

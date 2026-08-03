@@ -3,11 +3,11 @@
 </script>
 
 <div
-	class="flex w-full flex-col items-center justify-center rounded-md
- bg-white shadow-lg lg:w-md lg:min-w-3xl dark:bg-black dark:shadow-md dark:shadow-gray-900 {className}"
+	class="flex w-full flex-col items-center justify-center rounded-md border border-border
+ bg-card shadow-none lg:w-md lg:min-w-3xl {className}"
 >
 	<div
-		class="from-dark flex w-full flex-col items-center justify-start rounded-lg bg-linear-to-r from-gray-200 to-black px-8 py-6 text-white dark:from-gray-600"
+		class="flex w-full flex-col items-center justify-start rounded-t-md border-b border-border bg-primary px-8 py-6 text-primary-foreground"
 	>
 		{#if photo !== ''}
 			<img src="/files/{photo}" loading="lazy" class="h-48 w-48 rounded-full" alt="{title} photo" />

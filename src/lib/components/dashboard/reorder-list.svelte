@@ -20,15 +20,15 @@
 </script>
 
 <div class="animate-in fade-in slide-in-from-bottom-4 duration-500" style="animation-delay: 100ms;">
-	<Card class="border-0 shadow-lg-lg hover:shadow-lg-xl transition-shadow-lg duration-300">
+	<Card class="border border-border shadow-none transition-colors duration-300 hover:border-primary/40">
 		<CardHeader class="pb-3">
 			<div class="flex items-start justify-between">
 				<div class="space-y-1">
-					<CardTitle class="text-lg">{title}</CardTitle>
+					<CardTitle class="dash-heading text-lg font-semibold">{title}</CardTitle>
 					<CardDescription>{description}</CardDescription>
 				</div>
-				<div class="rounded-lg bg-accent/10 p-2">
-					<Icon class="size-5 text-black dark:text-white" />
+				<div class="rounded-lg bg-primary/10 p-2">
+					<Icon class="size-5 text-primary" />
 				</div>
 			</div>
 		</CardHeader>

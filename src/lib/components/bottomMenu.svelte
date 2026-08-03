@@ -25,7 +25,7 @@
 </script>
 
 <nav
-	class="fixed right-0 bottom-0 left-0 z-40 flex w-screen border-t border-border/50 bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-xl lg:hidden"
+	class="fixed right-0 bottom-0 left-0 z-40 flex w-screen border-t border-border bg-background/95 backdrop-blur-xl lg:hidden"
 >
 	<div class="grid grid-cols-5 items-center justify-around px-2 py-3">
 		{#each mobNav as item (item.url)}

@@ -53,7 +53,7 @@
 </script>
 
 <Sidebar.Group>
-	<Sidebar.Menu>
+	<Sidebar.Menu class="gap-1.5">
 		{#each items as item (item.title)}
 			{#if item.items}
 				<Collapsible.Root open={item.isActive} class="group/collapsible">

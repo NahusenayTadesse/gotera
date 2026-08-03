@@ -1,0 +1,76 @@
+/* Scoped theme override: re-skins shadcn tokens to match the public site's
+   cream / ink / copper brand (see src/routes/layout.css and +layout.svelte)
+   without touching the global tokens used elsewhere (e.g. /subscribe).
+   Plain CSS file (not a Svelte <style> block) — no :global() wrapper needed. */
+
+.dashboard-theme {
+	--background: #faf8f4;
+	--foreground: #1a1a1a;
+	--card: #ffffff;
+	--card-foreground: #1a1a1a;
+	--popover: #ffffff;
+	--popover-foreground: #1a1a1a;
+	--primary: #b5622a;
+	--primary-foreground: #ffffff;
+	--secondary: #f5f2ed;
+	--secondary-foreground: #1a1a1a;
+	--muted: #f5f2ed;
+	--muted-foreground: #7a746e;
+	--accent: #f5f2ed;
+	--accent-foreground: #1a1a1a;
+	--destructive: oklch(0.577 0.245 27.325);
+	--border: #e8e4e0;
+	--input: #e8e4e0;
+	--ring: #b5622a;
+	--radius: 0.25rem;
+	--sidebar: #faf8f4;
+	--sidebar-foreground: #1a1a1a;
+	--sidebar-primary: #b5622a;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #f5f2ed;
+	--sidebar-accent-foreground: #1a1a1a;
+	--sidebar-border: #e8e4e0;
+	--sidebar-ring: #b5622a;
+	--font-sans: 'Jost', sans-serif;
+}
+
+.dark .dashboard-theme {
+	--background: #1a1a1a;
+	--foreground: #faf8f4;
+	--card: #232221;
+	--card-foreground: #faf8f4;
+	--popover: #232221;
+	--popover-foreground: #faf8f4;
+	--primary: #b5622a;
+	--primary-foreground: #ffffff;
+	--secondary: #2a2926;
+	--secondary-foreground: #faf8f4;
+	--muted: #2a2926;
+	--muted-foreground: #a39d95;
+	--accent: #2a2926;
+	--accent-foreground: #faf8f4;
+	--border: #34322f;
+	--input: #34322f;
+	--ring: #b5622a;
+	--sidebar: #1a1a1a;
+	--sidebar-foreground: #faf8f4;
+	--sidebar-primary: #b5622a;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #2a2926;
+	--sidebar-accent-foreground: #faf8f4;
+	--sidebar-border: #34322f;
+	--sidebar-ring: #b5622a;
+}
+
+/* Serif heading treatment matching the public site's headings/logo */
+.dashboard-theme .dash-heading {
+	font-family: 'Cormorant Garamond', serif;
+}
+
+.dashboard-theme .dash-eyebrow {
+	font-size: 0.72rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted-foreground);
+	font-weight: 500;
+}

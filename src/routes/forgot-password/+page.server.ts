@@ -22,7 +22,7 @@ export const actions: Actions = {
 			await auth.api.signInMagicLink({
 				body: {
 					email: form.data.email,
-					callbackURL: '/account' // where the link lands them after sign-in
+					callbackURL: '/account' 
 				},
 				headers: request.headers
 			});

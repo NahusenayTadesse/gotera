@@ -153,10 +153,12 @@
     --ease-mid: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
-  :global(*) {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  @layer base {
+    :global(*) {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
   }
   
   :global(body) {
