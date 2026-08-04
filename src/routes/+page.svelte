@@ -4,7 +4,10 @@ import type { PageData } from './$types';
 	import Origin from '$lib/origin.svelte';
 	import Final from '$lib/final.svelte';
 	import Testimonial from '$lib/testimonial.svelte';
+	import Truth from '$lib/Truth.svelte';
 	let { data }: { data: PageData } = $props();
+	let heroVideoReady = $state(false);
+	let heroCardVideoReady = $state(false);
 
 	// Bespoke homepage copy, keyed by slug. Facts (price/featured/existence)
 	// come from the DB; this only overrides the marketing wording. A plan with
@@ -101,6 +104,20 @@ import type { PageData } from './$types';
 					alt="GOTERA injera"
 					style="width:100%;height:100%;object-fit:cover;object-position:center"
 				/>
+				<!-- svelte-ignore a11y_media_has_caption -->
+				<video
+					class="hero-card-video"
+					class:hero-card-video--ready={heroCardVideoReady}
+					poster="/hero.jpeg"
+					autoplay
+					muted
+					loop
+					playsinline
+					preload="metadata"
+					onloadeddata={() => (heroCardVideoReady = true)}
+				>
+					<source src="/hero.mp4" type="video/mp4" />
+				</video>
 			</div>
 			<div class="hero-card-body">
 				<h3>Injera</h3>
@@ -119,6 +136,20 @@ import type { PageData } from './$types';
 				style="width:100%;height:100%;object-fit:cover;object-position:center"
 			/>
 		</div>
+		<!-- svelte-ignore a11y_media_has_caption -->
+		<video
+			class="hero__video"
+			class:hero__video--ready={heroVideoReady}
+			poster="/hero.jpeg"
+			autoplay
+			muted
+			loop
+			playsinline
+			preload="metadata"
+			onloadeddata={() => (heroVideoReady = true)}
+		>
+			<source src="/hero.mp4" type="video/mp4" />
+		</video>
 	</div>
 	<div class="hero__gradient"></div>
 	<div class="hero__content">
@@ -177,33 +208,42 @@ import type { PageData } from './$types';
 	<div class="container">
 		<div class="pillars-head">
 			<span class="eyebrow">Why GOTERA</span>
-			<h2>One product. Done properly.</h2>
-			<p>Real injera, made in Ethiopia, on a subscription built for simplicity.</p>
+			<h2>Injera From Its Origin. Made Right.
+</h2>
+			<p>Real injera, made in Ethiopia. The genuine taste you’ve been missing.
+</p>
 		</div>
 		<div class="pillars-grid">
 			<div class="pillar">
 				<div class="pillar-num">01</div>
 				<h3>Made in Ethiopia</h3>
-				<p>The origin is the product. Always clearly stated.</p>
+				<p>Straight from its origin
+</p>
 			</div>
 			<div class="pillar">
 				<div class="pillar-num">02</div>
 				<h3>100% Teff</h3>
-				<p>One ingredient standard. No compromise.</p>
+				<p> No compromise.</p>
 			</div>
 			<div class="pillar">
 				<div class="pillar-num">03</div>
-				<h3>Monthly delivery</h3>
-				<p>Order once. Arrive every month.</p>
+				<h3>Weekly delivery</h3>
+				<p>Order once. It just keeps coming.</p>
 			</div>
 			<div class="pillar">
 				<div class="pillar-num">04</div>
-				<h3>Premium by design</h3>
-				<p>Clear packaging, clean information, no clutter.</p>
+				<h3>Premium, Every time
+</h3>
+				<p>What you order is what arrives. No surprises.
+
+</p>
 			</div>
 		</div>
 	</div>
 </section>
+<div class="container">	
+<Truth />
+</div>
 
 <section class="plans">
 	<div class="container">
@@ -252,14 +292,15 @@ import type { PageData } from './$types';
 			<div class="origin-panel">
 				<span class="eyebrow">Origin</span>
 				<h3>Made &amp; packed in Ethiopia</h3>
-				<p>The product stays close to its source. That is what makes GOTERA worth trusting.</p>
+				<p>Injera close to it’s source. That’s what makes GOTERA worth trusting.
+</p>
 			</div>
 			<div class="origin-panel">
 				<span class="eyebrow">Delivery</span>
 				<h3>Delivered with clarity</h3>
 				<p>
-					One delivery date per month. Cold-chain packaging. Clear cut-off dates. Nothing
-					complicated.
+					Per-week Delivery. Cold-chain packaging. Clear cut-off dates. Nothing complicated.
+
 				</p>
 			</div>
 		</div>
@@ -489,6 +530,7 @@ import type { PageData } from './$types';
 		overflow: hidden;
 	}
 	.hero-card-img {
+		position: relative;
 		width: 100%;
 		aspect-ratio: 4/3;
 		background: var(--panel);
@@ -498,6 +540,20 @@ import type { PageData } from './$types';
 		justify-content: center;
 		gap: 6px;
 		border-bottom: 1px solid var(--border);
+		overflow: hidden;
+	}
+	.hero-card-video {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center;
+		opacity: 0;
+		transition: opacity 0.6s ease;
+	}
+	.hero-card-video--ready {
+		opacity: 1;
 	}
 	.ph-label {
 		font-size: 0.62rem;
@@ -654,7 +710,9 @@ import type { PageData } from './$types';
 	.plan {
 		background: #fff;
 		border: 1px solid var(--border);
-		padding: 24px;
+		padding: 32px;
+				border-radius: 25px !important;
+
 	}
 	.plan h3 {
 		font-size: 1.4rem;
@@ -691,34 +749,37 @@ import type { PageData } from './$types';
 		padding-left: 12px;
 		position: relative;
 	}
-	.plan li::before {
+	/* .plan li::before {
 		content: '—';
 		position: absolute;
 		left: 0;
 		color: rgba(181, 98, 42, 0.4);
 		font-size: 0.7rem;
-	}
-	.plan-featured {
-		background: var(--copper);
-		border-color: var(--copper);
-	}
-	.plan-featured h3,
-	.plan-featured .price {
-		color: #fff;
-	}
-	.plan-featured .plan-desc,
-	.plan-featured .freq,
-	.plan-featured li {
-		color: rgba(255, 255, 255, 0.8);
-	}
-	.plan-featured li::before {
-		color: rgba(255, 255, 255, 0.4);
-	}
-	.plan-featured-btn {
-		background: #fff;
-		color: #b5622a;
-		border-color: #fff;
-	}
+	} */
+.plan-featured {
+    background: var(--ink);
+    border-color: var(--ink);
+}
+.plan-featured h3,
+.plan-featured .price {
+    color: #fff;
+}
+.plan-featured .plan-desc,
+.plan-featured .freq,
+.plan-featured li {
+    color: rgba(255, 255, 255, 0.6);
+}
+.plan-featured li::before {
+    color: rgba(255, 255, 255, 0.35);
+}
+.plan-featured-btn {
+    background: var(--copper);
+    color: #fff;
+    border-color: var(--copper);
+}
+.plan-featured-btn:hover {
+    background: #9a4f22;
+}
 	.origin {
 		padding: 72px 0;
 		border-bottom: 1px solid var(--border);
@@ -904,6 +965,18 @@ import type { PageData } from './$types';
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+	.hero__video {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0;
+		transition: opacity 0.6s ease;
+	}
+	.hero__video--ready {
+		opacity: 1;
 	}
 	.hero__gradient {
 		position: absolute;

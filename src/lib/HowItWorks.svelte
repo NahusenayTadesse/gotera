@@ -7,7 +7,7 @@
 		{
 			num: '01',
 			title: 'Subscribe',
-			copy: 'Choose your plan. No long contracts — pause or cancel any time from your account.',
+			copy: 'Choose your plan. No long contracts. Pause or cancel at any time.',
 			meta: 'From £6.50 / week'
 		},
 		{

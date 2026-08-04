@@ -439,7 +439,7 @@ function submitAfterAuth() {
 				{#if step === 'details'}
 					{#if $form.recipient === 'gift'}
 						<div class="sub-field">
-                            <label for="phone">Phone <span class="opt">  </span></label>
+                            <label for="phone">Phone  Number for Delivery<span class="opt">  </span></label>
                             <input id="phone" type="tel" bind:value={$form.phone} />
                         </div>
 						<div class="sub-field">
@@ -483,7 +483,7 @@ function submitAfterAuth() {
 						</div>
 					{:else}
 						<div class="sub-field">
-                            <label for="phone">Phone for Address</label>
+                            <label for="phone">Phone for Delivery</label>
                             <input id="phone" type="tel" name="address" bind:value={$form.phone} />
                         </div>
 						<div class="sub-field">
@@ -709,7 +709,7 @@ function submitAfterAuth() {
 						{#if $form.recipient === 'gift'}
 							<div class="field full">
 							   	<div class="sub-field">
-                            <label for="phone">Phone for address</label>
+                            <label for="phone">Phone for Delivery</label>
                             <input id="phone" type="tel" bind:value={$form.phone} required />
                         </div>
 								<div class="field full">
@@ -750,7 +750,7 @@ function submitAfterAuth() {
 							<div class="detail-grid">
 							  <div class="field full">
 							   	<div class="sub-field">
-                            <label for="phone">Phone for address</label>
+                            <label for="phone">Phone for Delivery</label>
                             <input id="phone" type="tel" bind:value={$form.phone} required />
                         </div>
 						</div>

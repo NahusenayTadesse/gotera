@@ -22,6 +22,7 @@
 				<Sidebar.Trigger class="rounded-lg border border-border bg-card p-4" />
 				<div class="flex flex-row items-center gap-4">
 					<Search />
+					<DarkMode />
 					<AvatarSettings data={data?.name} />
 				</div>
 			</div>

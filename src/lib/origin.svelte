@@ -17,7 +17,7 @@
 	<div class="origin-inner">
 		<header class="origin-head">
 			<span class="eyebrow">Origin</span>
-			<h2>From Ethiopian soil to your table.</h2>
+			<h2>Ethiopian perfection at your table</h2>
 		</header>
 
 		<figure class="origin-figure">
@@ -31,14 +31,17 @@
 				culture passed down through families.
 			</p>
 			<p>
-				We do not import teff and manufacture elsewhere. We source the finished product at origin —
-				made exactly as it should be — and bring it to London by cold chain.
+				We do not import Teff and manufactire it elsewhere. We source the real thing at its origin, exactly as it should be, and bring it to London by cold chain.
+
 			</p>
 
 			<p class="statement">
-				Nothing is approximated.<br />
-				Nothing is substituted.<br />
-				<em>This is the real thing.</em>
+				No cheap fillers
+<br />
+				100% Ethiopian Teff, uncompromisingly fermented
+<br />
+				<em>Taste the difference real Teff makes
+</em>
 			</p>
 
 			<a class="link-cta" href="/about">

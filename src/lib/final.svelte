@@ -5,7 +5,7 @@
 <section class="final">
 	<div class="final-inner">
 		<span class="eyebrow">Subscribe</span>
-		<h2>Your injera. Every month.</h2>
+		<h2>Your injera. Every week.</h2>
 		<p class="sub">
 			Stop searching. Start enjoying real Ethiopian injera delivered to your door every Saturday.
 		</p>
