@@ -1,8 +1,35 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { MailIcon, PhoneIcon, MapPinIcon, MessageCircleIcon, MapPin } from '@lucide/svelte';
+	import {
+		MailIcon,
+		PhoneIcon,
+		MapPinIcon,
+		MessageCircleIcon,
+		MapPin,
+		LanguagesIcon,
+		ChevronDownIcon
+	} from '@lucide/svelte';
+	import { getLocale, setLocale } from '$lib/paraglide/runtime';
 	let email = $state('');
+
+	const languageOptions = [
+		{ code: 'en' as const, label: 'English' },
+		{ code: 'am' as const, label: 'Amharic' }
+	];
+	let languageMenuOpen = $state(false);
+	let languageMenuEl: HTMLDivElement | undefined = $state();
+
+	const selectLanguage = (code: 'en' | 'am') => {
+		setLocale(code);
+		languageMenuOpen = false;
+	};
+
+	const handleWindowClick = (e: MouseEvent) => {
+		if (languageMenuOpen && languageMenuEl && !languageMenuEl.contains(e.target as Node)) {
+			languageMenuOpen = false;
+		}
+	};
 
 	const handleNewsletterSubmit = (e: Event) => {
 		e.preventDefault();
@@ -168,7 +195,40 @@
 
 			<!-- Social Links -->
 			<div class="flex flex-col items-center justify-between gap-4 border-t pt-8 md:flex-row">
-				<p class="text-sm text-foreground/70">Follow us on social media</p>
+				<div class="flex items-center gap-2">
+					<p class="text-sm text-foreground/70">Follow us on social media</p>
+					<div class="relative" bind:this={languageMenuEl}>
+						<button
+							type="button"
+							onclick={() => (languageMenuOpen = !languageMenuOpen)}
+							aria-label="Change language"
+							aria-haspopup="true"
+							aria-expanded={languageMenuOpen}
+							class="flex items-center gap-0.5 rounded-md p-1 text-foreground/40 transition-colors hover:text-foreground/80"
+						>
+							<LanguagesIcon class="size-3.5" />
+							<ChevronDownIcon class="size-2.5" />
+						</button>
+						{#if languageMenuOpen}
+							<div
+								class="absolute bottom-full left-0 z-10 mb-2 min-w-28 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+							>
+								{#each languageOptions as option (option.code)}
+									<button
+										type="button"
+										onclick={() => selectLanguage(option.code)}
+										class={[
+											'block w-full rounded-sm px-2 py-1 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
+											getLocale() === option.code && 'font-medium text-foreground'
+										]}
+									>
+										{option.label}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
 				<div class="grid grid-cols-4 gap-3">
 					{#each socialLinks as social (social.url)}
 						<a
@@ -194,3 +254,5 @@
 		</div>
 	</div>
 </footer>
+
+<svelte:window onclick={handleWindowClick} />

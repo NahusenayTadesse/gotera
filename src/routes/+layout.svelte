@@ -9,6 +9,7 @@
 	import { page } from '$app/state';
 	import { Hamburger, Menu } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 
 	let { data, children } = $props();
 
@@ -167,7 +168,8 @@
 
 			<div class="footer-bottom">
 				<span>{m.layout_footer_copyright({ year: new Date().getFullYear().toString() })}</span>
-				<span>{m.layout_footer_bottom_tagline()}</span>
+				<span class="flex flex-row gap-2">{m.layout_footer_bottom_tagline()} <LanguageSelector /></span>
+				
 			</div>
 		</div>
 	</footer>
@@ -175,11 +177,6 @@
 	{@render children()}
 {/if}
 
-<div style="display:none">
-	{#each locales as locale (locale)}
-		<a href={resolve(localizeHref(page.url.pathname, { locale }) as Pathname)}>{locale}</a>
-	{/each}
-</div>
 
 <style>
 	:global(:root) {

@@ -10,7 +10,7 @@ import { m } from '$lib/paraglide/messages.js';
 
 export const load: PageServerLoad = async ({ locals, parent, url }) => {
 	if (locals.user) {
-		const roleName = (await parent()).roleName;
+		const roleName = locals.role
 
 		if (roleName === 'Admin') {
 			return redirect(302, '/dashboard');

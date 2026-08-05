@@ -57,13 +57,13 @@
 						deleting = true;
 
 						return async ({ result, update }) => {
-							await update();
 							deleting = false;
-							if (result.type === 'success') {
+							if (result.type === 'success' || result.type === 'redirect') {
 								toast.success(m.logoutform_success_toast());
 							} else {
 								toast.error(m.logoutform_error_toast());
 							}
+							await update();
 						};
 					}}
 				>

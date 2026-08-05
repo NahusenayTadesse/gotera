@@ -937,6 +937,12 @@ import type { PageData } from './$types';
 		.proof-divider {
 			display: none;
 		}
+		.pillars,
+		.plans,
+		.origin,
+		.gift {
+			padding: 40px 0;
+		}
 	}
 	.hero-mobile {
 		position: relative;

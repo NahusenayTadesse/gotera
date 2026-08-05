@@ -100,4 +100,9 @@
         grid-template-columns: 1fr;
     }
 }
+@media (max-width: 580px) {
+    .truth {
+        padding: 40px 0;
+    }
+}
 </style>

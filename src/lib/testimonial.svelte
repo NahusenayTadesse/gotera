@@ -601,6 +601,9 @@
 		.proof-divider {
 			display: none;
 		}
+		.proof {
+			padding: 40px 0;
+		}
 	}
 	.hero-mobile {
 		position: relative;
