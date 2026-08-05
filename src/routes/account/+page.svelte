@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { toast } from 'svelte-sonner';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -37,18 +38,18 @@
 
 	const gbp = (pence: number) => `£${(pence / 100).toFixed(2)}`;
 
-	const statusLabel: Record<string, string> = {
-		pending: 'Pending',
-		active: 'Active',
-		paused: 'Paused',
-		cancelled: 'Cancelled'
-	};
-	const statusSub: Record<string, string> = {
-		pending: 'Awaiting first payment',
-		active: 'Renewing automatically',
-		paused: 'Paused — resume anytime',
-		cancelled: 'Subscription ended'
-	};
+	const statusLabel: Record<string, string> = $derived({
+		pending: m.account_status_pending(),
+		active: m.account_status_active(),
+		paused: m.account_status_paused(),
+		cancelled: m.account_status_cancelled()
+	});
+	const statusSub: Record<string, string> = $derived({
+		pending: m.account_status_sub_pending(),
+		active: m.account_status_sub_active(),
+		paused: m.account_status_sub_paused(),
+		cancelled: m.account_status_sub_cancelled()
+	});
 
 	// Shared enhance handler: toast the action's message and refresh data.
 	function withToast(resetAddonId?: string) {
@@ -59,7 +60,7 @@
 					if (msg) toast.success(msg);
 					if (resetAddonId) quantities[resetAddonId] = 0;
 				} else if (result.type === 'failure') {
-					toast.error(msg ?? 'Something went wrong.');
+					toast.error(msg ?? m.account_toast_error_generic());
 				}
 				await update();
 			};
@@ -72,12 +73,12 @@
 	<div class="block">
 		<div class="delivery-card">
 			<div>
-				<span class="delivery-card-eyebrow">No subscriptions</span>
-				<div class="delivery-date">You're not subscribed yet.</div>
-				<div class="delivery-detail">Start a plan to get injera delivered every month.</div>
+				<span class="delivery-card-eyebrow">{m.account_no_subs_eyebrow()}</span>
+				<div class="delivery-date">{m.account_no_subs_title()}</div>
+				<div class="delivery-detail">{m.account_no_subs_detail()}</div>
 			</div>
 			<div class="delivery-btns">
-				<a href="/subscribe" class="btn btn-full">Choose a plan</a>
+				<a href="/subscribe" class="btn btn-full">{m.account_choose_plan()}</a>
 			</div>
 		</div>
 	</div>
@@ -87,14 +88,14 @@
 		<div class="summary-count">
 			<span class="summary-n">{data.subscriptions.length}</span>
 			<span class="summary-label"
-				>{data.subscriptions.length === 1 ? 'subscription' : 'subscriptions'}</span
+				>{data.subscriptions.length === 1 ? m.account_subscription_singular() : m.account_subscription_plural()}</span
 			>
 		</div>
 		<div class="summary-breakdown">
-			{#if activeCount}<span class="summary-chip chip-active">{activeCount} active</span>{/if}
-			{#if pausedCount}<span class="summary-chip chip-paused">{pausedCount} paused</span>{/if}
-			{#if totalUnits > data.subscriptions.length}<span class="summary-chip">{totalUnits} units</span>{/if}
-			<span class="summary-total">{gbp(totalMonthlyPence)} <span class="summary-total-label">/ month combined</span></span>
+			{#if activeCount}<span class="summary-chip chip-active">{m.account_chip_active({ count: activeCount })}</span>{/if}
+			{#if pausedCount}<span class="summary-chip chip-paused">{m.account_chip_paused({ count: pausedCount })}</span>{/if}
+			{#if totalUnits > data.subscriptions.length}<span class="summary-chip">{m.account_chip_units({ count: totalUnits })}</span>{/if}
+			<span class="summary-total">{gbp(totalMonthlyPence)} <span class="summary-total-label">{m.account_month_combined()}</span></span>
 		</div>
 	</div>
 
@@ -107,45 +108,47 @@
 					{#if sub.quantity > 1}<span class="qty-pill">×{sub.quantity}</span>{/if}
 					<span class="status-pill status-{sub.status}">{statusLabel[sub.status] ?? sub.status}</span>
 				</h2>
-				<a href="/account/change-plan?subscriptionId={sub.id}" class="block-action">Change plan →</a>
+				<a href="/account/change-plan?subscriptionId={sub.id}" class="block-action">{m.account_change_plan_link()}</a>
 			</div>
 
 			<div class="plan-meta-row">
 				<span>{sub.packsLabel}</span>
-				{#if sub.quantity > 1}<span>· Qty {sub.quantity}</span>{/if}
+				{#if sub.quantity > 1}<span>· {m.account_qty_label({ quantity: sub.quantity })}</span>{/if}
 				{#if sub.addressLine}<span>· {sub.addressLine}</span>{/if}
 			</div>
 
 			{#if sub.cancelAtPeriodEnd}
 				<div class="notice notice-warning">
-					This plan is cancelling{sub.nextPaymentDate ? ` — ends ${sub.nextPaymentDate}` : ''}.
+					{#if sub.nextPaymentDate}{m.account_notice_cancelling_with_date({ date: sub.nextPaymentDate })}{:else}{m.account_notice_cancelling()}{/if}
 				</div>
 			{:else if sub.pendingPlanName}
 				<div class="notice">
-					Switching to <strong>{sub.pendingPlanName}</strong>{sub.pendingPlanAt
-						? ` on ${sub.pendingPlanAt}`
-						: ''}.
+					{#if sub.pendingPlanAt}
+						{m.account_notice_switching_with_date({ plan: sub.pendingPlanName, date: sub.pendingPlanAt })}
+					{:else}
+						{m.account_notice_switching({ plan: sub.pendingPlanName })}
+					{/if}
 				</div>
 			{/if}
 
 			<div class="delivery-card">
 				<div>
-					<span class="delivery-card-eyebrow">Next Delivery</span>
+					<span class="delivery-card-eyebrow">{m.account_next_delivery_eyebrow()}</span>
 					{#if sub.nextDelivery}
 						<div class="delivery-date">{sub.nextDelivery.dateLabel}</div>
 						<div class="delivery-detail">{sub.nextDelivery.addressLine}</div>
-						<span class="cutoff">Cut-off {sub.nextDelivery.cutoffLabel}</span>
+						<span class="cutoff">{m.account_cutoff_label({ cutoff: sub.nextDelivery.cutoffLabel })}</span>
 					{:else}
-						<div class="delivery-date">No delivery scheduled</div>
+						<div class="delivery-date">{m.account_no_delivery_scheduled()}</div>
 						<div class="delivery-detail">
 							{#if sub.status === 'paused'}
-								This plan is paused.
+								{m.account_delivery_note_paused()}
 							{:else if sub.status === 'cancelled'}
-								This plan has ended.
+								{m.account_delivery_note_cancelled()}
 							{:else if sub.addressLine}
-								Usually sent to {sub.addressLine}.
+								{m.account_delivery_note_usually_sent({ address: sub.addressLine })}
 							{:else}
-								Your next delivery hasn't been scheduled yet.
+								{m.account_delivery_note_not_scheduled()}
 							{/if}
 						</div>
 					{/if}
@@ -154,25 +157,25 @@
 					{#if sub.nextDelivery}
 						<form method="POST" action="?/skip" use:enhance={withToast()}>
 							<input type="hidden" name="deliveryId" value={sub.nextDelivery.id} />
-							<button type="submit" class="btn-ghost btn-full">Skip delivery</button>
+							<button type="submit" class="btn-ghost btn-full">{m.account_skip_delivery()}</button>
 						</form>
 					{/if}
 
 					{#if sub.status === 'paused'}
 						<form method="POST" action="?/resume" use:enhance={withToast()}>
 							<input type="hidden" name="subscriptionId" value={sub.id} />
-							<button type="submit" class="btn-ghost btn-full">Resume plan</button>
+							<button type="submit" class="btn-ghost btn-full">{m.account_resume_plan()}</button>
 						</form>
 					{:else if sub.status === 'active' && !sub.cancelAtPeriodEnd}
 						<form method="POST" action="?/pause" use:enhance={withToast()}>
 							<input type="hidden" name="subscriptionId" value={sub.id} />
-							<button type="submit" class="btn-ghost btn-full">Pause plan</button>
+							<button type="submit" class="btn-ghost btn-full">{m.account_pause_plan()}</button>
 						</form>
 					{/if}
 
 					{#if sub.status !== 'cancelled' && !sub.cancelAtPeriodEnd}
 						<a href="/account/cancel?subscriptionId={sub.id}" class="btn-ghost btn-full">
-							Cancel plan
+							{m.account_cancel_plan()}
 						</a>
 					{/if}
 				</div>
@@ -180,21 +183,21 @@
 
 			<div class="stats-row">
 				<div class="stat">
-					<span class="stat-label">Plan</span>
+					<span class="stat-label">{m.account_stat_plan_label()}</span>
 					<div class="stat-value">{sub.planName}</div>
 					<div class="stat-sub">
-						{sub.packsLabel}{#if sub.quantity > 1} · Qty {sub.quantity}{/if}
+						{sub.packsLabel}{#if sub.quantity > 1} · {m.account_qty_label({ quantity: sub.quantity })}{/if}
 					</div>
 				</div>
 				<div class="stat">
-					<span class="stat-label">Next Payment</span>
+					<span class="stat-label">{m.account_stat_next_payment_label()}</span>
 					<div class="stat-value">{gbp(sub.pricePence)}</div>
 					<div class="stat-sub">
 						{#if sub.quantity > 1}{gbp(sub.unitPricePence)} × {sub.quantity} · {/if}{sub.nextPaymentDate ?? '—'}
 					</div>
 				</div>
 				<div class="stat">
-					<span class="stat-label">Status</span>
+					<span class="stat-label">{m.account_stat_status_label()}</span>
 					<div class="stat-value" class:green={sub.status === 'active'}>
 						{statusLabel[sub.status] ?? sub.status}
 					</div>
@@ -207,17 +210,17 @@
 	<!-- ADD TO A DELIVERY -->
 	<div class="block" id="addons">
 		<div class="block-header">
-			<h2>Add to a delivery</h2>
+			<h2>{m.account_add_to_delivery_title()}</h2>
 			{#if selectedDelivery}
-				<span class="block-action text-normal">Before {selectedDelivery.cutoffLabel}</span>
+				<span class="block-action text-normal">{m.account_before_cutoff({ cutoff: selectedDelivery.cutoffLabel })}</span>
 			{/if}
 		</div>
 
 		{#if deliverableSubs.length === 0}
-			<p class="empty-note">No upcoming deliveries to add to right now.</p>
+			<p class="empty-note">{m.account_no_upcoming_deliveries()}</p>
 		{:else}
 			{#if deliverableSubs.length > 1}
-				<label class="target-label" for="target-sub">Adding to</label>
+				<label class="target-label" for="target-sub">{m.account_adding_to_label()}</label>
 				<select id="target-sub" class="target-select" bind:value={selectedSubId}>
 					{#each deliverableSubs as s (s.id)}
 						<option value={s.id}>{s.planName} — {s.nextDelivery?.dateLabel}</option>
@@ -256,7 +259,7 @@
 										class="btn-outline"
 										disabled={!selectedDelivery || quantities[item.id] < 1}
 									>
-										Add
+										{m.account_add_button()}
 									</button>
 								</form>
 							</div>
@@ -265,7 +268,7 @@
 				{/each}
 			</div>
 		{/if}
-		<a href="/addons" class="see-all">See all add-ons →</a>
+		<a href="/addons" class="see-all">{m.account_see_all_addons()}</a>
 	</div>
 {/if}
 

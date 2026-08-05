@@ -2,6 +2,7 @@
 	import { superForm } from 'sveltekit-superforms';
 	import { Loader2, AlertCircle, CheckCircle2 } from '@lucide/svelte';
 	import type { PageData } from './$types';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -26,7 +27,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign-in link — GOTERA</title>
+	<title>{m.forgotpw_meta_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -44,20 +45,19 @@
 		{#if submitted}
 			<div class="sent">
 				<CheckCircle2 class="sent-icon" />
-				<span class="eyebrow">Check your inbox</span>
-				<h1>Link sent.</h1>
+				<span class="eyebrow">{m.forgotpw_success_eyebrow()}</span>
+				<h1>{m.forgotpw_success_heading()}</h1>
 				<p>
-					If <strong>{sentTo}</strong> has an account, we've sent a secure sign-in link. Follow it to
-					get back in — then you can set a new password from your account.
+					{m.forgotpw_success_body({ email: sentTo })}
 				</p>
-				<a href="/login" class="btn btn-full">Back to sign in</a>
-				<p class="fine">Didn't get it? Check spam, or give it a minute to arrive.</p>
+				<a href="/login" class="btn btn-full">{m.forgotpw_back_to_signin()}</a>
+				<p class="fine">{m.forgotpw_success_fine()}</p>
 			</div>
 		{:else}
 			<div class="brand">
-				<span class="eyebrow">Forgot password?</span>
-				<h1>Get back in.</h1>
-				<p class="sub">Enter your email and we'll send a secure sign-in link — no password needed.</p>
+				<span class="eyebrow">{m.forgotpw_eyebrow()}</span>
+				<h1>{m.forgotpw_heading()}</h1>
+				<p class="sub">{m.forgotpw_sub()}</p>
 			</div>
 
 			<form method="POST" use:enhance class="form">
@@ -69,14 +69,14 @@
 				{/if}
 
 				<div class="field">
-					<label class="field-label" for="email">Email address</label>
+					<label class="field-label" for="email">{m.forgotpw_email_label()}</label>
 					<input
 						id="email"
 						name="email"
 						type="email"
 						class="input"
 						autocomplete="email"
-						placeholder="name@example.com"
+						placeholder={m.forgotpw_email_placeholder()}
 						bind:value={$form.email}
 						required
 						disabled={$submitting}
@@ -87,13 +87,13 @@
 				<button type="submit" class="btn btn-full" disabled={$submitting}>
 					{#if $submitting}
 						<Loader2 class="spin btn-icon" />
-						Sending link…
+						{m.forgotpw_sending()}
 					{:else}
-						Send sign-in link
+						{m.forgotpw_submit()}
 					{/if}
 				</button>
 
-				<p class="alt"><a href="/login">Back to sign in</a></p>
+				<p class="alt"><a href="/login">{m.forgotpw_back_to_signin()}</a></p>
 			</form>
 		{/if}
 	</div>

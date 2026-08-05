@@ -2,6 +2,7 @@
 	import { superForm } from 'sveltekit-superforms';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -64,12 +65,12 @@
 
 <div class="block">
 	<div class="block-header">
-		<h2>Your details</h2>
+		<h2>{m.acctdetails_heading()}</h2>
 	</div>
 	<div class="details-grid">
 		<!-- EMAIL -->
 		<div class="detail">
-			<span class="detail-label">Email</span>
+			<span class="detail-label">{m.acctdetails_email_label()}</span>
 			{#if editing.email}
 				<form method="POST" action="?/updateEmail" use:emailEnhance class="edit">
 					<input
@@ -80,27 +81,28 @@
 						bind:value={$emailForm.email}
 					/>
 					{#if $emailErrors.email}<span class="form-error">{$emailErrors.email}</span>{/if}
-					<div class="edit-note">Changing your email requires verification.</div>
+					<div class="edit-note">{m.acctdetails_email_verify_note()}</div>
 					<div class="edit-actions">
 						<button type="submit" class="btn-save" disabled={$emailSubmitting}>
-							{$emailSubmitting ? 'Sending…' : 'Save'}
+							{$emailSubmitting ? m.acctdetails_sending() : m.acctdetails_save()}
 						</button>
 						<button type="button" class="btn-soft" onclick={() => (editing.email = false)}
-							>Cancel</button
+							>{m.acctdetails_cancel()}</button
 						>
 					</div>
 				</form>
 			{:else}
 				<div class="detail-value">{data.email}</div>
-				<div class="detail-note">Receipts and subscription notices.</div>
-				<button type="button" class="btn-soft" onclick={() => (editing.email = true)}>Update</button
+				<div class="detail-note">{m.acctdetails_email_note()}</div>
+				<button type="button" class="btn-soft" onclick={() => (editing.email = true)}
+					>{m.acctdetails_update()}</button
 				>
 			{/if}
 		</div>
 
 		<!-- PHONE -->
 		<div class="detail">
-			<span class="detail-label">Phone</span>
+			<span class="detail-label">{m.acctdetails_phone_label()}</span>
 			{#if editing.phone}
 				<form method="POST" action="?/updatePhone" use:phoneEnhance class="edit">
 					<input
@@ -113,45 +115,47 @@
 					{#if $phoneErrors.phone}<span class="form-error">{$phoneErrors.phone}</span>{/if}
 					<div class="edit-actions">
 						<button type="submit" class="btn-save" disabled={$phoneSubmitting}>
-							{$phoneSubmitting ? 'Saving…' : 'Save'}
+							{$phoneSubmitting ? m.acctdetails_saving() : m.acctdetails_save()}
 						</button>
 						<button type="button" class="btn-soft" onclick={() => (editing.phone = false)}
-							>Cancel</button
+							>{m.acctdetails_cancel()}</button
 						>
 					</div>
 				</form>
 			{:else}
-				<div class="detail-value">{data.phone ?? 'Not added yet'}</div>
-				<div class="detail-note">Delivery updates only.</div>
-				<button type="button" class="btn-soft" onclick={() => (editing.phone = true)}>Update</button
+				<div class="detail-value">{data.phone ?? m.acctdetails_phone_not_added()}</div>
+				<div class="detail-note">{m.acctdetails_phone_note()}</div>
+				<button type="button" class="btn-soft" onclick={() => (editing.phone = true)}
+					>{m.acctdetails_update()}</button
 				>
 			{/if}
 		</div>
 
 		<!-- ADDRESS -->
 		<div class="detail full">
-			<span class="detail-label">Delivery Address</span>
+			<span class="detail-label">{m.acctdetails_address_label()}</span>
 			{#if editing.address}
 				<form method="POST" action="?/updateAddress" use:addressEnhance class="edit">
 					<div class="addr-grid">
 						<div class="af full">
-							<label class="af-label" for="line1">Address line 1</label>
+							<label class="af-label" for="line1">{m.acctdetails_line1_label()}</label>
 							<input id="line1" class="edit-input" name="line1" bind:value={$addressForm.line1} />
 							{#if $addressErrors.line1}<span class="form-error">{$addressErrors.line1}</span>{/if}
 						</div>
 						<div class="af full">
 							<label class="af-label" for="line2"
-								>Address line 2 <span class="opt">optional</span></label
+								>{m.acctdetails_line2_label()} <span class="opt">{m.acctdetails_optional()}</span
+								></label
 							>
 							<input id="line2" class="edit-input" name="line2" bind:value={$addressForm.line2} />
 						</div>
 						<div class="af">
-							<label class="af-label" for="city">City</label>
+							<label class="af-label" for="city">{m.acctdetails_city_label()}</label>
 							<input id="city" class="edit-input" name="city" bind:value={$addressForm.city} />
 							{#if $addressErrors.city}<span class="form-error">{$addressErrors.city}</span>{/if}
 						</div>
 						<div class="af">
-							<label class="af-label" for="postcode">Postcode</label>
+							<label class="af-label" for="postcode">{m.acctdetails_postcode_label()}</label>
 							<input
 								id="postcode"
 								class="edit-input"
@@ -164,18 +168,18 @@
 					</div>
 					<div class="edit-actions">
 						<button type="submit" class="btn-save" disabled={$addressSubmitting}>
-							{$addressSubmitting ? 'Saving…' : 'Save address'}
+							{$addressSubmitting ? m.acctdetails_saving() : m.acctdetails_save_address()}
 						</button>
 						<button type="button" class="btn-soft" onclick={() => (editing.address = false)}
-							>Cancel</button
+							>{m.acctdetails_cancel()}</button
 						>
 					</div>
 				</form>
 			{:else}
-				<div class="detail-value">{addressLine ?? 'No delivery address on file'}</div>
-				<div class="detail-note">Changes before cut-off apply to next delivery.</div>
+				<div class="detail-value">{addressLine ?? m.acctdetails_no_address()}</div>
+				<div class="detail-note">{m.acctdetails_address_note()}</div>
 				<button type="button" class="btn-soft" onclick={() => (editing.address = true)}
-					>Update address</button
+					>{m.acctdetails_update_address()}</button
 				>
 			{/if}
 		</div>

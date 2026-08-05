@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { SuperValidated, Infer } from 'sveltekit-superforms';
 	import type { SignupSchema } from './schema';
+	import { m } from '$lib/paraglide/messages.js';
 
 	// `onSuccess` lets the dialog close after an in-place signup (when the user
 	// is signed straight in). If your signup requires email verification first,
@@ -30,11 +31,11 @@
 	async function handleSignUp(e: SubmitEvent) {
 		e.preventDefault();
 		if (!$form.name || !$form.email || !$form.password) {
-			toast.error('Fill in your name, email and password.');
+			toast.error(m.authsignup_toast_fill_required());
 			return;
 		}
 		if ($form.password !== $form.confirmPassword) {
-			toast.error('Passwords do not match.');
+			toast.error(m.authsignup_toast_password_mismatch());
 			return;
 		}
 		loading = true;
@@ -44,7 +45,7 @@
 			password: $form.password
 		});
 		if (error) {
-			toast.error(error.message ?? 'Could not create your account.');
+			toast.error(error.message ?? m.authsignup_toast_create_failed());
 			loading = false;
 			return;
 		}
@@ -93,7 +94,7 @@ async function signInWithGoogle() {
 	});
 
 	if (error || !social?.url) {
-		toast.error(error?.message ?? 'Could not start Google sign-in.');
+		toast.error(error?.message ?? m.authsignup_toast_google_start_failed());
 		googleLoading = false;
 		return;
 	}
@@ -109,7 +110,7 @@ async function signInWithGoogle() {
 	);
 
 	if (!popup) {
-		toast.error('Popup blocked — allow popups and try again.');
+		toast.error(m.authsignup_toast_popup_blocked());
 		googleLoading = false;
 		return;
 	}
@@ -136,7 +137,7 @@ async function signInWithGoogle() {
 
 	if (done) {
 		await invalidateAll();   // refresh data.user — no navigation
-		toast.success('Signed in.');
+		toast.success(m.authsignup_toast_signed_in());
 		onSuccess?.();           // close the dialog
 	}
 	googleLoading = false;
@@ -150,16 +151,16 @@ async function signInWithGoogle() {
 				<svg class="sent-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
 					<circle cx="24" cy="24" r="22" /><path d="M15 24.5l6 6 12-13" />
 				</svg>
-				<span class="eyebrow">Almost there</span>
-				<h1>Check your inbox.</h1>
-				<p>We've sent a verification link to <strong>{sentTo}</strong>. Click it to activate your account, then come back and subscribe.</p>
-				<p class="fine">Didn't get it? Check spam, or give it a minute to arrive.</p>
+				<span class="eyebrow">{m.authsignup_almost_there()}</span>
+				<h1>{m.authsignup_check_inbox()}</h1>
+				<p>{m.authsignup_verification_sent_prefix()} <strong>{sentTo}</strong>. {m.authsignup_verification_sent_suffix()}</p>
+				<p class="fine">{m.authsignup_verification_fine_print()}</p>
 			</div>
 		{:else}
 			<div class="brand">
-				<span class="eyebrow">Create account</span>
-				<h1>Join GOTERA.</h1>
-				<p class="sub">Real injera, made in Ethiopia, delivered every month.</p>
+				<span class="eyebrow">{m.authsignup_eyebrow_create_account()}</span>
+				<h1>{m.authsignup_join_gotera()}</h1>
+				<p class="sub">{m.authsignup_tagline()}</p>
 			</div>
 
 			<button type="button" class="btn-google" onclick={signInWithGoogle} disabled={googleLoading}>
@@ -169,40 +170,40 @@ async function signInWithGoogle() {
 					<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
 					<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
 				</svg>
-				{googleLoading ? 'Connecting…' : 'Continue with Google'}
+				{googleLoading ? m.authsignup_google_connecting() : m.authsignup_google_continue()}
 			</button>
 
-			<div class="divider">or</div>
+			<div class="divider">{m.authsignup_divider_or()}</div>
 
 			<form onsubmit={handleSignUp} class="form">
 				<div class="field">
-					<label class="field-label" for="name">Full name</label>
+					<label class="field-label" for="name">{m.authsignup_label_full_name()}</label>
 					<input id="name" name="name" class="input" autocomplete="name" bind:value={$form.name} />
 					{#if $errors.name}<span class="form-error">{$errors.name}</span>{/if}
 				</div>
 				<div class="field">
-					<label class="field-label" for="email">Email</label>
+					<label class="field-label" for="email">{m.authsignup_label_email()}</label>
 					<input id="email" name="email" type="email" class="input" autocomplete="email" bind:value={$form.email} />
 					{#if $errors.email}<span class="form-error">{$errors.email}</span>{/if}
 				</div>
 				<div class="field">
-					<label class="field-label" for="password">Password</label>
+					<label class="field-label" for="password">{m.authsignup_label_password()}</label>
 					<input id="password" name="password" type="password" class="input" autocomplete="new-password" bind:value={$form.password} />
 					{#if $errors.password}<span class="form-error">{$errors.password}</span>{/if}
 				</div>
 				<div class="field">
-					<label class="field-label" for="confirmPassword">Confirm password</label>
+					<label class="field-label" for="confirmPassword">{m.authsignup_label_confirm_password()}</label>
 					<input id="confirmPassword" name="confirmPassword" type="password" class="input" autocomplete="new-password" bind:value={$form.confirmPassword} />
 					{#if $errors.confirmPassword}<span class="form-error">{$errors.confirmPassword}</span>{/if}
 				</div>
 
 				<label class="opt-in">
 					<input type="checkbox" bind:checked={$form.marketingOptIn} />
-					<span>Send me occasional updates and offers.</span>
+					<span>{m.authsignup_optin_marketing()}</span>
 				</label>
 
 				<button type="submit" class="btn btn-full" disabled={loading}>
-					{loading ? 'Creating account…' : 'Create account'}
+					{loading ? m.authsignup_creating_account() : m.authsignup_create_account()}
 				</button>
 			</form>
 		{/if}

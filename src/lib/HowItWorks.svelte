@@ -1,41 +1,42 @@
 <script lang="ts">
 	import { ArrowRight } from '@lucide/svelte';
+	import { m } from '$lib/paraglide/messages.js';
 
 	type Step = { num: string; title: string; copy: string; meta: string };
 
-	const steps: Step[] = [
+	const steps = $derived<Step[]>([
 		{
 			num: '01',
-			title: 'Subscribe',
-			copy: 'Choose your plan. No long contracts. Pause or cancel at any time.',
-			meta: 'From £6.50 / week'
+			title: m.howitworks_step1_title(),
+			copy: m.howitworks_step1_copy(),
+			meta: m.howitworks_step1_meta()
 		},
 		{
 			num: '02',
-			title: 'Made fresh in Ethiopia',
-			copy: 'Every injera is made with 100% teff using traditional natural fermentation. Packed at source to lock in freshness.',
-			meta: '100% teff · Naturally fermented'
+			title: m.howitworks_step2_title(),
+			copy: m.howitworks_step2_copy(),
+			meta: m.howitworks_step2_meta()
 		},
 		{
 			num: '03',
-			title: 'Delivered to your door',
-			copy: 'Cold-chain packaging keeps your injera fresh from Addis Ababa to your door. Delivered every Saturday in London.',
-			meta: 'Addis Ababa → London · Saturdays'
+			title: m.howitworks_step3_title(),
+			copy: m.howitworks_step3_copy(),
+			meta: m.howitworks_step3_meta()
 		},
 		{
 			num: '04',
-			title: 'Eat real injera',
-			copy: 'Warm gently in a dry pan or serve fresh. 100% teff. Naturally gluten-free. High in iron. The real thing.',
-			meta: 'Gluten-free · High in iron'
+			title: m.howitworks_step4_title(),
+			copy: m.howitworks_step4_copy(),
+			meta: m.howitworks_step4_meta()
 		}
-	];
+	]);
 </script>
 
 <section class="how">
 	<div class="how-inner">
 		<header class="how-head">
-			<span class="eyebrow">How it works</span>
-			<h2>Simple from start to delivery.</h2>
+			<span class="eyebrow">{m.howitworks_eyebrow()}</span>
+			<h2>{m.howitworks_heading()}</h2>
 		</header>
 
 		<ol class="steps">
@@ -51,10 +52,10 @@
 
 		<div class="cta-row">
 			<a class="btn btn-full" href="/subscribe">
-				Start your subscription — from £6.50
+				{m.howitworks_cta_button()}
 				<ArrowRight class="btn-icon" />
 			</a>
-			<p class="alt">Pause or cancel any time. Delivered every Saturday in London.</p>
+			<p class="alt">{m.howitworks_cta_note()}</p>
 		</div>
 	</div>
 </section>

@@ -4,6 +4,7 @@ import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { auth } from '$lib/server/auth';
 import { magicLinkSchema, type MagicLinkMessage } from './schema';
+import { m } from '$lib/paraglide/messages.js';
 
 export const load: PageServerLoad = async (event) => {
 	if (event.locals.user) redirect(302, '/account');
@@ -34,7 +35,7 @@ export const actions: Actions = {
 
 		return message(form, {
 			type: 'success',
-			text: 'If that email has an account, a sign-in link is on its way.'
+			text: m.forgotpw_success_message()
 		} satisfies MagicLinkMessage);
 	}
 };

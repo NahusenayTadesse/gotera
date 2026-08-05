@@ -1,24 +1,28 @@
+<script lang="ts">
+	import { m } from '$lib/paraglide/messages.js';
+</script>
+
 <section class="truth">
 	<div class="container">
 		<div class="truth-grid">
 			<div class="truth-copy">
-				<span class="eyebrow">The Truth</span>
-				<h2>Let's be honest about the injera you're buying right now.</h2>
+				<span class="eyebrow">{m.truth_eyebrow()}</span>
+				<h2>{m.truth_heading()}</h2>
 				<ul class="truth-list">
-					<li>It's hard to find.</li>
-					<li>Finding it means driving across town.</li>
-					<li>What's on the shelf is often wheat, not teff.</li>
-					<li>It doesn't taste right. It doesn't feel right.</li>
-					<li>By the time you find it, it's already gone stale and spoiled.</li>
+					<li>{m.truth_point1()}</li>
+					<li>{m.truth_point2()}</li>
+					<li>{m.truth_point3()}</li>
+					<li>{m.truth_point4()}</li>
+					<li>{m.truth_point5()}</li>
 				</ul>
 			</div>
 			<div class="truth-resolve">
-				<p class="truth-resolve-lead">Real injera shouldn't be this hard to find.</p>
-				<p class="truth-resolve-sub">So we brought it here, made properly.</p>
+				<p class="truth-resolve-lead">{m.truth_resolve_lead()}</p>
+				<p class="truth-resolve-sub">{m.truth_resolve_sub()}</p>
 				<div class="truth-badges">
-					<span>Made in Ethiopia</span><span class="meta-dot"></span>
-					<span>Packed at source</span><span class="meta-dot"></span>
-					<span>Delivered to London</span>
+					<span>{m.truth_badge1()}</span><span class="meta-dot"></span>
+					<span>{m.truth_badge2()}</span><span class="meta-dot"></span>
+					<span>{m.truth_badge3()}</span>
 				</div>
 			</div>
 		</div>

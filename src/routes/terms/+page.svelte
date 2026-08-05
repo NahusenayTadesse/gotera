@@ -1,83 +1,85 @@
 <script>
+	import { m } from '$lib/paraglide/messages.js';
+
 	// Data array keeps layout components easy to scan and update
-	const sections = [
+	const sections = $derived([
 		{
 			id: 'about',
-			title: 'About these terms',
-			content: '<p>These terms govern your use of the GOTERA website and your purchase of GOTERA products. By placing an order or subscribing, you agree to them.</p>',
-			infobox: '<strong>GOTERA Foods Ltd</strong> · Registered in England and Wales<br>Email: <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a>'
+			title: m.terms_about_title(),
+			content: m.terms_about_content(),
+			infobox: m.terms_about_infobox()
 		},
 		{
 			id: 'service',
-			title: 'What the service is',
-			content: '<p>GOTERA is a premium Ethiopian food subscription service. We supply injera and related pantry products monthly. Products are made and packed in Ethiopia, distributed in the UK. We currently deliver within London only.</p>'
+			title: m.terms_service_title(),
+			content: m.terms_service_content()
 		},
 		{
 			id: 'subscription',
-			title: 'Subscription terms',
+			title: m.terms_subscription_title(),
 			subsections: [
 				{
-					title: 'Billing and renewal',
-					body: 'Subscriptions bill monthly on the same date as first payment. You will receive an email before each charge. The amount reflects your plan plus any add-ons.'
+					title: m.terms_subscription_billing_title(),
+					body: m.terms_subscription_billing_body()
 				},
 				{
-					title: 'Cancellation',
-					body: 'Cancel any time from your account. Cancellation takes effect at the end of the current billing period. No refunds for payments already taken.'
+					title: m.terms_subscription_cancellation_title(),
+					body: m.terms_subscription_cancellation_body()
 				},
 				{
-					title: 'Pause and skip',
-					body: 'Pause or skip a delivery from your account before the cut-off date.'
+					title: m.terms_subscription_pause_title(),
+					body: m.terms_subscription_pause_body()
 				},
 				{
-					title: 'Minimum term',
-					body: 'None. Cancel any time.'
+					title: m.terms_subscription_minterm_title(),
+					body: m.terms_subscription_minterm_body()
 				}
 			]
 		},
 		{
 			id: 'pricing',
-			title: 'Pricing and payment',
-			content: '<p>All prices in GBP, inclusive of VAT where applicable. Price changes notified 30 days in advance. Payments processed by Stripe — we do not store card details. Failed payments are retried once after 3 days.</p>',
+			title: m.terms_pricing_title(),
+			content: m.terms_pricing_content(),
 			list: [
-				'One-Off: £6.50 per pack (3 injera)',
-				'Starter: £12.00 per month (2 packs)',
-				'Regular: £24.00 per month (4 packs)',
-				'Gift: £8.50 one-time'
+				m.terms_pricing_list_oneoff(),
+				m.terms_pricing_list_starter(),
+				m.terms_pricing_list_regular(),
+				m.terms_pricing_list_gift()
 			]
 		},
 		{
 			id: 'delivery',
-			title: 'Delivery',
-			content: '<p>London only. Saturdays. Cold-chain packaging. Full details at <a href="/delivery">Delivery</a>. If delivery is lost in transit, contact us within 48 hours.</p>'
+			title: m.terms_delivery_title(),
+			content: m.terms_delivery_content()
 		},
 		{
 			id: 'refunds',
-			title: 'Refund policy',
-			content: '<p>Food products cannot be returned. If a product arrives damaged or incorrect, contact us within 48 hours with a photo at <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a>. We will offer a replacement, credit, or refund as appropriate. Statutory rights under the Consumer Rights Act 2015 are not affected.</p>'
+			title: m.terms_refunds_title(),
+			content: m.terms_refunds_content()
 		},
 		{
 			id: 'quality',
-			title: 'Product quality',
-			content: '<p>All injera is 100% teff, naturally fermented, vegan, and gluten-free. Consume before the best-before date. Quality complaints responded to within 3 working days.</p>'
+			title: m.terms_quality_title(),
+			content: m.terms_quality_content()
 		},
 		{
 			id: 'liability',
-			title: 'Limitation of liability',
-			content: '<p>Our liability is limited to the amount paid for the product in question. We are not liable for indirect or consequential losses. Your statutory consumer rights are not limited.</p>'
+			title: m.terms_liability_title(),
+			content: m.terms_liability_content()
 		},
 		{
 			id: 'law',
-			title: 'Governing law',
-			content: '<p>These terms are governed by the law of England and Wales.</p>'
+			title: m.terms_law_title(),
+			content: m.terms_law_content()
 		}
-	];
+	]);
 </script>
 
 <section class="hero">
 	<div class="container">
-		<span class="eyebrow">Legal</span>
-		<h1>Terms of Service</h1>
-		<p class="updated">Last updated: 1 January 2026</p>
+		<span class="eyebrow">{m.terms_eyebrow()}</span>
+		<h1>{m.terms_h1()}</h1>
+		<p class="updated">{m.terms_updated()}</p>
 	</div>
 </section>
 
@@ -117,9 +119,9 @@
 		{/each}
 
 		<div class="cta-box">
-			<div class="cta-title">Ready to subscribe?</div>
-			<p class="cta-sub">No minimum term. Cancel any time.</p>
-			<a href="/subscribe" class="cta-btn">Choose Your Plan</a>
+			<div class="cta-title">{m.terms_cta_title()}</div>
+			<p class="cta-sub">{m.terms_cta_sub()}</p>
+			<a href="/subscribe" class="cta-btn">{m.terms_cta_btn()}</a>
 		</div>
 	</div>
 </div>

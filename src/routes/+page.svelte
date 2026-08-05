@@ -5,6 +5,7 @@ import type { PageData } from './$types';
 	import Final from '$lib/final.svelte';
 	import Testimonial from '$lib/testimonial.svelte';
 	import Truth from '$lib/Truth.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	let { data }: { data: PageData } = $props();
 	let heroVideoReady = $state(false);
 	let heroCardVideoReady = $state(false);
@@ -12,37 +13,36 @@ import type { PageData } from './$types';
 	// Bespoke homepage copy, keyed by slug. Facts (price/featured/existence)
 	// come from the DB; this only overrides the marketing wording. A plan with
 	// no entry here still renders using its DB name/subtitle/freq/bullets.
-	const CARD_COPY: Record<
-		string,
-		{ title?: string; desc?: string; freq?: string; bullets?: string[]; cta: string }
-	> = {
+	const CARD_COPY = $derived<
+		Record<string, { title?: string; desc?: string; freq?: string; bullets?: string[]; cta: string }>
+	>({
 		'one-off': {
-			desc: 'Try GOTERA without committing.',
-			bullets: ['No subscription', 'Ideal first order'],
-			cta: 'Order now'
+			desc: m.home_plan_oneoff_desc(),
+			bullets: [m.home_plan_oneoff_bullet1(), m.home_plan_oneoff_bullet2()],
+			cta: m.home_plan_oneoff_cta()
 		},
 		starter: {
-			desc: 'Lighter monthly plan.',
-			bullets: ['2 packs monthly', 'Pause or skip anytime'],
-			cta: 'Choose Starter'
+			desc: m.home_plan_starter_desc(),
+			bullets: [m.home_plan_starter_bullet1(), m.home_plan_starter_bullet2()],
+			cta: m.home_plan_starter_cta()
 		},
 		regular: {
-			desc: 'Our core plan.',
-			bullets: ['Best for regular households', 'Strongest monthly value'],
-			cta: 'Choose Regular'
+			desc: m.home_plan_regular_desc(),
+			bullets: [m.home_plan_regular_bullet1(), m.home_plan_regular_bullet2()],
+			cta: m.home_plan_regular_cta()
 		},
 		'single-gift': {
-			desc: 'Send injera to someone else.',
-			bullets: ['No subscription needed', 'Add pantry items'],
-			cta: 'Send a gift'
+			desc: m.home_plan_gift_desc(),
+			bullets: [m.home_plan_gift_bullet1(), m.home_plan_gift_bullet2()],
+			cta: m.home_plan_gift_cta()
 		}
-	};
+	});
 
 	// All subscription-type plans from the DB (already ordered by sortOrder),
 	// merged with any bespoke copy. Falls back to DB fields when copy is absent.
 	const cards = $derived(
 		(data?.subscriptionPlans ?? []).map((p) => {
-			const copy = CARD_COPY[p.slug] ?? { cta: 'Choose plan' };
+			const copy = CARD_COPY[p.slug] ?? { cta: m.home_plan_default_cta() };
 			return {
 				slug: p.slug,
 				title: copy.title ?? p.name,
@@ -67,7 +67,7 @@ import type { PageData } from './$types';
 </script>
 
 <svelte:head>
-	<title>GOTERA — Premium Ethiopian Food</title>
+	<title>{m.home_meta_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -76,32 +76,32 @@ import type { PageData } from './$types';
 	/>
 </svelte:head>
 
-<section class="hero hidden! lg:block!" aria-label="Hero">
+<section class="hero hidden! lg:block!" aria-label={m.home_hero_aria_label()}>
 	<div class="container hero-grid">
 		<div>
-			<span class="eyebrow">Made &amp; packed in Ethiopia</span>
-			<h1 class="hero-title">Injera, Delivered To your door.</h1>
+			<span class="eyebrow">{m.home_hero_eyebrow()}</span>
+			<h1 class="hero-title">{m.home_hero_title()}</h1>
 			<div class="hero-meta">
-				<span>100% Teff</span><span class="meta-dot"></span>
-				<span>Vegan</span><span class="meta-dot"></span>
-				<span>Gluten Free</span><span class="meta-dot"></span>
-				<span>High in Iron</span>
+				<span>{m.home_hero_meta_teff()}</span><span class="meta-dot"></span>
+				<span>{m.home_hero_meta_vegan()}</span><span class="meta-dot"></span>
+				<span>{m.home_hero_meta_gluten_free()}</span><span class="meta-dot"></span>
+				<span>{m.home_hero_meta_iron()}</span>
 			</div>
 			<p class="hero-copy">
-				Real injera on a monthly subscription. Made in Ethiopia. Delivered to your door.
+				{m.home_hero_copy()}
 			</p>
 			<div class="hero-actions">
 				<a href="/subscribe/?slug" class="btn"
-					>Choose Your Plan{subFrom ? ` — from ${fmtPrice(subFrom)}` : ''}</a
+					>{m.home_hero_cta_plan()}{subFrom ? m.home_price_from_suffix({ price: fmtPrice(subFrom) }) : ''}</a
 				>
-				<a href="/about" class="btn-outline">About GOTERA</a>
+				<a href="/about" class="btn-outline">{m.home_hero_cta_about()}</a>
 			</div>
 		</div>
 		<div class="hero-card">
 			<div class="hero-card-img">
 				<img
 					src="/hero.jpeg"
-					alt="GOTERA injera"
+					alt={m.home_hero_img_alt()}
 					style="width:100%;height:100%;object-fit:cover;object-position:center"
 				/>
 				<!-- svelte-ignore a11y_media_has_caption -->
@@ -120,19 +120,19 @@ import type { PageData } from './$types';
 				</video>
 			</div>
 			<div class="hero-card-body">
-				<h3>Injera</h3>
-				<p>100% teff · naturally fermented · made in Ethiopia</p>
+				<h3>{m.home_hero_card_title()}</h3>
+				<p>{m.home_hero_card_desc()}</p>
 			</div>
 		</div>
 	</div>
 </section>
 
-<section class="hero-mobile flex! lg:hidden!" aria-label="Hero">
+<section class="hero-mobile flex! lg:hidden!" aria-label={m.home_hero_aria_label()}>
 	<div class="hero__img">
 		<div class="img-ph" style="width:100%;height:100%">
 			<img
 				src="/hero.jpeg"
-				alt="GOTERA injera"
+				alt={m.home_hero_img_alt()}
 				style="width:100%;height:100%;object-fit:cover;object-position:center"
 			/>
 		</div>
@@ -155,27 +155,27 @@ import type { PageData } from './$types';
 	<div class="hero__content">
 		<div class="hero__tag">
 			<div class="hero__tag-line"></div>
-			<span>Made &amp; packed in Ethiopia</span>
+			<span>{m.home_hero_eyebrow()}</span>
 		</div>
 		<h1 class="hero__h1">
-			Injera,<br />
-				Delivered
-				<br />To your door.
+			{m.home_hero_mobile_line1()}<br />
+				{m.home_hero_mobile_line2()}
+				<br />{m.home_hero_mobile_line3()}
 		</h1>
 		{#if subFrom}
 			<div class="hero__price-row">
-				<span class="hero__price-from">From</span>
+				<span class="hero__price-from">{m.home_hero_price_from()}</span>
 				<span class="hero__price-num">{fmtPrice(subFrom)}</span>
-				<span class="hero__price-note">/ month · London delivery</span>
+				<span class="hero__price-note">{m.home_hero_price_note()}</span>
 			</div>
 		{/if}
 		<a href="/subscribe" class="btn btn--primary" style="margin-bottom:12px"
-			>Order Now</a
+			>{m.home_hero_cta_order_now()}</a
 		>
 		<div class="hero__claims">
-			<span class="hero__claim">Gluten free</span>
-			<span class="hero__claim">Vegan</span>
-			<span class="hero__claim">100% teff</span>
+			<span class="hero__claim">{m.home_hero_claim_gluten_free()}</span>
+			<span class="hero__claim">{m.home_hero_claim_vegan()}</span>
+			<span class="hero__claim">{m.home_hero_claim_teff()}</span>
 		</div>
 	</div>
 </section>
@@ -184,17 +184,17 @@ import type { PageData } from './$types';
 	<div class="container proof-inner">
 		<div class="proof-stat">
 			<span class="proof-stat-num">12</span>
-			<span class="proof-stat-label">Subscribers</span>
+			<span class="proof-stat-label">{m.home_proof_label_subscribers()}</span>
 		</div>
 		<div class="proof-divider"></div>
 		<div class="proof-stat">
 			<span class="proof-stat-num">47</span>
-			<span class="proof-stat-label">Deliveries made</span>
+			<span class="proof-stat-label">{m.home_proof_label_deliveries()}</span>
 		</div>
 		<div class="proof-divider"></div>
 		<div class="proof-stat">
-			<span class="proof-stat-num text-[24px]!">London</span>
-			<span class="proof-stat-label">Delivering in</span>
+			<span class="proof-stat-num text-[24px]!">{m.home_proof_city_london()}</span>
+			<span class="proof-stat-label">{m.home_proof_label_delivering_in()}</span>
 		</div>
 		<div class="proof-divider"></div>
 		<!-- <div class="proof-quote-ph">
@@ -207,36 +207,30 @@ import type { PageData } from './$types';
 <section class="pillars">
 	<div class="container">
 		<div class="pillars-head">
-			<span class="eyebrow">Why GOTERA</span>
-			<h2>Injera From Its Origin. Made Right.
-</h2>
-			<p>Real injera, made in Ethiopia. The genuine taste you’ve been missing.
-</p>
+			<span class="eyebrow">{m.home_pillars_eyebrow()}</span>
+			<h2>{m.home_pillars_title()}</h2>
+			<p>{m.home_pillars_subtitle()}</p>
 		</div>
 		<div class="pillars-grid">
 			<div class="pillar">
 				<div class="pillar-num">01</div>
-				<h3>Made in Ethiopia</h3>
-				<p>Straight from its origin
-</p>
+				<h3>{m.home_pillar1_title()}</h3>
+				<p>{m.home_pillar1_desc()}</p>
 			</div>
 			<div class="pillar">
 				<div class="pillar-num">02</div>
-				<h3>100% Teff</h3>
-				<p> No compromise.</p>
+				<h3>{m.home_pillar2_title()}</h3>
+				<p>{m.home_pillar2_desc()}</p>
 			</div>
 			<div class="pillar">
 				<div class="pillar-num">03</div>
-				<h3>Weekly delivery</h3>
-				<p>Order once. It just keeps coming.</p>
+				<h3>{m.home_pillar3_title()}</h3>
+				<p>{m.home_pillar3_desc()}</p>
 			</div>
 			<div class="pillar">
 				<div class="pillar-num">04</div>
-				<h3>Premium, Every time
-</h3>
-				<p>What you order is what arrives. No surprises.
-
-</p>
+				<h3>{m.home_pillar4_title()}</h3>
+				<p>{m.home_pillar4_desc()}</p>
 			</div>
 		</div>
 	</div>
@@ -248,9 +242,9 @@ import type { PageData } from './$types';
 <section class="plans">
 	<div class="container">
 		<div class="plans-head">
-			<span class="eyebrow">Subscription Plans</span>
-			<h2>Choose your plan.</h2>
-			<p>No minimum term. Pause or cancel any time.</p>
+			<span class="eyebrow">{m.home_plans_eyebrow()}</span>
+			<h2>{m.home_plans_title()}</h2>
+			<p>{m.home_plans_subtitle()}</p>
 		</div>
 		{#if cards.length}
 			<div class="plans-grid">
@@ -281,7 +275,7 @@ import type { PageData } from './$types';
 				{/each}
 			</div>
 		{:else}
-			<p class="plans-empty">Plans are being updated — check back shortly.</p>
+			<p class="plans-empty">{m.home_plans_empty()}</p>
 		{/if}
 	</div>
 </section>
@@ -290,17 +284,15 @@ import type { PageData } from './$types';
 	<div class="container">
 		<div class="origin-grid">
 			<div class="origin-panel">
-				<span class="eyebrow">Origin</span>
-				<h3>Made &amp; packed in Ethiopia</h3>
-				<p>Injera close to it’s source. That’s what makes GOTERA worth trusting.
-</p>
+				<span class="eyebrow">{m.home_origin_eyebrow()}</span>
+				<h3>{m.home_origin_title()}</h3>
+				<p>{m.home_origin_desc1()}</p>
 			</div>
 			<div class="origin-panel">
-				<span class="eyebrow">Delivery</span>
-				<h3>Delivered with clarity</h3>
+				<span class="eyebrow">{m.home_origin_delivery_eyebrow()}</span>
+				<h3>{m.home_origin_delivery_title()}</h3>
 				<p>
-					Per-week Delivery. Cold-chain packaging. Clear cut-off dates. Nothing complicated.
-
+					{m.home_origin_delivery_desc()}
 				</p>
 			</div>
 		</div>
@@ -373,17 +365,17 @@ import type { PageData } from './$types';
 	<section class="gift">
 		<div class="container gift-grid">
 			<div class="gift-text">
-				<span class="eyebrow">Gifting</span>
-				<h2>Send GOTERA to someone's door.</h2>
-				<p>Something they will actually use. One purchase, no subscription required.</p>
+				<span class="eyebrow">{m.home_gift_eyebrow()}</span>
+				<h2>{m.home_gift_title()}</h2>
+				<p>{m.home_gift_subtitle()}</p>
 				<a href="/subscribe" class="btn"
-					>Send a Gift{giftFrom ? ` — from ${fmtPrice(giftFrom)}` : ''}</a
+					>{m.home_gift_cta()}{giftFrom ? m.home_price_from_suffix({ price: fmtPrice(giftFrom) }) : ''}</a
 				>
 			</div>
 			<div class="gift-card">
 				<div class="gift-card-img">
-					<span class="ph-label">Gift photography</span>
-					<span class="ph-sub">Packaging · warm tone · 4:3</span>
+					<span class="ph-label">{m.home_gift_ph_label()}</span>
+					<span class="ph-sub">{m.home_gift_ph_sub()}</span>
 				</div>
 				<div class="gift-card-body">
 					<h3>{data?.giftPlans[0]?.name}</h3>

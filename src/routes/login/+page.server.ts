@@ -6,6 +6,7 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { loginSchema } from '$lib/ZodSchema';
 import { redirect } from 'sveltekit-flash-message/server';
 import { auth } from '$lib/server/auth';
+import { m } from '$lib/paraglide/messages.js';
 
 export const load: PageServerLoad = async ({ locals, parent, url }) => {
 	if (locals.user) {
@@ -39,7 +40,7 @@ export const actions: Actions = {
 				form,
 				{
 					type: 'error',
-					text: 'Please Check the form}'
+					text: m.login_form_check_error()
 				},
 				{
 					status: 500
@@ -59,13 +60,13 @@ export const actions: Actions = {
 			});
 
 			if (!result.user) {
-				setError(form, 'email', 'Invalid email or password');
-				setError(form, 'password', 'Invalid email or password');
+				setError(form, 'email', m.login_invalid_credentials());
+				setError(form, 'password', m.login_invalid_credentials());
 				return message(
 					form,
 					{
 						type: 'error',
-						text: 'An error occurred while logging in'
+						text: m.login_error_generic()
 					},
 					{
 						status: 500
@@ -75,7 +76,7 @@ export const actions: Actions = {
 
 			return message(form, {
 				type: 'success',
-				text: 'Sign Up Successful!'
+				text: m.login_success()
 			});
 		} catch (error) {
 			if (error instanceof APIError) {
@@ -94,7 +95,7 @@ export const actions: Actions = {
 				form,
 				{
 					type: 'error',
-					text: 'Registration Failed'
+					text: m.login_action_failed()
 				},
 				{
 					status: 500

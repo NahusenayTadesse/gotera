@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { m } from '$lib/paraglide/messages.js';
 
 /**
  * Zod 4 schema for the GOTERA subscribe / gift checkout page.
@@ -41,7 +42,7 @@ export const checkoutSchema = z
 		// Reused by both flows (a given submission is either "me" or "gift",
 		// never both, so one address block is enough).
 		addressLabel: z.string().max(255).optional(),
-		phone: z.coerce.string("Phone is required").default(''),
+		phone: z.coerce.string(m.subscribe_error_phone_required()).default(''),
 		line1: z.string().max(255).default(''),
 		line2: z.string().max(255).optional(),
 		city: z.string().max(255).default('London'),
@@ -51,40 +52,40 @@ export const checkoutSchema = z
 
 		// ── Gift-only ──
 		buyerName: z.string().max(255).optional(),
-		buyerEmail: z.email({ error: 'Enter a valid email address.' }).optional(),
+		buyerEmail: z.email({ error: m.subscribe_error_email_invalid() }).optional(),
 		recipientName: z.string().max(255).default(''),
 		giftMessage: z.string().max(500).optional(),
 		durationMonths: z.number().int().min(1).max(12).default(1)
 	})
 	// Plan must match the chosen recipient.
 	.refine((v) => (v.recipient === 'me' ? (SUB_PLANS as readonly string[]).includes(v.plan) : true), {
-		error: 'Choose a subscription plan.',
+		error: m.subscribe_error_choose_subscription_plan(),
 		path: ['plan']
 	})
 	.refine(
 		(v) => (v.recipient === 'gift' ? (GIFT_PLANS as readonly string[]).includes(v.plan) : true),
-		{ error: 'Choose a gift pack.', path: ['plan'] }
+		{ error: m.subscribe_error_choose_gift_pack(), path: ['plan'] }
 	)
 	// Address required for "me".
 	.refine((v) => (v.recipient === 'me' ? v.line1.trim().length > 0 : true), {
-		error: 'Address line 1 is required.',
+		error: m.subscribe_error_line1_required(),
 		path: ['line1']
 	})
 	.refine((v) => (v.recipient === 'me' ? v.postcode.trim().length > 0 : true), {
-		error: 'Postcode is required.',
+		error: m.subscribe_error_postcode_required(),
 		path: ['postcode']
 	})
 	// Recipient details required for "gift".
 	.refine((v) => (v.recipient === 'gift' ? v.recipientName.trim().length > 0 : true), {
-		error: "Recipient's name is required.",
+		error: m.subscribe_error_recipient_name_required(),
 		path: ['recipientName']
 	})
 	.refine((v) => (v.recipient === 'gift' ? v.line1.trim().length > 0 : true), {
-		error: 'Recipient address line 1 is required.',
+		error: m.subscribe_error_recipient_line1_required(),
 		path: ['line1']
 	})
 	.refine((v) => (v.recipient === 'gift' ? v.postcode.trim().length > 0 : true), {
-		error: 'Recipient postcode is required.',
+		error: m.subscribe_error_recipient_postcode_required(),
 		path: ['postcode']
 	});
 

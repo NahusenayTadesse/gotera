@@ -3,6 +3,7 @@
 	import { authClient } from '$lib/auth-client';
 	import { invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let {
 		onSuccess,
@@ -45,12 +46,12 @@
 			await authClient.oneTap({
 				fetchOptions: {
 					onSuccess: async () => {
-						toast.success('Signed in.');
+						toast.success(m.google_toast_signed_in());
 						onSuccess?.();
 					},
 					onError: (ctx) => {
 						googleLoading = false;
-						toast.error(ctx.error?.message ?? 'Google sign-in failed. Try again.');
+						toast.error(ctx.error?.message ?? m.google_toast_signin_failed());
 					}
 				},
 				// Plain div container — NOT the styled <button>.
@@ -68,7 +69,7 @@
 				}
 			});
 		} catch (e) {
-			toast.error('Google sign-in is unavailable right now.');
+			toast.error(m.google_toast_unavailable());
 			return;
 		}
 
@@ -114,7 +115,7 @@
 			{/if}
 		</span>
 
-		<span class="label">{googleLoading ? 'Opening Google…' : 'Continue with Google'}</span>
+		<span class="label">{googleLoading ? m.google_opening() : m.google_continue_with_google()}</span>
 
 		{#if hint && !googleLoading}
 			<span class="chip" title={hint.email}>

@@ -1,31 +1,32 @@
 <script>
 	import Testimonial from "$lib/testimonial.svelte";
+	import { m } from '$lib/paraglide/messages.js';
 
   // Structured content matrices for sections to keep the markup completely DRY
   const originPanels = [
     {
-      eyebrow: 'Origin',
-      title: 'Made and packed in Ethiopia.',
+      eyebrow: m.about_origin_panel1_eyebrow(),
+      title: m.about_origin_panel1_title(),
       paragraphs: [
-        'GOTERA starts at the source. Traditional fermentation. Real teff. Made where injera should be made.'
+        m.about_origin_panel1_p1()
       ],
-      protectedText: 'This is not an imitation product made to resemble the real thing. It is injera made where it should be made.'
+      protectedText: m.about_origin_panel1_protected()
     },
     {
-      eyebrow: 'Ingredient',
-      title: 'Why teff matters.',
+      eyebrow: m.about_origin_panel2_eyebrow(),
+      title: m.about_origin_panel2_title(),
       paragraphs: [
-        'Teff is the foundation of injera. It gives the product its character, its nutritional value, and its place in Ethiopian food culture.',
-        'One ingredient. One standard. No shortcuts.'
+        m.about_origin_panel2_p1(),
+        m.about_origin_panel2_p2()
       ],
       protectedText: null
     }
   ];
 
   const brandValues = [
-    { name: 'Authenticity', desc: 'Real origin, clearly stated.' },
-    { name: 'Clarity', desc: 'Simple product, simple offer.' },
-    { name: 'Consistency', desc: 'Same quality. Every month.' }
+    { name: m.about_value1_name(), desc: m.about_value1_desc() },
+    { name: m.about_value2_name(), desc: m.about_value2_desc() },
+    { name: m.about_value3_name(), desc: m.about_value3_desc() }
   ];
 
   const testimonialCards = [
@@ -44,9 +45,9 @@
 
 <section class="hero">
   <div class="container">
-    <span class="eyebrow">About GOTERA</span>
-    <h1>Authentic Ethiopian food. Clear origin. No compromise.</h1>
-    <p>One product. Made properly. Delivered monthly.</p>
+    <span class="eyebrow">{m.about_hero_eyebrow()}</span>
+    <h1>{m.about_hero_title()}</h1>
+    <p>{m.about_hero_subtitle()}</p>
   </div>
 </section>
 
@@ -55,7 +56,7 @@
   <!-- <span class="ph-label">Brand photography — full width</span>
   <span class="ph-sub">Injera being made · teff grain · or product in situ · warm natural light · 21:6 crop</span> -->
 
-  <img src="/injera.avif" alt="Injera with wot" />
+  <img src="/injera.avif" alt={m.about_hero_image_alt()} />
 </div>
 
 <!-- COMPONENT PILLARS BLOCK (ORIGIN & INGREDIENT) -->
@@ -96,9 +97,9 @@
 <section class="model">
   <div class="container">
     <div class="model-inner">
-      <span class="eyebrow">The Model</span>
-      <h2>Built for subscription.</h2>
-      <p>One product. One delivery per month. Managed from your account. That is the whole offer.</p>
+      <span class="eyebrow">{m.about_model_eyebrow()}</span>
+      <h2>{m.about_model_title()}</h2>
+      <p>{m.about_model_desc()}</p>
     </div>
   </div>
 </section>
@@ -126,12 +127,12 @@
 <section class="cta">
   <div class="container">
     <div class="cta-inner">
-      <span class="eyebrow">Start Today</span>
-      <h2>Injera, every month.</h2>
-      <p>No minimum term. Cancel or pause any time.</p>
+      <span class="eyebrow">{m.about_cta_eyebrow()}</span>
+      <h2>{m.about_cta_title()}</h2>
+      <p>{m.about_cta_desc()}</p>
       <div class="cta-actions">
-        <a href="/subscribe" class="btn">Choose Your Plan</a>
-        <a href="/delivery" class="btn-outline">Delivery Info</a>
+        <a href="/subscribe" class="btn">{m.about_cta_btn_primary()}</a>
+        <a href="/delivery" class="btn-outline">{m.about_cta_btn_secondary()}</a>
       </div>
     </div>
   </div>

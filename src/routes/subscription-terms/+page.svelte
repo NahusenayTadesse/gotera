@@ -1,13 +1,14 @@
 <script>
+	import { m } from '$lib/paraglide/messages.js';
 	// Subscription plans static data
   let { data } = $props();
 </script>
 
 <section class="hero">
 	<div class="container">
-		<span class="eyebrow">Legal</span>
-		<h1>Subscription Terms</h1>
-		<p class="updated">Last updated: 1 January 2026</p>
+		<span class="eyebrow">{m.subterms_eyebrow()}</span>
+		<h1>{m.subterms_h1()}</h1>
+		<p class="updated">{m.subterms_updated()}</p>
 	</div>
 </section>
 
@@ -15,22 +16,23 @@
 	<div class="container">
 
 		<div class="ls">
-			<h2>How subscriptions work</h2>
-			<p>A GOTERA subscription is a recurring monthly order. Choose a plan, set your delivery, and GOTERA delivers injera every month. Manage everything from your account.</p>
+			<h2>{m.subterms_how_title()}</h2>
+			<p>{m.subterms_how_body()}</p>
 			<div class="highlight">
-				<p><strong>No minimum term.</strong> Cancel any time. No cancellation fees.</p>
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				<p>{@html m.subterms_how_highlight()}</p>
 			</div>
 		</div>
 
 		<div class="ls">
-			<h2>Plans</h2>
+			<h2>{m.subterms_plans_title()}</h2>
 			<table class="ptable">
 	<thead>
 		<tr>
-			<th>Plan</th>
-			<th>Packs</th>
-			<th>Billing</th>
-			<th class="price">Price</th>
+			<th>{m.subterms_plans_th_plan()}</th>
+			<th>{m.subterms_plans_th_packs()}</th>
+			<th>{m.subterms_plans_th_billing()}</th>
+			<th class="price">{m.subterms_plans_th_price()}</th>
 		</tr>
 	</thead>
 
@@ -61,49 +63,50 @@
 		</div>
 
 		<div class="ls">
-			<h2>Billing</h2>
-			<p>Billed monthly on the same date as your first payment. Your charge is your plan price plus any add-ons. An email reminder is sent 3 days before each payment.</p>
+			<h2>{m.subterms_billing_title()}</h2>
+			<p>{m.subterms_billing_body()}</p>
 		</div>
 
 		<div class="ls">
-			<h2>Pause, skip, cancel</h2>
-			<h3>Pause</h3>
-			<p>No payments or deliveries until you resume. No time limit. Account → Pause Subscription.</p>
-			
-			<h3>Skip</h3>
-			<p>Skip one month's delivery with no charge. Must be done before the cut-off. Account → Skip Next Delivery.</p>
-			
-			<h3>Cancel</h3>
-			<p>Ends at the close of the current billing period. No further charges. Account → Cancel Subscription, or email <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a>.</p>
+			<h2>{m.subterms_pauseskipcancel_title()}</h2>
+			<h3>{m.subterms_pause_subtitle()}</h3>
+			<p>{m.subterms_pause_body()}</p>
+
+			<h3>{m.subterms_skip_subtitle()}</h3>
+			<p>{m.subterms_skip_body()}</p>
+
+			<h3>{m.subterms_cancel_subtitle()}</h3>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			<p>{@html m.subterms_cancel_body()}</p>
 		</div>
 
 		<div class="ls">
-			<h2>Minimum term</h2>
-			<p>None. Cancel any time with no penalty.</p>
+			<h2>{m.subterms_minterm_title()}</h2>
+			<p>{m.subterms_minterm_body()}</p>
 		</div>
 
 		<div class="ls">
-			<h2>Failed payments</h2>
-			<p>If payment fails we email you immediately and retry after 3 days. If the second attempt fails, we email again. After 7 days without resolution, your subscription is paused — no delivery is made for that cycle. Update payment at Account → Payment.</p>
+			<h2>{m.subterms_failedpay_title()}</h2>
+			<p>{m.subterms_failedpay_body()}</p>
 		</div>
 
 		<div class="ls">
-			<h2>Changing plan</h2>
-			<p>Switch between Starter and Regular any time from your account. Changes take effect from the next billing cycle.</p>
+			<h2>{m.subterms_changeplan_title()}</h2>
+			<p>{m.subterms_changeplan_body()}</p>
 		</div>
 
 		<div class="ls">
-			<h2>Add-ons</h2>
-			<p>Add pantry products to any delivery before the cut-off date. Added to your next monthly payment. Remove before cut-off at no charge.</p>
+			<h2>{m.subterms_addons_title()}</h2>
+			<p>{m.subterms_addons_body1()}</p>
 			<div class="infobox">
-				<p>Berbere £3.50 · Mitmita £3.50 · Niter Kibbeh £5.00</p>
+				<p>{m.subterms_addons_infobox()}</p>
 			</div>
-			<p>Cut-off: the Sunday before your Saturday delivery at midnight. Shown in your account.</p>
+			<p>{m.subterms_addons_body2()}</p>
 		</div>
 
 		<div class="ls">
-			<h2>WhatsApp notifications</h2>
-			<p>Optional delivery updates via WhatsApp — dispatch, delivery window, and confirmation. Opt in by adding your WhatsApp number in account settings. Withdraw consent any time from account preferences. Sent via Twilio. Number not shared with third parties.</p>
+			<h2>{m.subterms_whatsapp_title()}</h2>
+			<p>{m.subterms_whatsapp_body()}</p>
 		</div>
 
 	</div>

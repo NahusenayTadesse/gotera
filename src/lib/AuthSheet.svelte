@@ -4,11 +4,12 @@
 	import Google from './forms/Google.svelte';
 	import Signup from './forms/Signup.svelte';
 	import { invalidate } from '$app/navigation';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let {
 		data,
 		loginOpen = $bindable(false),
-		title = 'Log In',
+		title = m.authsheet_default_title(),
 		variant = 'ghost',
 		signupOpen = $bindable(false),
 		onAuthenticated    
@@ -24,27 +25,27 @@
 <DialogComp {variant} class={variant !== 'ghost'? 'w-full! p-6! rounded-none! bg-[#1a1a1a] text-white' : ''}  {title}>
 	<div class="auth">
 		<div>
-			<div class="auth-title">Sign in to place your order</div>
-			<div class="auth-sub">So we can send your confirmation and let you track delivery.</div>
+			<div class="auth-title">{m.authsheet_title()}</div>
+			<div class="auth-sub">{m.authsheet_subtitle()}</div>
 		</div>
 
-		<h3 id="auth-heading" class="sr-only">Sign in to Gotera</h3>
+		<h3 id="auth-heading" class="sr-only">{m.authsheet_sr_heading()}</h3>
 
 		<!-- Continue with Google -->
 		<div class="google-slot">
 			<Google {onSuccess} hint={data?.lastAccount} />
 		</div>
 
-		<p class="tagline">One tap — fastest way in</p>
+		<p class="tagline">{m.authsheet_tagline()}</p>
 
 		<!-- Divider -->
-		<div class="rule" role="separator"><span>or use email</span></div>
+		<div class="rule" role="separator"><span>{m.authsheet_or_use_email()}</span></div>
 
 		<!-- Continue with email -->
 		<div class="email-slot">
 			<DialogComp
 				variant="outline"
-				title="Continue with email"
+				title={m.authsheet_continue_with_email()}
 				IconComp={UserRoundPlus}
 				bind:open={signupOpen}
 			>
@@ -53,8 +54,8 @@
 		</div>
 
 		<div class="terms">
-			By continuing you agree to our <a href="/terms">Terms</a> and
-			<a href="/privacy">Privacy Policy</a>.
+			{m.authsheet_terms_prefix()} <a href="/terms">{m.authsheet_terms_link()}</a> {m.authsheet_terms_and()}
+			<a href="/privacy">{m.authsheet_privacy_link()}</a>.
 		</div>
 	</div>
 </DialogComp>

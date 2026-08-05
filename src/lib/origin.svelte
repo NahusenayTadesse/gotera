@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ArrowRight } from '@lucide/svelte';
+	import { m } from '$lib/paraglide/messages.js';
 
 	type Props = {
 		/** Ethiopian highlands / teff field, or injera on the mitad. Wide, warm natural light. */
@@ -9,15 +10,15 @@
 
 	let {
 		src = '/teff.webp',
-		alt = 'Teff growing in the Ethiopian highlands'
+		alt = m.origin_image_alt()
 	}: Props = $props();
 </script>
 
 <section class="origin">
 	<div class="origin-inner">
 		<header class="origin-head">
-			<span class="eyebrow">Origin</span>
-			<h2>Ethiopian perfection at your table</h2>
+			<span class="eyebrow">{m.origin_eyebrow()}</span>
+			<h2>{m.origin_heading()}</h2>
 		</header>
 
 		<figure class="origin-figure">
@@ -26,26 +27,23 @@
 
 		<div class="origin-body">
 			<p>
-				GOTERA works directly with producers in Ethiopia who have been making injera for
-				generations. The teff is grown in the Ethiopian highlands. The fermentation uses a live
-				culture passed down through families.
+				{m.origin_paragraph1()}
 			</p>
 			<p>
-				We do not import Teff and manufactire it elsewhere. We source the real thing at its origin, exactly as it should be, and bring it to London by cold chain.
-
+				{m.origin_paragraph2()}
 			</p>
 
 			<p class="statement">
-				No cheap fillers
+				{m.origin_statement_line1()}
 <br />
-				100% Ethiopian Teff, uncompromisingly fermented
+				{m.origin_statement_line2()}
 <br />
-				<em>Taste the difference real Teff makes
+				<em>{m.origin_statement_line3()}
 </em>
 			</p>
 
 			<a class="link-cta" href="/about">
-				Read about GOTERA
+				{m.origin_cta_link()}
 				<ArrowRight class="link-icon" />
 			</a>
 		</div>

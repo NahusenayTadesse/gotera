@@ -1,26 +1,27 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import { m } from '$lib/paraglide/messages.js';
 	let { data }: { data: PageData } = $props();
 </script>
 
 <div class="block">
 	<div class="block-header">
-		<h2>Order history</h2>
+		<h2>{m.accthistory_heading()}</h2>
 	</div>
 
 	{#if data.orders.length === 0}
 		<div class="empty">
-			No deliveries yet. Your order history will appear here after your first delivery.
+			{m.accthistory_empty()}
 		</div>
 	{:else}
 		<div class="table-wrap">
 			<table>
 				<thead>
 					<tr>
-						<th>Date</th>
-						<th>Contents</th>
-						<th>Amount</th>
-						<th>Status</th>
+						<th>{m.accthistory_col_date()}</th>
+						<th>{m.accthistory_col_contents()}</th>
+						<th>{m.accthistory_col_amount()}</th>
+						<th>{m.accthistory_col_status()}</th>
 					</tr>
 				</thead>
 				<tbody>

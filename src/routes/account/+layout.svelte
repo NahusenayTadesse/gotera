@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Logout from '$lib/forms/Logout.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children: any; data: LayoutData } = $props();
@@ -10,15 +11,15 @@
 	const closeMenu = () => (menuOpen = false);
 
 	// Sidebar nav (static, already DRY).
-	const managementLinks = [
-		{ href: '/account', label: 'Overview', iconPath: '<rect x="1" y="1" width="14" height="14" rx="1"/><path d="M1 6h14M6 6v9"/>' },
-		{ href: '/account/delivery', label: 'Next Delivery', iconPath: '<path d="M8 2v5l3 2"/><circle cx="8" cy="8" r="6.5"/>' },
-		{ href: '/account/history', label: 'Order History', iconPath: '<path d="M2 4h12M2 8h8M2 12h5"/>' },
-		{ href: '/account/details', label: 'Your Details', iconPath: '<circle cx="8" cy="5" r="3"/><path d="M1.5 14c0-3 3-5.5 6.5-5.5s6.5 2.5 6.5 5.5"/>' }
-	];
-	const subscriptionLinks = [
-		{ href: '/account/change-plan', label: 'Change Plan', iconPath: '<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 3V1.5M11 3V1.5M2 7h12"/>' },
-	];
+	const managementLinks = $derived([
+		{ href: '/account', label: m.account_sidebar_overview(), iconPath: '<rect x="1" y="1" width="14" height="14" rx="1"/><path d="M1 6h14M6 6v9"/>' },
+		{ href: '/account/delivery', label: m.account_sidebar_next_delivery(), iconPath: '<path d="M8 2v5l3 2"/><circle cx="8" cy="8" r="6.5"/>' },
+		{ href: '/account/history', label: m.account_sidebar_order_history(), iconPath: '<path d="M2 4h12M2 8h8M2 12h5"/>' },
+		{ href: '/account/details', label: m.account_sidebar_your_details(), iconPath: '<circle cx="8" cy="5" r="3"/><path d="M1.5 14c0-3 3-5.5 6.5-5.5s6.5 2.5 6.5 5.5"/>' }
+	]);
+	const subscriptionLinks = $derived([
+		{ href: '/account/change-plan', label: m.account_sidebar_change_plan(), iconPath: '<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 3V1.5M11 3V1.5M2 7h12"/>' },
+	]);
 
 	let currentPath = $derived(page.url.pathname);
 
@@ -30,7 +31,7 @@
 
 	// Label for the active page, shown on the mobile toggle button.
 	const activeLabel = $derived(
-		[...managementLinks, ...subscriptionLinks].find((l) => l.href === currentPath)?.label ?? 'Menu'
+		[...managementLinks, ...subscriptionLinks].find((l) => l.href === currentPath)?.label ?? m.account_sidebar_menu()
 	);
 
 	// "£24.00 · 12 April" once the date exists, otherwise just the amount.
@@ -47,8 +48,8 @@
 	<div class="container">
 		<div class="page-header-inner">
 			<div>
-				<span class="greeting">My Account</span>
-				<h1>Good to see you, {data.firstName}.</h1>
+				<span class="greeting">{m.account_greeting_eyebrow()}</span>
+				<h1>{m.account_greeting_heading({ name: data.firstName })}</h1>
 				{#if data.summary}
 					<div class="header-meta">
 						<span class="header-meta-item">
@@ -56,11 +57,11 @@
 						</span>
 						{#if data.summary.nextDeliveryLabel}
 							<span class="header-meta-item">
-								<strong>Next delivery</strong>{data.summary.nextDeliveryLabel}
+								<strong>{m.account_next_delivery_label()}</strong>{data.summary.nextDeliveryLabel}
 							</span>
 						{/if}
 						<span class="header-meta-item">
-							<strong>Next payment</strong>{paymentLabel}
+							<strong>{m.account_next_payment_label()}</strong>{paymentLabel}
 						</span>
 					</div>
 				{/if}
@@ -91,7 +92,7 @@
 				<path d="M2 4.5h12M2 8h12M2 11.5h12" />
 			{/if}
 		</svg>
-		<span class="menu-toggle-label">{menuOpen ? 'Close menu' : activeLabel}</span>
+		<span class="menu-toggle-label">{menuOpen ? m.account_close_menu() : activeLabel}</span>
 		<svg class="menu-toggle-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
 			<path d="M4 6l4 4 4-4" />
 		</svg>
@@ -100,7 +101,7 @@
 	<div class="layout">
 		<aside id="account-nav" class="sidebar" class:open={menuOpen}>
 			<div class="sidebar-section">
-				<span class="sidebar-label">Manage</span>
+				<span class="sidebar-label">{m.account_sidebar_manage_label()}</span>
 				<nav class="sidebar-nav">
 					{#each managementLinks as link (link.href)}
 						<a
@@ -119,7 +120,7 @@
 			</div>
 			<div class="sidebar-divider"></div>
 			<div class="sidebar-section">
-				<span class="sidebar-label">Subscription</span>
+				<span class="sidebar-label">{m.account_sidebar_subscription_label()}</span>
 				<nav class="sidebar-nav">
 					{#each subscriptionLinks as link (link.href)}
 						<a

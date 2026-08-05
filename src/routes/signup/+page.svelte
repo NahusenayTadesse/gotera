@@ -3,6 +3,7 @@
 	import { authClient } from '$lib/auth-client';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -12,13 +13,13 @@
 	const { form, errors, enhance, submitting } = superForm(data.form, {
 		resetForm: false,
 		onUpdated({ form }) {
-			const m = form.message as { type: string; text: string } | undefined;
-			if (!m) return;
-			if (m.type === 'success') {
+			const msg = form.message as { type: string; text: string } | undefined;
+			if (!msg) return;
+			if (msg.type === 'success') {
 				sentTo = form.data.email;
 				submitted = true;
 			} else {
-				toast.error(m.text);
+				toast.error(msg.text);
 			}
 		}
 	});
@@ -33,14 +34,14 @@
 			callbackURL: '/account'
 		});
 		if (error) {
-			toast.error(error.message ?? 'Could not continue with Google.');
+			toast.error(error.message ?? m.signup_google_error_fallback());
 			googleLoading = false;
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>Create your account — GOTERA</title>
+	<title>{m.signup_page_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -58,20 +59,19 @@
 					<circle cx="24" cy="24" r="22" />
 					<path d="M15 24.5l6 6 12-13" />
 				</svg>
-				<span class="eyebrow">Almost there</span>
-				<h1>Check your inbox.</h1>
+				<span class="eyebrow">{m.signup_almost_there()}</span>
+				<h1>{m.signup_check_inbox()}</h1>
 				<p>
-					We've sent a verification link to <strong>{sentTo}</strong>. Click it to activate your
-					account and start your subscription.
+					{m.signup_verification_sent_prefix()} <strong>{sentTo}</strong>. {m.signup_verification_sent_suffix()}
 				</p>
-				<a href="/login" class="btn btn-full">Back to sign in</a>
-				<p class="fine">Didn't get it? Check spam, or give it a minute to arrive.</p>
+				<a href="/login" class="btn btn-full">{m.signup_back_to_signin()}</a>
+				<p class="fine">{m.signup_fine_print()}</p>
 			</div>
 		{:else}
 			<div class="brand">
-				<span class="eyebrow">Create account</span>
-				<h1>Join GOTERA.</h1>
-				<p class="sub">Real injera, made in Ethiopia, delivered every month.</p>
+				<span class="eyebrow">{m.signup_eyebrow()}</span>
+				<h1>{m.signup_heading()}</h1>
+				<p class="sub">{m.signup_subheading()}</p>
 			</div>
 
 			<button
@@ -86,14 +86,14 @@
 					<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
 					<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
 				</svg>
-				{googleLoading ? 'Connecting…' : 'Continue with Google'}
+				{googleLoading ? m.signup_google_connecting() : m.signup_google_continue()}
 			</button>
 
-			<div class="divider">or</div>
+			<div class="divider">{m.signup_divider_or()}</div>
 
 			<form method="POST" use:enhance class="form">
 				<div class="field">
-					<label class="field-label" for="name">Full name</label>
+					<label class="field-label" for="name">{m.signup_label_name()}</label>
 					<input
 						id="name"
 						name="name"
@@ -105,7 +105,7 @@
 				</div>
 
 				<div class="field">
-					<label class="field-label" for="email">Email</label>
+					<label class="field-label" for="email">{m.signup_label_email()}</label>
 					<input
 						id="email"
 						name="email"
@@ -118,7 +118,7 @@
 				</div>
 
 				<div class="field">
-					<label class="field-label" for="password">Password</label>
+					<label class="field-label" for="password">{m.signup_label_password()}</label>
 					<input
 						id="password"
 						name="password"
@@ -131,7 +131,7 @@
 				</div>
 
 				<div class="field">
-					<label class="field-label" for="confirmPassword">Confirm password</label>
+					<label class="field-label" for="confirmPassword">{m.signup_label_confirm_password()}</label>
 					<input
 						id="confirmPassword"
 						name="confirmPassword"
@@ -145,14 +145,14 @@
 
 				<label class="opt-in">
 					<input type="checkbox" bind:checked={$form.marketingOptIn} />
-					<span>Send me occasional updates and offers.</span>
+					<span>{m.signup_marketing_optin()}</span>
 				</label>
 
 				<button type="submit" class="btn btn-full" disabled={$submitting}>
-					{$submitting ? 'Creating account…' : 'Create account'}
+					{$submitting ? m.signup_submitting() : m.signup_submit_button()}
 				</button>
 
-				<p class="alt">Already have an account? <a href="/login">Sign in</a></p>
+				<p class="alt">{m.signup_already_account()} <a href="/login">{m.signup_sign_in()}</a></p>
 			</form>
 		{/if}
 	</div>

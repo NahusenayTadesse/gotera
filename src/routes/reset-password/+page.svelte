@@ -3,6 +3,7 @@
 	import { authClient } from '$lib/auth-client';
 	import { Loader2, AlertCircle, CheckCircle2 } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/paraglide/messages.js';
 
 	// Extract token from URL search parameters (?token=xyz)
 	const token = $derived($page.url.searchParams.get('token'));
@@ -32,7 +33,7 @@
 		isLoading = false;
 
 		if (error) {
-			errorMessage = error.message || 'Failed to reset password. The link may have expired.';
+			errorMessage = error.message || m.resetpw_generic_error();
 		} else {
 			isSuccess = true;
 			// Automatically send them to login after 3 seconds
@@ -42,7 +43,7 @@
 </script>
 
 <svelte:head>
-	<title>Set a new password — GOTERA</title>
+	<title>{m.resetpw_meta_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -60,27 +61,27 @@
 
 		{#if !token}
 			<div class="brand">
-				<span class="eyebrow">Reset password</span>
-				<h1>Invalid link.</h1>
+				<span class="eyebrow">{m.resetpw_eyebrow_invalid()}</span>
+				<h1>{m.resetpw_invalid_heading()}</h1>
 			</div>
 			<div class="alert">
 				<AlertCircle class="alert-icon" />
-				<span>This reset link is invalid or broken. Please request a new one.</span>
+				<span>{m.resetpw_invalid_alert()}</span>
 			</div>
-			<a href="/forgot-password" class="btn btn-full" style="margin-top:16px">Request a new link</a>
+			<a href="/forgot-password" class="btn btn-full" style="margin-top:16px">{m.resetpw_request_new_link()}</a>
 		{:else if isSuccess}
 			<div class="sent">
 				<CheckCircle2 class="sent-icon" />
-				<span class="eyebrow">All set</span>
-				<h1>Password updated.</h1>
-				<p>Your password has been changed. Taking you to sign in…</p>
-				<a href="/login" class="btn btn-full">Sign in now</a>
+				<span class="eyebrow">{m.resetpw_success_eyebrow()}</span>
+				<h1>{m.resetpw_success_heading()}</h1>
+				<p>{m.resetpw_success_body()}</p>
+				<a href="/login" class="btn btn-full">{m.resetpw_signin_now()}</a>
 			</div>
 		{:else}
 			<div class="brand">
-				<span class="eyebrow">Create new password</span>
-				<h1>Reset password.</h1>
-				<p class="sub">Enter a secure new password for your account.</p>
+				<span class="eyebrow">{m.resetpw_eyebrow()}</span>
+				<h1>{m.resetpw_heading()}</h1>
+				<p class="sub">{m.resetpw_sub()}</p>
 			</div>
 
 			<form onsubmit={handleReset} class="form">
@@ -92,7 +93,7 @@
 				{/if}
 
 				<div class="field">
-					<label class="field-label" for="password">New password</label>
+					<label class="field-label" for="password">{m.resetpw_password_label()}</label>
 					<input
 						id="password"
 						type="password"
@@ -103,12 +104,12 @@
 						disabled={isLoading}
 					/>
 					{#if password && !isPasswordValid}
-						<span class="form-error">Password must be at least 8 characters long.</span>
+						<span class="form-error">{m.resetpw_password_min_error()}</span>
 					{/if}
 				</div>
 
 				<div class="field">
-					<label class="field-label" for="confirmPassword">Confirm new password</label>
+					<label class="field-label" for="confirmPassword">{m.resetpw_confirm_password_label()}</label>
 					<input
 						id="confirmPassword"
 						type="password"
@@ -119,20 +120,20 @@
 						disabled={isLoading}
 					/>
 					{#if confirmPassword && !passwordsMatch}
-						<span class="form-error">Passwords do not match.</span>
+						<span class="form-error">{m.resetpw_passwords_mismatch_error()}</span>
 					{/if}
 				</div>
 
 				<button type="submit" class="btn btn-full" disabled={!canSubmit}>
 					{#if isLoading}
 						<Loader2 class="spin btn-icon" />
-						Updating password…
+						{m.resetpw_updating()}
 					{:else}
-						Reset password
+						{m.resetpw_submit()}
 					{/if}
 				</button>
 
-				<p class="alt"><a href="/login">Back to sign in</a></p>
+				<p class="alt"><a href="/login">{m.resetpw_back_to_signin()}</a></p>
 			</form>
 		{/if}
 	</div>

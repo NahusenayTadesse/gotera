@@ -1,8 +1,12 @@
+<script lang="ts">
+  import { m } from '$lib/paraglide/messages.js';
+</script>
+
 <section class="hero">
   <div class="container">
-    <span class="eyebrow">Delivery</span>
-    <h1>Delivery Information</h1>
-    <p>How and when GOTERA arrives at your door.</p>
+    <span class="eyebrow">{m.acctdelivery_eyebrow()}</span>
+    <h1>{m.acctdelivery_title()}</h1>
+    <p>{m.acctdelivery_subtitle()}</p>
   </div>
 </section>
 
@@ -10,81 +14,81 @@
   <div class="container">
 
     <div class="ls">
-      <h2>Where we deliver</h2>
+      <h2>{m.acctdelivery_where_heading()}</h2>
       <div class="highlight">
-        <p><strong>London only.</strong> We are expanding. Email <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a> to register interest for other cities.</p>
+        <p><strong>{m.acctdelivery_london_only()}</strong> {m.acctdelivery_expanding_pre()} <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a> {m.acctdelivery_expanding_post()}</p>
       </div>
-      <p>Unsure if your postcode is covered? Email us and we will confirm.</p>
+      <p>{m.acctdelivery_postcode_unsure()}</p>
     </div>
 
     <div class="ls">
-      <h2>Days and windows</h2>
-      <h3>Delivery day</h3>
-      <p>All deliveries are on <strong>Saturdays</strong>. One delivery per month.</p>
-      <h3>Window</h3>
-      <p>8am to 6pm. A WhatsApp or email notification with a tighter window is sent on the morning of delivery where possible.</p>
+      <h2>{m.acctdelivery_days_windows_heading()}</h2>
+      <h3>{m.acctdelivery_day_heading()}</h3>
+      <p>{m.acctdelivery_day_pre()} <strong>{m.acctdelivery_day_strong()}</strong>{m.acctdelivery_day_post()}</p>
+      <h3>{m.acctdelivery_window_heading()}</h3>
+      <p>{m.acctdelivery_window_text()}</p>
     </div>
 
     <div class="ls">
-      <h2>How injera stays fresh</h2>
+      <h2>{m.acctdelivery_fresh_heading()}</h2>
       <div class="cold-panel">
-        <h3>Cold chain packaging</h3>
-        <p>Each order is packed on dispatch day in insulated packaging with food-safe cold packs. Maintains the correct temperature for up to 8 hours in typical UK conditions.</p>
-        <p>Once received: store in a cool, dry place or refrigerate. Consume before the best-before date. Injera can be frozen — see the pack for guidance.</p>
+        <h3>{m.acctdelivery_cold_chain_heading()}</h3>
+        <p>{m.acctdelivery_cold_chain_p1()}</p>
+        <p>{m.acctdelivery_cold_chain_p2()}</p>
       </div>
     </div>
 
     <div class="ls">
-      <h2>If you are not home</h2>
-      <p>Our driver will:</p>
+      <h2>{m.acctdelivery_not_home_heading()}</h2>
+      <p>{m.acctdelivery_driver_will()}</p>
       <ul>
-        <li>Leave in a safe place if you have set one in your account</li>
-        <li>Leave a delivery card if no safe place is available</li>
-        <li>Contact you via WhatsApp or phone if the order cannot be left safely</li>
+        <li>{m.acctdelivery_safe_place_li()}</li>
+        <li>{m.acctdelivery_delivery_card_li()}</li>
+        <li>{m.acctdelivery_contact_li()}</li>
       </ul>
-      <p>Temperature-sensitive orders will not be left in locations exposed to heat. Set a safe place at Account → Your Details.</p>
+      <p>{m.acctdelivery_temp_sensitive_note()}</p>
     </div>
 
     <div class="ls">
-      <h2>Cut-off dates</h2>
-      <p>All changes — add-ons, address updates, plan changes — must be made before the cut-off.</p>
+      <h2>{m.acctdelivery_cutoff_heading()}</h2>
+      <p>{m.acctdelivery_cutoff_intro()}</p>
       <div class="infobox">
         <p>
-          <strong>Cut-off:</strong> The Sunday before your Saturday delivery at midnight.<br />
-          Example: delivery Saturday 18 April → cut-off Sunday 13 April midnight.<br />
-          Your exact cut-off is shown in your account.
+          <strong>{m.acctdelivery_cutoff_strong()}</strong> {m.acctdelivery_cutoff_line1()}<br />
+          {m.acctdelivery_cutoff_example()}<br />
+          {m.acctdelivery_cutoff_shown()}
         </p>
       </div>
     </div>
 
     <div class="ls">
-      <h2>Changing your address</h2>
+      <h2>{m.acctdelivery_changing_address_heading()}</h2>
       <ul>
-        <li>Account → Your Details → Update Address</li>
-        <li>Changes before cut-off apply to the next delivery</li>
-        <li>Changes after cut-off apply the following month</li>
-        <li>Address must be within our London delivery area</li>
+        <li>{m.acctdelivery_change_addr_li1()}</li>
+        <li>{m.acctdelivery_change_addr_li2()}</li>
+        <li>{m.acctdelivery_change_addr_li3()}</li>
+        <li>{m.acctdelivery_change_addr_li4()}</li>
       </ul>
-      <p>Moving outside London? Email <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a>.</p>
+      <p>{m.acctdelivery_moving_pre()} <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a>.</p>
     </div>
 
     <div class="ls">
-      <h2>Order not arrived?</h2>
-      <p>If your delivery has not arrived by 6pm on your Saturday, first check:</p>
+      <h2>{m.acctdelivery_not_arrived_heading()}</h2>
+      <p>{m.acctdelivery_not_arrived_intro()}</p>
       <ul>
-        <li>Your WhatsApp or email for a delivery notification from us</li>
-        <li>Any delivery card left at your address</li>
-        <li>Your saved address in account</li>
+        <li>{m.acctdelivery_check_li1()}</li>
+        <li>{m.acctdelivery_check_li2()}</li>
+        <li>{m.acctdelivery_check_li3()}</li>
       </ul>
-      <p>If still unresolved, contact us within 48 hours:</p>
+      <p>{m.acctdelivery_unresolved_intro()}</p>
       <div class="infobox">
         <p>
-          <strong>Email:</strong> <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a><br />
-          <strong>Response time:</strong> Within 4 hours on delivery days
+          <strong>{m.acctdelivery_email_label()}</strong> <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a><br />
+          <strong>{m.acctdelivery_response_time_label()}</strong> {m.acctdelivery_response_time_value()}
         </p>
       </div>
-      <p>Confirmed lost orders receive a replacement or account credit.</p>
-      <a href="/subscribe" class="btn">Start your subscription</a>
+      <p>{m.acctdelivery_lost_order_note()}</p>
+      <a href="/subscribe" class="btn">{m.acctdelivery_start_subscription_btn()}</a>
     </div>
 
   </div>

@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { LogOut, X } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { action = '/dashboard/?/logout' } = $props();
 
@@ -22,7 +23,7 @@
 
 <button type="button" class="logout-trigger" onclick={() => (open = true)}>
 	<LogOut size={16} />
-	Logout
+	{m.logoutform_logout()}
 </button>
 
 {#if open}
@@ -36,18 +37,18 @@
 			aria-labelledby="logout-title"
 		>
 			<div class="dialog-header">
-				<span class="eyebrow">Manage account</span>
-				<button type="button" class="dialog-close" onclick={close} aria-label="Close">
+				<span class="eyebrow">{m.logoutform_eyebrow()}</span>
+				<button type="button" class="dialog-close" onclick={close} aria-label={m.logoutform_close_label()}>
 					<X size={16} />
 				</button>
 			</div>
 
-			<h3 id="logout-title">Log out?</h3>
-			<p class="dialog-body-text">You'll need to sign in again to get back to your account.</p>
+			<h3 id="logout-title">{m.logoutform_title()}</h3>
+			<p class="dialog-body-text">{m.logoutform_body_text()}</p>
 
 			<div class="dialog-actions">
 				<button type="button" class="btn btn-ghost" onclick={close} disabled={deleting}>
-					Cancel
+					{m.logoutform_cancel()}
 				</button>
 				<form
 					method="post"
@@ -59,18 +60,18 @@
 							await update();
 							deleting = false;
 							if (result.type === 'success') {
-								toast.success('Logged out successfully');
+								toast.success(m.logoutform_success_toast());
 							} else {
-								toast.error('Failed to log out');
+								toast.error(m.logoutform_error_toast());
 							}
 						};
 					}}
 				>
 					<button type="submit" class="btn btn-danger" disabled={deleting}>
 						{#if deleting}
-							<span class="spinner"></span> Logging out…
+							<span class="spinner"></span> {m.logoutform_logging_out()}
 						{:else}
-							<LogOut size={16} /> Logout
+							<LogOut size={16} /> {m.logoutform_logout()}
 						{/if}
 					</button>
 				</form>

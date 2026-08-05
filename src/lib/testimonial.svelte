@@ -1,11 +1,31 @@
+<script>
+  import { m } from '$lib/paraglide/messages.js';
+
+  // Built as a derived value so it re-localizes when the active locale changes.
+  let testimonials = $derived([
+    {
+      quote: m.testimonial_quote_1(),
+      attr: m.testimonial_attr_1()
+    },
+    {
+      quote: m.testimonial_quote_2(),
+      attr: m.testimonial_attr_2()
+    },
+    {
+      quote: m.testimonial_quote_3(),
+      attr: m.testimonial_attr_3()
+    }
+  ]);
+</script>
+
 <section class="proof flex justify-center j" data-status="placeholder-copy">
   <div class="container">
     <div class="proof-head">
-      <span class="eyebrow">From our subscribers</span>
-      <h2>What people say.</h2>
-      <p>Sample copy — replace with real, consented quotes at launch.</p>
+      <span class="eyebrow">{m.testimonial_eyebrow()}</span>
+      <h2>{m.testimonial_section_title()}</h2>
+      <p>{m.testimonial_section_subtitle()}</p>
     </div>
- 
+
     <div class="proof-grid">
       <!-- Diaspora / authenticity -->
       <div class="proof-card">
@@ -16,12 +36,12 @@
           width="72" height="72" loading="lazy" aria-hidden="true"
         > -->
         <div class="proof-card-quote">
-          "Finally, authentic injera that tastes like home. The texture is perfect, and it arrives perfectly fresh every month"
+          "{testimonials[0].quote}"
         </div>
-        <div class="proof-card-attr">Alemayehu T. · London · Subscriber since March 2026
+        <div class="proof-card-attr">{testimonials[0].attr}
 </div>
       </div>
- 
+
       <!-- Health / vegan -->
       <div class="proof-card">
         <!-- <img
@@ -31,13 +51,11 @@
           width="72" height="72" loading="lazy" aria-hidden="true"
         > -->
         <div class="proof-card-quote">
-          "I went gluten-free two years ago and dinner got boring fast. This is the first thing
-          I've found that's naturally teff, actually filling, and doesn't taste like a substitute
-          for something else."
+          "{testimonials[1].quote}"
         </div>
-        <div class="proof-card-attr">Meaza Tesfaye · London · Subscriber since February 2026</div>
+        <div class="proof-card-attr">{testimonials[1].attr}</div>
       </div>
- 
+
       <!-- Gifting -->
       <div class="proof-card">
         <!-- <img
@@ -47,10 +65,9 @@
           width="72" height="72" loading="lazy" aria-hidden="true"
         > -->
         <div class="proof-card-quote">
-          "Sent one to my sister for her birthday. She opened the box on video call and went quiet,
-          then said it smelled like our grandmother's kitchen. Best twenty seconds of my year."
+          "{testimonials[2].quote}"
         </div>
-        <div class="proof-card-attr">Dawit Bekele · London · Gift sender</div>
+        <div class="proof-card-attr">{testimonials[2].attr}</div>
       </div>
     </div>
   </div>

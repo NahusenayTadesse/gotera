@@ -1,21 +1,22 @@
 <script lang="ts">
 	import { ArrowRight } from '@lucide/svelte';
+	import { m } from '$lib/paraglide/messages.js';
 </script>
 
 <section class="final">
 	<div class="final-inner">
-		<span class="eyebrow">Subscribe</span>
-		<h2>Your injera. Every week.</h2>
+		<span class="eyebrow">{m.final_eyebrow()}</span>
+		<h2>{m.final_heading()}</h2>
 		<p class="sub">
-			Stop searching. Start enjoying real Ethiopian injera delivered to your door every Saturday.
+			{m.final_sub()}
 		</p>
 
 		<div class="actions">
 			<a class="btn btn-full" href="/subscribe">
-				Subscribe from £6.50 — secure your delivery
+				{m.final_cta_button()}
 				<ArrowRight class="btn-icon" />
 			</a>
-			<p class="alt">Have a question? <a href="/faq">Read the FAQ</a></p>
+			<p class="alt">{m.final_faq_prompt()} <a href="/faq">{m.final_faq_link()}</a></p>
 		</div>
 	</div>
 </section>

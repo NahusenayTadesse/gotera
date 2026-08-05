@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { PageData, Snapshot } from './$types';
 	import { Button } from '$lib/components/ui/button';
+	import { m } from '$lib/paraglide/messages.js';
 
 	import { onMount } from 'svelte';
 
@@ -191,7 +192,7 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 		stepError = null;
 		if (step === 'who') {
 			if (!$form.recipient) {
-				stepError = 'Choose an option to continue.';
+				stepError = m.subscribe_error_choose_option();
 				return;
 			}
 			next();
@@ -200,11 +201,11 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 		} else if (step === 'details') {
 			if ($form.recipient === 'gift') {
 				if (!$form.buyerEmail || !$form.recipientName || !$form.line1 || !$form.postcode) {
-					stepError = 'Please fill in all required fields.';
+					stepError = m.subscribe_error_required_fields();
 					return;
 				}
 			} else if (!$form.line1 || !$form.postcode) {
-				stepError = 'Please fill in all required fields.';
+				stepError = m.subscribe_error_required_fields();
 				return;
 			}
 			next();
@@ -213,34 +214,38 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 
 	const cardTitle = $derived(
 		{
-			who: 'Who is this for?',
-			plan: 'Choose your plan.',
-			extras: 'Add to your first delivery.',
-			details: $form.recipient === 'gift' ? 'Where is it going?' : 'Your details.',
-			review: 'Review & pay.'
+			who: m.subscribe_step_who_title(),
+			plan: m.subscribe_step_plan_title(),
+			extras: m.subscribe_step_extras_title(),
+			details: $form.recipient === 'gift' ? m.subscribe_step_details_gift_title() : m.subscribe_step_details_me_title(),
+			review: m.subscribe_step_review_title()
 		}[step]
 	);
 	const cardSub = $derived(
 		{
-			who: 'For me or as a gift.',
-			plan: 'No minimum term. Cancel any time.',
-			extras: 'Optional. Added to your first payment only.',
-			details: 'Where we deliver every Saturday.',
+			who: m.subscribe_step_who_sub(),
+			plan: m.subscribe_step_plan_sub(),
+			extras: m.subscribe_step_extras_sub(),
+			details: m.subscribe_step_details_sub(),
 			review: `${currentPlanDetails?.name ?? ''}${qty > 1 ? ` × ${qty}` : ''} · £${planLineTotal.toFixed(2)}`
 		}[step]
 	);
 	const ctaLabel = $derived(
 		step === 'review'
 			? $submitting
-				? 'Processing…'
+				? m.subscribe_cta_processing()
 				: $form.recipient === 'me'
-					? `${data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"} — £${finalTotalPrice.toFixed(2)}  ${isOrder ? '' : '/month'}`
-					: `Continue as gift — £${finalTotalPrice.toFixed(2)}`
+					? (isOrder
+						? m.subscribe_cta_order_price({ price: finalTotalPrice.toFixed(2) })
+						: m.subscribe_cta_subscribe_price({ price: finalTotalPrice.toFixed(2) }))
+					: m.subscribe_cta_continue_gift({ price: finalTotalPrice.toFixed(2) })
 			: step === 'extras'
 				? $form.addonIds.length > 0
-					? `Continue with ${$form.addonIds.length} extra${$form.addonIds.length > 1 ? 's' : ''}`
-					: 'Continue'
-				: 'Continue'
+					? ($form.addonIds.length > 1
+						? m.subscribe_cta_continue_with_extras({ count: $form.addonIds.length })
+						: m.subscribe_cta_continue_with_extra({ count: $form.addonIds.length }))
+					: m.subscribe_cta_continue()
+				: m.subscribe_cta_continue()
 	);
 
 	import { untrack } from 'svelte';
@@ -321,7 +326,7 @@ function submitAfterAuth() {
 </script>
 
 <svelte:head>
-    <title>Subscribe</title>
+    <title>{m.subscribe_page_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -335,16 +340,16 @@ function submitAfterAuth() {
 	<div class="sub-bg">
 		<div class="sub-plan-hero">
 			{#if step === 'who'}
-				<span class="sub-plan-eyebrow">Subscribe</span>
-				<span class="sub-plan-name">Choose<br />your plan.</span>
-				<span class="sub-plan-price">No minimum term · Cancel any time</span>
+				<span class="sub-plan-eyebrow">{m.subscribe_eyebrow()}</span>
+				<span class="sub-plan-name">{m.subscribe_hero_heading_1()}<br />{m.subscribe_hero_heading_2()}</span>
+				<span class="sub-plan-price">{m.subscribe_hero_no_minimum()}</span>
 			{:else}
-				<span class="sub-plan-eyebrow">{$form.recipient === 'gift' ? 'Gift' : `${currentPlanDetails?.name} plan`}</span>
-				<span class="sub-plan-name">{currentPlanDetails?.name}<br /><em>{$form.recipient === 'gift' ? 'one-time.' : 'every month.'}</em></span>
+				<span class="sub-plan-eyebrow">{$form.recipient === 'gift' ? m.subscribe_badge_gift() : m.subscribe_plan_name_suffix({ name: currentPlanDetails?.name ?? '' })}</span>
+				<span class="sub-plan-name">{currentPlanDetails?.name}<br /><em>{$form.recipient === 'gift' ? m.subscribe_freq_one_time() : m.subscribe_freq_every_month()}</em></span>
 				<span class="sub-plan-price">
 					<strong>£{(currentPlanDetails?.price ?? 0).toFixed(2)}</strong>
-					{$form.recipient === 'me' ? '/ month' : 'one-time'}
-					{#if addonsTotal > 0}· <strong>+£{addonsTotal.toFixed(2)}</strong> extras{/if}
+					{$form.recipient === 'me' ? m.subscribe_unit_per_month() : m.subscribe_unit_one_time()}
+					{#if addonsTotal > 0}· <strong>+£{addonsTotal.toFixed(2)}</strong> {m.subscribe_extras_label()}{/if}
 				</span>
 			{/if}
 		</div>
@@ -358,9 +363,9 @@ function submitAfterAuth() {
 		<div class="sub-card" class:animating>
 			<div class="sub-card__head">
 				{#if stepIdx > 0}
-					<button type="button" class="sub-back" onclick={back} aria-label="Go back a step">
+					<button type="button" class="sub-back" onclick={back} aria-label={m.subscribe_back_aria()}>
 						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 18l-6-6 6-6" /></svg>
-						Back
+						{m.subscribe_back_label()}
 					</button>
 				{/if}
 				<span class="sub-card__title">{cardTitle}</span>
@@ -377,10 +382,10 @@ function submitAfterAuth() {
 								</svg>
 							</div>
 							<div class="who-card__text">
-								<h3>For me</h3>
-								<p>Monthly subscription · Manage from your account</p>
+								<h3>{m.subscribe_who_me_title()}</h3>
+								<p>{m.subscribe_who_me_desc()}</p>
 							</div>
-							<div class="who-card__price">£{mePrice.toFixed(0)}<br /><span>/ month</span></div>
+							<div class="who-card__price">£{mePrice.toFixed(0)}<br /><span>{m.subscribe_unit_per_month()}</span></div>
 						</button>
 
 						<button type="button" class="who-card" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
@@ -390,10 +395,10 @@ function submitAfterAuth() {
 								</svg>
 							</div>
 							<div class="who-card__text">
-								<h3>As a gift</h3>
-								<p>One-time order · Different address · No subscription</p>
+								<h3>{m.subscribe_who_gift_title()}</h3>
+								<p>{m.subscribe_who_gift_desc()}</p>
 							</div>
-							<div class="who-card__price">From<br />£{giftFromPrice.toFixed(2)}</div>
+							<div class="who-card__price">{m.subscribe_from_label()}<br />£{giftFromPrice.toFixed(2)}</div>
 						</button>
 					</div>
 				{/if}
@@ -402,14 +407,14 @@ function submitAfterAuth() {
 					<div class="plan-sel">
 						{#each ($form.recipient === 'gift' ? giftPlans : subscriptionPlans) as p (p.id)}
 							<button type="button" class="plan-sel-card" class:active={$form.plan === p.id} onclick={() => ($form.plan = p.id)}>
-								{#if p.featured}<span class="plan-sel-card__badge">Most popular</span>{/if}
+								{#if p.featured}<span class="plan-sel-card__badge">{m.subscribe_badge_popular()}</span>{/if}
 								<div class="plan-sel-card__name" class:pad={p.featured}>
 									<h3>{p.name}</h3>
 									<p>{p.freq}</p>
 								</div>
 								<div class="plan-sel-card__price" class:pad={p.featured}>
 									<span class="plan-sel-card__price-num">£{p.price.toFixed(p.price % 1 === 0 ? 0 : 2)}</span>
-									<span class="plan-sel-card__price-freq">{$form.recipient === 'me' ? 'per month' : 'one-time'}</span>
+									<span class="plan-sel-card__price-freq">{$form.recipient === 'me' ? m.subscribe_freq_per_month() : m.subscribe_unit_one_time()}</span>
 								</div>
 								<div class="plan-sel-card__dot"></div>
 							</button>
@@ -427,91 +432,91 @@ function submitAfterAuth() {
 									<span class="extra-card__name">{addon.name}</span>
 									{#if addon.description}<span class="extra-card__desc">{addon.description}</span>{/if}
 									<span class="extra-card__price">+£{(addon.pricePence / 100).toFixed(2)}</span>
-									<span class="extra-card__btn">{$form.addonIds.includes(addon.id) ? 'Added ✓' : 'Add'}</span>
+									<span class="extra-card__btn">{$form.addonIds.includes(addon.id) ? m.subscribe_addon_added() : m.subscribe_addon_add()}</span>
 								</div>
 							</button>
 						{/each}
 					</div>
-					<button type="button" class="skip-link" onclick={next}>Skip — no extras this time</button>
+					<button type="button" class="skip-link" onclick={next}>{m.subscribe_skip_extras()}</button>
 					{#if $errors.addonIds?._errors}<span class="sub-error">{$errors.addonIds._errors}</span>{/if}
 				{/if}
 
 				{#if step === 'details'}
 					{#if $form.recipient === 'gift'}
 						<div class="sub-field">
-                            <label for="phone">Phone  Number for Delivery<span class="opt">  </span></label>
+                            <label for="phone">{m.subscribe_field_phone_gift_label()}</label>
                             <input id="phone" type="tel" bind:value={$form.phone} />
                         </div>
 						<div class="sub-field">
-							<label for="m-buyerEmail">Your email</label>
-							<input id="m-buyerEmail" type="email" placeholder="you@example.com" bind:value={$form.buyerEmail} />
-							<span class="sub-field-note">For your confirmation and receipt.</span>
+							<label for="m-buyerEmail">{m.subscribe_field_email_label()}</label>
+							<input id="m-buyerEmail" type="email" placeholder={m.subscribe_placeholder_email()} bind:value={$form.buyerEmail} />
+							<span class="sub-field-note">{m.subscribe_note_confirmation_receipt()}</span>
 							{#if $errors.buyerEmail}<span class="sub-error">{$errors.buyerEmail}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-recipientName">Recipient's name</label>
+							<label for="m-recipientName">{m.subscribe_field_recipient_name_label()}</label>
 							<input id="m-recipientName" type="text" bind:value={$form.recipientName} />
 							{#if $errors.recipientName}<span class="sub-error">{$errors.recipientName}</span>{/if}
 						</div>
 						<div class="sub-divider"></div>
-						<span class="sub-section-label">Delivery address</span>
+						<span class="sub-section-label">{m.subscribe_section_delivery_address()}</span>
 						<div class="sub-field">
-							<label for="m-line1">Address line 1</label>
-							<input id="m-line1" type="text" placeholder="Street address" bind:value={$form.line1} />
+							<label for="m-line1">{m.subscribe_field_line1_label()}</label>
+							<input id="m-line1" type="text" placeholder={m.subscribe_placeholder_street()} bind:value={$form.line1} />
 							{#if $errors.line1}<span class="sub-error">{$errors.line1}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-line2">Address line 2 <span class="opt">(optional)</span></label>
-							<input id="m-line2" type="text" placeholder="Flat, building" bind:value={$form.line2} />
+							<label for="m-line2">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional_paren()}</span></label>
+							<input id="m-line2" type="text" placeholder={m.subscribe_placeholder_flat()} bind:value={$form.line2} />
 						</div>
 						<div class="sub-field">
 							<div class="sub-field-row">
 								<div>
-									<label for="m-city">City</label>
-									<input id="m-city" type="text" disabled placeholder="London" bind:value={$form.city} />
+									<label for="m-city">{m.subscribe_field_city_label()}</label>
+									<input id="m-city" type="text" disabled placeholder={m.subscribe_placeholder_london()} bind:value={$form.city} />
 								</div>
 								<div>
-									<label for="m-postcode">Postcode</label>
-									<input id="m-postcode" type="text" placeholder="N7 0DD" bind:value={$form.postcode} />
+									<label for="m-postcode">{m.subscribe_field_postcode_label()}</label>
+									<input id="m-postcode" type="text" placeholder={m.subscribe_placeholder_postcode()} bind:value={$form.postcode} />
 								</div>
 							</div>
 							{#if $errors.postcode}<span class="sub-error">{$errors.postcode}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-giftMessage">Gift message <span class="opt">(optional)</span></label>
-							<input id="m-giftMessage" type="text" placeholder="A short note" bind:value={$form.giftMessage} />
+							<label for="m-giftMessage">{m.subscribe_field_gift_message_label()} <span class="opt">{m.subscribe_opt_optional_paren()}</span></label>
+							<input id="m-giftMessage" type="text" placeholder={m.subscribe_placeholder_gift_note()} bind:value={$form.giftMessage} />
 						</div>
 					{:else}
 						<div class="sub-field">
-                            <label for="phone">Phone for Delivery</label>
+                            <label for="phone">{m.subscribe_field_phone_label()}</label>
                             <input id="phone" type="tel" name="address" bind:value={$form.phone} />
                         </div>
 						<div class="sub-field">
-							<label for="m-line1b">Address line 1</label>
-							<input id="m-line1b" type="text" placeholder="Street address" bind:value={$form.line1} />
+							<label for="m-line1b">{m.subscribe_field_line1_label()}</label>
+							<input id="m-line1b" type="text" placeholder={m.subscribe_placeholder_street()} bind:value={$form.line1} />
 							{#if $errors.line1}<span class="sub-error">{$errors.line1}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-line2b">Address line 2 <span class="opt">(optional)</span></label>
-							<input id="m-line2b" type="text" placeholder="Flat, building" bind:value={$form.line2} />
+							<label for="m-line2b">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional_paren()}</span></label>
+							<input id="m-line2b" type="text" placeholder={m.subscribe_placeholder_flat()} bind:value={$form.line2} />
 						</div>
 						<div class="sub-field">
 							<div class="sub-field-row">
 								<div>
-									<label for="m-cityb">City</label>
-									<input id="m-cityb" type="text" disabled placeholder="London" bind:value={$form.city} />
+									<label for="m-cityb">{m.subscribe_field_city_label()}</label>
+									<input id="m-cityb" type="text" disabled placeholder={m.subscribe_placeholder_london()} bind:value={$form.city} />
 								</div>
 								<div>
-									<label for="m-postcodeb">Postcode</label>
-									<input id="m-postcodeb" type="text" placeholder="N7 0DD" bind:value={$form.postcode} />
+									<label for="m-postcodeb">{m.subscribe_field_postcode_label()}</label>
+									<input id="m-postcodeb" type="text" placeholder={m.subscribe_placeholder_postcode()} bind:value={$form.postcode} />
 								</div>
 							</div>
-							<span class="sub-field-note">London only · Delivered every Saturday</span>
+							<span class="sub-field-note">{m.subscribe_note_london_saturday()}</span>
 							{#if $errors.postcode}<span class="sub-error">{$errors.postcode}</span>{/if}
 						</div>
 						<label class="opt-in-m">
 							<input type="checkbox" bind:checked={$form.marketingOptIn} />
-							<span>Send me occasional updates and offers.</span>
+							<span>{m.subscribe_optin_updates()}</span>
 						</label>
 					{/if}
 					{#if stepError}<span class="sub-error">{stepError}</span>{/if}
@@ -520,16 +525,16 @@ function submitAfterAuth() {
 				{#if step === 'review'}
 					<div class="pay-summary">
 						<div class="pay-row">
-							<span class="pay-row__label">Quantity</span>
+							<span class="pay-row__label">{m.subscribe_label_quantity()}</span>
 							<div class="qty-stepper">
-								<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label="Decrease quantity">−</button>
+								<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label={m.subscribe_aria_decrease_qty()}>−</button>
 								<span class="qty-value">{qty}</span>
-								<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label="Increase quantity">+</button>
+								<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label={m.subscribe_aria_increase_qty()}>+</button>
 							</div>
 						</div>
 					<div class="pay-row">
 	<span class="pay-row__label">
-		{currentPlanDetails?.name} {$form.recipient === 'me' ? 'subscription' : 'gift'}
+		{currentPlanDetails?.name} {$form.recipient === 'me' ? m.subscribe_kind_subscription() : m.subscribe_kind_gift()}
 		{#if qty > 1}· £{(currentPlanDetails?.price ?? 0).toFixed(2)} × {qty}{/if}
 	</span>
 	<span class="pay-row__val">£{planLineTotal.toFixed(2)}</span>
@@ -541,11 +546,11 @@ function submitAfterAuth() {
 							</div>
 						{/each}
 						<div class="pay-row">
-							<span class="pay-row__label">Saturday delivery</span>
-							<span class="pay-row__val">Included</span>
+							<span class="pay-row__label">{m.subscribe_label_saturday_delivery()}</span>
+							<span class="pay-row__val">{m.subscribe_label_included()}</span>
 						</div>
 						<div class="pay-total">
-							<span class="pay-total__label">First payment</span>
+							<span class="pay-total__label">{m.subscribe_label_first_payment()}</span>
 							<span class="pay-total__val">£{finalTotalPrice.toFixed(2)}</span>
 						</div>
 					</div>
@@ -553,11 +558,11 @@ function submitAfterAuth() {
 						<svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke-width="1.5">
 							<rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
 						</svg>
-						Secured by Stripe. You'll complete payment on the next screen.
+						{m.subscribe_secure_note()}
 					</div>
 					<p class="terms-note">
-						By continuing you agree to our <a href="/subscription-terms">Subscription Terms</a> and
-						<a href="/privacy">Privacy Policy</a>. Cancel any time from your account.
+						{m.subscribe_terms_prefix()} <a href="/subscription-terms">{m.subscribe_terms_link1()}</a> {m.subscribe_terms_and()}
+						<a href="/privacy">{m.subscribe_terms_link2()}</a>{m.subscribe_terms_suffix()}
 					</p>
 				{/if}
 			</div>
@@ -574,7 +579,7 @@ function submitAfterAuth() {
 						<AuthSheet  onAuthenticated={submitAfterAuth} title={ctaLabel} variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
 					</div>
 				{:else}
-					<button type="submit" form="start" title={data?.user ? 'Continue' : 'Please sign in'} formaction={$form.recipient === 'me' && data?.user ? '?/subscribe' : isOrder && !data?.user ? '?/guestOrder' : '?/gift'} class="sub-cta__btn" disabled={$submitting || (!data?.user && !isOrder)}>
+					<button type="submit" form="start" title={data?.user ? m.subscribe_title_continue() : m.subscribe_title_please_sign_in()} formaction={$form.recipient === 'me' && data?.user ? '?/subscribe' : isOrder && !data?.user ? '?/guestOrder' : '?/gift'} class="sub-cta__btn" disabled={$submitting || (!data?.user && !isOrder)}>
 						{ctaLabel}
 					</button>
 				{/if}
@@ -589,9 +594,9 @@ function submitAfterAuth() {
 <div class="desktop-view">
 	<div class="page-head">
 		<div class="container">
-			<span class="eyebrow">Subscribe</span>
-			<h1>Choose your plan.</h1>
-			<p>Select, add extras, go straight to checkout.</p>
+			<span class="eyebrow">{m.subscribe_eyebrow()}</span>
+			<h1>{m.subscribe_page_heading()}</h1>
+			<p>{m.subscribe_page_subheading()}</p>
 		</div>
 	</div>
 
@@ -600,18 +605,18 @@ function submitAfterAuth() {
 			<div class="steps">
 				{#if bothModes}
 					<div class="step">
-						<div class="step-head"><span class="step-num">01</span><h2>Who is this for?</h2></div>
+						<div class="step-head"><span class="step-num">01</span><h2>{m.subscribe_step_who_title()}</h2></div>
 						<div class="step-body">
 							<div class="choice-grid">
 								<button type="button" class="choice" class:active={$form.recipient === 'me'} onclick={() => selectRecipient('me')}>
-									<h3>For me</h3>
-									<p>Monthly subscription. Manage from your account.</p>
-									<span class="choice-tag">Monthly subscription</span>
+									<h3>{m.subscribe_who_me_title()}</h3>
+									<p>{m.subscribe_choice_me_desc()}</p>
+									<span class="choice-tag">{m.subscribe_tag_monthly_subscription()}</span>
 								</button>
 								<button type="button" class="choice" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
-									<h3>As a gift</h3>
-									<p>One-time order. Different address. No subscription.</p>
-									<span class="choice-tag">One-time · From £6.50</span>
+									<h3>{m.subscribe_who_gift_title()}</h3>
+									<p>{m.subscribe_choice_gift_desc()}</p>
+									<span class="choice-tag">{m.subscribe_tag_one_time_from({ price: giftFromPrice.toFixed(2) })}</span>
 								</button>
 							</div>
 						</div>
@@ -620,9 +625,9 @@ function submitAfterAuth() {
 
 				{#if $form.recipient === 'gift'}
 					<div class="step gift-step">
-						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>Sending as a gift?</h2></div>
+						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>{m.subscribe_step_gift_heading()}</h2></div>
 						<div class="step-body">
-							<span class="gift-label">No subscription required</span>
+							<span class="gift-label">{m.subscribe_gift_label_no_sub()}</span>
 							<div class="gift-grid">
 								{#each giftPlans as plan (plan.id)}
 									<button type="button" class="plan text-left" class:active={$form.plan === plan.id} onclick={() => ($form.plan = plan.id)}>
@@ -630,7 +635,7 @@ function submitAfterAuth() {
 										<p class="plan-sub">{plan.sub}</p>
 										<div class="price">£{plan.price.toFixed(2)}</div>
 										<div class="freq">{plan.freq}</div>
-										<div class="btn-outline btn-full margin-top-fallback">{$form.plan === plan.id ? 'Selected' : 'Select'}</div>
+										<div class="btn-outline btn-full margin-top-fallback">{$form.plan === plan.id ? m.subscribe_btn_selected() : m.subscribe_btn_select()}</div>
 									</button>
 								{/each}
 							</div>
@@ -638,7 +643,7 @@ function submitAfterAuth() {
 					</div>
 				{:else}
 					<div class="step">
-						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>Choose your plan.</h2></div>
+						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>{m.subscribe_step_plan_title()}</h2></div>
 						<div class="step-body">
 							<div class="plans-grid">
 								{#each subscriptionPlans as plan (plan.id)}
@@ -663,18 +668,18 @@ function submitAfterAuth() {
 				{/if}
 
 				<div class="step">
-					<div class="step-head"><span class="step-num">{stepNo('delivery')}</span><h2>Delivery.</h2></div>
+					<div class="step-head"><span class="step-num">{stepNo('delivery')}</span><h2>{m.subscribe_step_delivery_heading()}</h2></div>
 					<div class="step-body">
 						<div class="delivery-grid">
 							<div class="field-box">
-								<label class="field-label" for="delivery-day">Delivery Day</label>
-								<select id="delivery-day" class="select" bind:value={$form.deliveryDay}><option value="Saturday">Saturday</option></select>
-								<div class="field-help">London only · launch delivery day.</div>
+								<label class="field-label" for="delivery-day">{m.subscribe_field_delivery_day_label()}</label>
+								<select id="delivery-day" class="select" bind:value={$form.deliveryDay}><option value="Saturday">{m.subscribe_option_saturday()}</option></select>
+								<div class="field-help">{m.subscribe_help_delivery_day()}</div>
 							</div>
 							<div class="field-box">
-								<label class="field-label" for="frequency">Frequency</label>
-								<select id="frequency" class="select" bind:value={$form.frequency}><option value="Monthly">Monthly</option></select>
-								<div class="field-help">One delivery per month.</div>
+								<label class="field-label" for="frequency">{m.subscribe_field_frequency_label()}</label>
+								<select id="frequency" class="select" bind:value={$form.frequency}><option value="Monthly">{m.subscribe_option_monthly()}</option></select>
+								<div class="field-help">{m.subscribe_help_frequency()}</div>
 							</div>
 						</div>
 					</div>
@@ -682,14 +687,14 @@ function submitAfterAuth() {
 
 				{#if hasAddons}
 					<div class="step">
-						<div class="step-head"><span class="step-num">{stepNo('addons')}</span><h2>Add to your order.</h2></div>
+						<div class="step-head"><span class="step-num">{stepNo('addons')}</span><h2>{m.subscribe_step_addons_heading()}</h2></div>
 						<div class="step-body">
 							<div class="addons-grid">
 								{#each data?.addons as item (item.id)}
 									<button type="button" class="{$form.addonIds.includes(item.id) ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
 										<div class="addon-img">
-											<span class="ph-label">{item.name} · product photo</span>
-											<span class="ph-sub">Warm light · minimal styling</span>
+											<span class="ph-label">{item.name} · {m.subscribe_addon_photo_suffix()}</span>
+											<span class="ph-sub">{m.subscribe_addon_photo_style()}</span>
 										</div>
 										<div class="addon-top">
 											<div><h3>{item.name}</h3><div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div></div>
@@ -704,45 +709,45 @@ function submitAfterAuth() {
 					</div>
 				{/if}
 				<div class="step">
-					<div class="step-head"><span class="step-num">{stepNo('details')}</span><h2>{$form.recipient === 'gift' ? 'Where is it going?' : 'Your details.'}</h2></div>
+					<div class="step-head"><span class="step-num">{stepNo('details')}</span><h2>{$form.recipient === 'gift' ? m.subscribe_step_details_gift_title() : m.subscribe_step_details_me_title()}</h2></div>
 					<div class="step-body">
 						{#if $form.recipient === 'gift'}
 							<div class="field full">
 							   	<div class="sub-field">
-                            <label for="phone">Phone for Delivery</label>
+                            <label for="phone">{m.subscribe_field_phone_label()}</label>
                             <input id="phone" type="tel" bind:value={$form.phone} required />
                         </div>
 								<div class="field full">
-									<label class="field-label" for="buyerEmail">Your email</label>
-									<input id="buyerEmail" class="input" type="email" placeholder="you@example.com" bind:value={$form.buyerEmail} />
-									<div class="field-help">For your confirmation and receipt.</div>
+									<label class="field-label" for="buyerEmail">{m.subscribe_field_email_label()}</label>
+									<input id="buyerEmail" class="input" type="email" placeholder={m.subscribe_placeholder_email()} bind:value={$form.buyerEmail} />
+									<div class="field-help">{m.subscribe_note_confirmation_receipt()}</div>
 									{#if $errors.buyerEmail}<span class="form-error">{$errors.buyerEmail}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="recipientName">Recipient's name</label>
+									<label class="field-label" for="recipientName">{m.subscribe_field_recipient_name_label()}</label>
 									<input id="recipientName" class="input" type="text" bind:value={$form.recipientName} />
 									{#if $errors.recipientName}<span class="form-error">{$errors.recipientName}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="line1">Address line 1</label>
+									<label class="field-label" for="line1">{m.subscribe_field_line1_label()}</label>
 									<input id="line1" class="input" type="text" bind:value={$form.line1} />
 									{#if $errors.line1}<span class="form-error">{$errors.line1}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="line2">Address line 2 <span class="opt">optional</span></label>
+									<label class="field-label" for="line2">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional()}</span></label>
 									<input id="line2" class="input" type="text" bind:value={$form.line2} />
 								</div>
 								<div class="field">
-									<label class="field-label" for="city">City</label>
+									<label class="field-label" for="city">{m.subscribe_field_city_label()}</label>
 									<input id="city" class="input" disabled type="text" bind:value={$form.city} />
 								</div>
 								<div class="field">
-									<label class="field-label" for="postcode">Postcode</label>
+									<label class="field-label" for="postcode">{m.subscribe_field_postcode_label()}</label>
 									<input id="postcode" class="input" type="text" bind:value={$form.postcode} />
 									{#if $errors.postcode}<span class="form-error">{$errors.postcode}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="giftMessage">Gift message <span class="opt">optional</span></label>
+									<label class="field-label" for="giftMessage">{m.subscribe_field_gift_message_label()} <span class="opt">{m.subscribe_opt_optional()}</span></label>
 									<textarea id="giftMessage" class="input textarea" rows="3" bind:value={$form.giftMessage}></textarea>
 								</div>
 							</div>
@@ -750,35 +755,35 @@ function submitAfterAuth() {
 							<div class="detail-grid">
 							  <div class="field full">
 							   	<div class="sub-field">
-                            <label for="phone">Phone for Delivery</label>
+                            <label for="phone">{m.subscribe_field_phone_label()}</label>
                             <input id="phone" type="tel" bind:value={$form.phone} required />
                         </div>
 						</div>
 								<div class="field full">
-									<label class="field-label" for="addressLabel">Label <span class="opt">optional · e.g. Home</span></label>
+									<label class="field-label" for="addressLabel">{m.subscribe_field_label_label()} <span class="opt">{m.subscribe_opt_optional_label()}</span></label>
 									<input id="addressLabel" class="input" type="text" bind:value={$form.addressLabel} />
 								</div>
 								<div class="field full">
-									<label class="field-label" for="line1d">Address line 1</label>
+									<label class="field-label" for="line1d">{m.subscribe_field_line1_label()}</label>
 									<input id="line1d" class="input" type="text" bind:value={$form.line1} />
 									{#if $errors.line1}<span class="form-error">{$errors.line1}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="line2d">Address line 2 <span class="opt">optional</span></label>
+									<label class="field-label" for="line2d">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional()}</span></label>
 									<input id="line2d" class="input" type="text" bind:value={$form.line2} />
 								</div>
 								<div class="field">
-									<label class="field-label"  for="cityd">City</label>
+									<label class="field-label"  for="cityd">{m.subscribe_field_city_label()}</label>
 									<input id="cityd" disabled class="input" type="text" bind:value={$form.city} />
 								</div>
 								<div class="field">
-									<label class="field-label" for="postcoded">Postcode</label>
+									<label class="field-label" for="postcoded">{m.subscribe_field_postcode_label()}</label>
 									<input id="postcoded" class="input" type="text" bind:value={$form.postcode} />
 									{#if $errors.postcode}<span class="form-error">{$errors.postcode}</span>{/if}
 								</div>
 								<label class="opt-in full">
 									<input type="checkbox" bind:checked={$form.marketingOptIn} />
-									<span>Send me occasional updates and offers.</span>
+									<span>{m.subscribe_optin_updates()}</span>
 								</label>
 							</div>
 						{/if}
@@ -788,50 +793,50 @@ function submitAfterAuth() {
 
 			<aside class="summary">
 				<div class="sum-head">
-					<small>Order Summary</small>
-					<h2>{currentPlanDetails?.name ?? 'Plan'}</h2>
+					<small>{m.subscribe_summary_title()}</small>
+					<h2>{currentPlanDetails?.name ?? m.subscribe_label_plan()}</h2>
 				</div>
 				<div class="sum-body">
 					<div class="sum-row">
-	<span class="sum-label">Plan</span>
-	<div class="sum-val">{currentPlanDetails?.name} · {$form.recipient === 'gift' ? 'One-time Pack' : currentPlanDetails?.freq}{#if qty > 1} · Qty {qty}{/if}</div>
+	<span class="sum-label">{m.subscribe_label_plan()}</span>
+	<div class="sum-val">{currentPlanDetails?.name} · {$form.recipient === 'gift' ? m.subscribe_label_one_time_pack() : currentPlanDetails?.freq}{#if qty > 1} {m.subscribe_qty_suffix({ qty })}{/if}</div>
 </div>
 					<div class="sum-row sum-row--qty">
-						<span class="sum-label">Quantity</span>
+						<span class="sum-label">{m.subscribe_label_quantity()}</span>
 						<div class="qty-stepper">
-							<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label="Decrease quantity">−</button>
+							<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label={m.subscribe_aria_decrease_qty()}>−</button>
 							<span class="qty-value">{qty}</span>
-							<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label="Increase quantity">+</button>
+							<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label={m.subscribe_aria_increase_qty()}>+</button>
 						</div>
 					</div>
 					<div class="sum-row">
-						<span class="sum-label">Delivery</span>
+						<span class="sum-label">{m.subscribe_label_delivery()}</span>
 						<div class="sum-val">{$form.deliveryDay} · {$form.frequency}</div>
-						<div class="sum-sub">London only</div>
+						<div class="sum-sub">{m.subscribe_note_london_only()}</div>
 					</div>
 					{#if activeAddons.length > 0}
 						<div class="sum-row">
-							<span class="sum-label">Add-ons</span>
+							<span class="sum-label">{m.subscribe_label_addons()}</span>
 							<div class="sum-val">{activeAddons.map((a) => a.name).join(', ')}</div>
 						</div>
 					{/if}
 					<div class="sum-row">
-						<span class="sum-label">Total</span>
+						<span class="sum-label">{m.subscribe_label_total()}</span>
 <div class="price-line">
-	<span>{currentPlanDetails?.name} product{#if qty > 1} × {qty}{/if}</span>
+	<span>{currentPlanDetails?.name} {m.subscribe_label_product_suffix()}{#if qty > 1} × {qty}{/if}</span>
 	<span>£{planLineTotal.toFixed(2)}</span>
 </div>						{#each activeAddons as item (item.id)}
 							<div class="price-line"><span>{item.name}</span><span>£{(item.pricePence / 100).toFixed(2)}</span></div>
 						{/each}
-						<div class="price-line total"><span>First payment</span><strong>£{finalTotalPrice.toFixed(2)}</strong></div>
+						<div class="price-line total"><span>{m.subscribe_label_first_payment()}</span><strong>£{finalTotalPrice.toFixed(2)}</strong></div>
 					</div>
 					<div class="sum-actions">
 						{#if $form.recipient === 'me' && !data.user}
-							<AuthSheet onAuthenticated={submitAfterAuth} title="Subscribe" variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
+							<AuthSheet onAuthenticated={submitAfterAuth} title={m.subscribe_cta_subscribe()} variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
 						{:else if $form.recipient === 'me'}
-							<Button type="submit" class="w-full! rounded-none! p-6!" form="start" disabled={!data?.user && $submitting && !isOrder} title={data?.user ? undefined : 'Please log in to subscribe'} formaction={isOrder && !data?.user ? "?/guestOrder" : "?/subscribe"}>{$submitting ? 'Starting…' : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? 'Order' : "Subscribe"}</Button>
+							<Button type="submit" class="w-full! rounded-none! p-6!" form="start" disabled={!data?.user && $submitting && !isOrder} title={data?.user ? undefined : m.subscribe_title_login_to_subscribe()} formaction={isOrder && !data?.user ? "?/guestOrder" : "?/subscribe"}>{$submitting ? m.subscribe_cta_starting() : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? m.subscribe_cta_order() : m.subscribe_cta_subscribe()}</Button>
 						{:else}
-							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : 'Please log in to gift a subscription'} formaction="?/gift" class="btn btn-full">{$submitting ? 'Processing…' : 'Continue as Gift'}</Button>
+							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : m.subscribe_title_login_to_gift()} formaction="?/gift" class="btn btn-full">{$submitting ? m.subscribe_cta_processing() : m.subscribe_cta_continue_as_gift()}</Button>
 						{/if}
 
 						{#if !data?.user && isOrder}
@@ -840,12 +845,12 @@ function submitAfterAuth() {
                          <button form="start" title="Checkout Without an account"  class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
                          {/if} -->
 						    <div class="flex flex-row gap-2" >
-							 <p>Already have an account?</p>
+							 <p>{m.subscribe_already_have_account()}</p>
 							<AuthSheet  onAuthenticated={submitAfterAuth} data={data?.signupForm} bind:loginOpen bind:signupOpen />
 							</div>
 						{/if}
 					</div>
-					<p class="sum-note">Pause, skip, or cancel any time from your account.</p>
+					<p class="sum-note">{m.subscribe_note_pause_skip_cancel()}</p>
 					<!-- <div class="trust-panel-strip">
                         <div class="trust-quote">"Subscriber quote placeholder — one sentence, high trust."</div>
                         <div class="trust-attr">Name · GOTERA subscriber</div>

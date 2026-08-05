@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
+import { m } from '$lib/paraglide/messages.js';
 import { superValidate, message, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, and, asc } from 'drizzle-orm';
@@ -192,11 +193,11 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'me') {
-			return message(form, { type: 'error', text: 'Wrong flow for this order.' } satisfies FormMessage, { status: 400 });
+			return message(form, { type: 'error', text: m.subscribe_error_wrong_flow_order() } satisfies FormMessage, { status: 400 });
 		}
 		const user = locals.user;
 		if (!user) {
-			return message(form, { type: 'error', text: 'Please sign in to order.' } satisfies FormMessage, { status: 401 });
+			return message(form, { type: 'error', text: m.subscribe_error_sign_in_to_order() } satisfies FormMessage, { status: 401 });
 		}
 
 		const [plan] = await db
@@ -204,10 +205,10 @@ export const actions: Actions = {
 			.from(plans)
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
 		if (!plan || (plan.kind !== 'subscription' && plan.kind !== 'order')) {
-			return message(form, { type: 'error', text: "That plan isn't available here." } satisfies FormMessage, { status: 400 });
+			return message(form, { type: 'error', text: m.subscribe_error_plan_unavailable() } satisfies FormMessage, { status: 400 });
 		}
 		if (!plan.stripePriceId) {
-			return message(form, { type: 'error', text: 'This plan has no Stripe price set.' } satisfies FormMessage, { status: 500 });
+			return message(form, { type: 'error', text: m.subscribe_error_plan_no_price() } satisfies FormMessage, { status: 500 });
 		}
 
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
@@ -241,7 +242,7 @@ export const actions: Actions = {
 				});
 			} catch (e) {
 				console.error('one-off checkout failed', e);
-				return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
+				return message(form, { type: 'error', text: m.subscribe_error_checkout_failed() } satisfies FormMessage, { status: 500 });
 			}
 			redirect(303, checkoutUrl);
 		}
@@ -283,7 +284,7 @@ export const actions: Actions = {
 			});
 		} catch (e) {
 			console.error('subscribe (db) failed', e);
-			return message(form, { type: 'error', text: 'Something went wrong starting your subscription.' } satisfies FormMessage, { status: 500 });
+			return message(form, { type: 'error', text: m.subscribe_error_subscription_start_failed() } satisfies FormMessage, { status: 500 });
 		}
 
 
@@ -305,7 +306,7 @@ export const actions: Actions = {
 			console.log("Metadata:", session.metadata);
 		} catch (e) {
 			console.error('stripe checkout create failed', e);
-			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
+			return message(form, { type: 'error', text: m.subscribe_error_checkout_failed() } satisfies FormMessage, { status: 500 });
 		}
 
 		redirect(303, session.url!);
@@ -319,7 +320,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'gift') {
-			return message(form, { type: 'error', text: 'Wrong flow for a gift.' } satisfies FormMessage, { status: 400 });
+			return message(form, { type: 'error', text: m.subscribe_error_wrong_flow_gift() } satisfies FormMessage, { status: 400 });
 		}
 		const [plan] = await db
 			.select()
@@ -327,7 +328,7 @@ export const actions: Actions = {
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
 		if (!plan || plan.kind !== 'gift') return setError(form, 'plan', 'Choose a gift pack.');
 		if (!plan.stripePriceId) {
-			return message(form, { type: 'error', text: 'This gift has no Stripe price set.' } satisfies FormMessage, { status: 500 });
+			return message(form, { type: 'error', text: m.subscribe_error_gift_no_price() } satisfies FormMessage, { status: 500 });
 		}
 
 		const buyerEmail = form.data.buyerEmail ?? locals.user?.email;
@@ -357,7 +358,7 @@ export const actions: Actions = {
 			});
 		} catch (e) {
 			console.error('gift checkout failed', e);
-			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
+			return message(form, { type: 'error', text: m.subscribe_error_checkout_failed() } satisfies FormMessage, { status: 500 });
 		}
 		redirect(303, checkoutUrl);
 	},
@@ -391,10 +392,10 @@ export const actions: Actions = {
 			});
 		} catch (e) {
 			console.error('updateSubscription failed', e);
-			return message(form, { type: 'error', text: 'Could not update your subscription.' } satisfies FormMessage, { status: 400 });
+			return message(form, { type: 'error', text: m.subscribe_error_update_failed() } satisfies FormMessage, { status: 400 });
 		}
 
-		return message(form, { type: 'success', text: 'Subscription updated.' } satisfies FormMessage);
+		return message(form, { type: 'success', text: m.subscribe_success_updated() } satisfies FormMessage);
 	},
 
 	/* CANCEL — one subscription at period end. */
@@ -410,7 +411,7 @@ export const actions: Actions = {
 			.innerJoin(subscribers, eq(subscriptions.subscriberId, subscribers.id))
 			.where(and(eq(subscriptions.id, form.data.subscriptionId), eq(subscribers.userId, user.id)));
 		if (!owned) {
-			return message(form, { type: 'error', text: 'Subscription not found.' } satisfies FormMessage, { status: 404 });
+			return message(form, { type: 'error', text: m.subscribe_error_not_found() } satisfies FormMessage, { status: 404 });
 		}
 
 		try {
@@ -422,10 +423,10 @@ export const actions: Actions = {
 			}
 		} catch (e) {
 			console.error('cancelSubscription failed', e);
-			return message(form, { type: 'error', text: 'Could not cancel your subscription.' } satisfies FormMessage, { status: 400 });
+			return message(form, { type: 'error', text: m.subscribe_error_cancel_failed() } satisfies FormMessage, { status: 400 });
 		}
 
-		return message(form, { type: 'success', text: 'Subscription cancelled.' } satisfies FormMessage);
+		return message(form, { type: 'success', text: m.subscribe_success_cancelled() } satisfies FormMessage);
 	},
 	guestOrder: async ({ request, url }) => {
 		console.log('guest')
@@ -456,7 +457,7 @@ export const actions: Actions = {
 			.from(plans)
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
 		if(plan.kind !== 'order') {
-			   return message(form, { type:"error", text: "Guest Order is not allowed for non one type orders."})
+			   return message(form, { type:"error", text: m.subscribe_error_guest_order_not_allowed()})
 		}
 		
 
@@ -482,7 +483,7 @@ export const actions: Actions = {
 			});
 		} catch (e) {
 			console.error('one-off checkout failed', e);
-			return message(form, { type: 'error', text: 'Could not start checkout. Please try again.' } satisfies FormMessage, { status: 500 });
+			return message(form, { type: 'error', text: m.subscribe_error_checkout_failed() } satisfies FormMessage, { status: 500 });
 		}
 		redirect(303, checkoutUrl);
 	}

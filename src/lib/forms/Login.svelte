@@ -7,6 +7,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { Eye, EyeOff } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { m } from '$lib/paraglide/messages.js';
 
 	import { onMount } from 'svelte';
 
@@ -60,7 +61,7 @@ async function signInWithGoogle() {
 	});
 
 	if (error || !social?.url) {
-		toast.error(error?.message ?? 'Could not start Google sign-in.');
+		toast.error(error?.message ?? m.loginform_google_signin_error());
 		googleLoading = false;
 		return;
 	}
@@ -76,7 +77,7 @@ async function signInWithGoogle() {
 	);
 
 	if (!popup) {
-		toast.error('Popup blocked — allow popups and try again.');
+		toast.error(m.loginform_popup_blocked());
 		googleLoading = false;
 		return;
 	}
@@ -103,7 +104,7 @@ async function signInWithGoogle() {
 
 	if (done) {
 		await invalidateAll();   // refresh data.user — no navigation
-		toast.success('Signed in.');
+		toast.success(m.loginform_signed_in_toast());
 		onSuccess?.();           // close the dialog
 	}
 	googleLoading = false;
@@ -126,9 +127,9 @@ async function signInWithGoogle() {
 		</div>
 
 		<div class="brand">
-			<span class="eyebrow">Welcome back</span>
-			<h1>Sign in.</h1>
-			<p class="sub">Enter your email to access your account.</p>
+			<span class="eyebrow">{m.loginform_eyebrow()}</span>
+			<h1>{m.loginform_title()}</h1>
+			<p class="sub">{m.loginform_subtitle()}</p>
 		</div>
 
 		<button type="button" class="btn-google" onclick={signInWithGoogle} disabled={googleLoading}>
@@ -138,26 +139,26 @@ async function signInWithGoogle() {
 				<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
 				<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
 			</svg>
-			{googleLoading ? 'Connecting…' : 'Continue with Google'}
+			{googleLoading ? m.loginform_google_connecting() : m.loginform_google_continue()}
 		</button>
 
-		<div class="divider">or</div>
+		<div class="divider">{m.loginform_divider_or()}</div>
 
 		<form method="POST" {action} use:enhance class="form">
 			<div class="field">
-				<label class="field-label" for="email">Email</label>
-				<input id="email" name="email" type="email" class="input" autocomplete="email" placeholder="m@example.com" bind:value={$form.email} required />
+				<label class="field-label" for="email">{m.loginform_email_label()}</label>
+				<input id="email" name="email" type="email" class="input" autocomplete="email" placeholder={m.loginform_email_placeholder()} bind:value={$form.email} required />
 				{#if $errors.email}<span class="form-error">{$errors.email}</span>{/if}
 			</div>
 
 			<div class="field">
 				<div class="label-row">
-					<label class="field-label" for="password">Password</label>
-					<a href="/forgot-password" class="forgot">Forgot your password?</a>
+					<label class="field-label" for="password">{m.loginform_password_label()}</label>
+					<a href="/forgot-password" class="forgot">{m.loginform_forgot_password()}</a>
 				</div>
 				<div class="pw">
 					<input id="password" name="password" type={eye ? 'text' : 'password'} class="input" autocomplete="current-password" bind:value={$form.password} required />
-					<button type="button" class="pw-toggle" onclick={() => (eye = !eye)} title="Toggle password visibility" aria-label="Toggle password visibility">
+					<button type="button" class="pw-toggle" onclick={() => (eye = !eye)} title={m.loginform_toggle_password_visibility()} aria-label={m.loginform_toggle_password_visibility()}>
 						<EyeIcon class="pw-icon" />
 					</button>
 				</div>
@@ -165,10 +166,10 @@ async function signInWithGoogle() {
 			</div>
 
 			<button type="submit" class="btn btn-full" disabled={loading}>
-				{loading ? 'Signing in…' : 'Sign in'}
+				{loading ? m.loginform_signing_in() : m.loginform_submit()}
 			</button>
 
-			<p class="alt">Don't have an account? <a href="/signup">Create one</a></p>
+			<p class="alt">{m.loginform_no_account()} <a href="/signup">{m.loginform_create_account()}</a></p>
 		</form>
 	</div>
 </div>

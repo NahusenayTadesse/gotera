@@ -5,6 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { cancelSchema } from './schema';
 	import type { PageData } from './$types';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -21,12 +22,12 @@
 	});
 
 	const reasons = [
-		{ value: 'too_expensive', label: 'Too expensive' },
-		{ value: 'too_much_food', label: 'Too much injera' },
-		{ value: 'taking_a_break', label: 'Just taking a break' },
-		{ value: 'moving', label: 'Moving / delivery area' },
-		{ value: 'quality', label: 'Not happy with quality' },
-		{ value: 'other', label: 'Something else' }
+		{ value: 'too_expensive', label: m.acctplan_reason_too_expensive() },
+		{ value: 'too_much_food', label: m.acctplan_reason_too_much_food() },
+		{ value: 'taking_a_break', label: m.acctplan_reason_taking_a_break() },
+		{ value: 'moving', label: m.acctplan_reason_moving() },
+		{ value: 'quality', label: m.acctplan_reason_quality() },
+		{ value: 'other', label: m.acctplan_reason_other() }
 	];
 
 	// Cancellable plans only — an already-cancelling plan can't be re-selected
@@ -36,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>Cancel a plan — GOTERA</title>
+	<title>{m.acctplan_page_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -47,24 +48,28 @@
 
 <div class="wrap">
 	<div class="card">
-		<span class="eyebrow">Manage subscriptions</span>
-		<h1>Cancel a plan.</h1>
+		<span class="eyebrow">{m.acctplan_eyebrow()}</span>
+		<h1>{m.acctplan_heading()}</h1>
 
 		{#if data.plansList.length === 0}
-			<p class="lead">You don't have any active plans to cancel.</p>
+			<p class="lead">{m.acctplan_empty_lead()}</p>
 			<div class="actions">
-				<a href="/account" class="btn btn-ghost">Back to account</a>
+				<a href="/account" class="btn btn-ghost">{m.acctplan_back_to_account()}</a>
 			</div>
 		{:else}
 			<p class="lead">
-				You have {data.plansList.length} active
-				{data.plansList.length === 1 ? 'plan' : 'plans'}. Cancelling one leaves the rest untouched.
+				{m.acctplan_lead({
+					count: data.plansList.length,
+					planWord: data.plansList.length === 1
+						? m.acctplan_plan_word_singular()
+						: m.acctplan_plan_word_plural()
+				})}
 			</p>
 
 			<form method="POST" use:enhance class="form">
 				<!-- Choose which subscription to cancel -->
 				<fieldset class="plan-list">
-					<legend>Which plan?</legend>
+					<legend>{m.acctplan_which_plan()}</legend>
 					{#each data.plansList as p (p.id)}
 						<label
 							class="plan-row"
@@ -81,7 +86,8 @@
 							<div class="plan-info">
 								<div class="plan-top">
 									<span class="plan-name"
-										>{p.planName}{#if p.quantity > 1}<span class="qty-pill">×{p.quantity}</span
+										>{p.planName}{#if p.quantity > 1}<span class="qty-pill"
+												>{m.acctplan_qty_pill({ quantity: p.quantity })}</span
 											>{/if}</span
 									>
 									<span class="plan-price">£{p.price.toFixed(2)}</span>
@@ -92,7 +98,9 @@
 								</div>
 								{#if p.cancelAtPeriodEnd}
 									<span class="plan-flag"
-										>Already cancelling{p.periodEndLabel ? ` — ends ${p.periodEndLabel}` : ''}</span
+										>{m.acctplan_already_cancelling()}{p.periodEndLabel
+											? ` — ${m.acctplan_ends_on({ date: p.periodEndLabel })}`
+											: ''}</span
 									>
 								{/if}
 							</div>
@@ -104,15 +112,14 @@
 				{#if selected && !selected.cancelAtPeriodEnd}
 					<div class="keep-note">
 						{#if selected.periodEndLabel}
-							This plan stays active until <strong>{selected.periodEndLabel}</strong>. You'll keep
-							any delivery already paid for and won't be charged again after that.
+							{m.acctplan_keep_note_prefix()} <strong>{selected.periodEndLabel}</strong>. {m.acctplan_keep_note_suffix()}
 						{:else}
-							Cancelling stops future charges. You'll keep anything already paid for.
+							{m.acctplan_keep_note_no_date()}
 						{/if}
 					</div>
 
 					<fieldset class="reasons">
-						<legend>Mind telling us why? <span class="opt">(optional)</span></legend>
+						<legend>{m.acctplan_reason_legend()} <span class="opt">({m.acctplan_optional()})</span></legend>
 						{#each reasons as r (r.value)}
 							<label class="reason" class:active={$form.reason === r.value}>
 								<input type="radio" name="reason" value={r.value} bind:group={$form.reason} />
@@ -123,7 +130,7 @@
 
 					<div class="field">
 						<label class="field-label" for="feedback"
-							>Anything we could do better? <span class="opt">(optional)</span></label
+							>{m.acctplan_feedback_label()} <span class="opt">({m.acctplan_optional()})</span></label
 						>
 						<textarea
 							id="feedback"
@@ -137,21 +144,24 @@
 					<label class="confirm">
 						<input type="checkbox" name="confirm" bind:checked={$form.confirm} />
 						<span
-							>I understand my <strong>{selected.planName}</strong>{#if selected.quantity > 1} (×{selected.quantity}){/if}
-							plan will end{selected.periodEndLabel ? ` on ${selected.periodEndLabel}` : ''}.</span
+							>{m.acctplan_confirm_prefix()} <strong>{selected.planName}</strong>{#if selected.quantity > 1}
+								{m.acctplan_qty_suffix({ quantity: selected.quantity })}{/if}
+							{selected.periodEndLabel
+								? m.acctplan_confirm_will_end_on({ date: selected.periodEndLabel })
+								: m.acctplan_confirm_will_end()}</span
 						>
 					</label>
 					{#if $errors.confirm}<span class="form-error">{$errors.confirm}</span>{/if}
 				{/if}
 
 				<div class="actions">
-					<a href="/account" class="btn btn-ghost">Keep all my plans</a>
+					<a href="/account" class="btn btn-ghost">{m.acctplan_keep_all_button()}</a>
 					<button
 						type="submit"
 						class="btn btn-danger"
 						disabled={$submitting || !selected || selected.cancelAtPeriodEnd || !$form.confirm}
 					>
-						{$submitting ? 'Cancelling…' : 'Cancel this plan'}
+						{$submitting ? m.acctplan_submitting() : m.acctplan_submit_button()}
 					</button>
 				</div>
 			</form>

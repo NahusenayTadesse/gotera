@@ -1,45 +1,47 @@
 <script>
+	import { m } from '$lib/paraglide/messages.js';
+
 	// Reactive or static dataset for the 14 UK major allergens
-	const allergens = [
+	const allergens = $derived([
 		{
-			name: 'Cereals containing gluten',
-			subtext: 'wheat, rye, barley, oats, spelt, kamut',
+			name: m.allergens_item_gluten_name(),
+			subtext: m.allergens_item_gluten_subtext(),
 			status: 'absent',
-			label: 'Not present',
-			notes: 'Recipe contains no gluten-containing grains. Made with 100% teff.'
+			label: m.allergens_status_not_present(),
+			notes: m.allergens_item_gluten_notes()
 		},
-		{ name: 'Crustaceans', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Eggs', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Fish', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Peanuts', status: 'absent', label: 'Not present', notes: '—' },
+		{ name: m.allergens_item_crustaceans_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_eggs_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_fish_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_peanuts_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
 		{
-			name: 'Soybeans',
+			name: m.allergens_item_soybeans_name(),
 			status: 'may',
-			label: 'May contain',
-			notes: 'Produced in a facility that also handles soy products.'
+			label: m.allergens_status_may_contain(),
+			notes: m.allergens_item_soybeans_notes()
 		},
-		{ name: 'Milk', status: 'absent', label: 'Not present', notes: 'Product is vegan. No dairy ingredients used.' },
+		{ name: m.allergens_item_milk_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_item_milk_notes() },
 		{
-			name: 'Nuts',
-			subtext: 'almond, hazelnut, walnut, cashew, pecan, brazil, pistachio, macadamia',
+			name: m.allergens_item_nuts_name(),
+			subtext: m.allergens_item_nuts_subtext(),
 			status: 'may',
-			label: 'May contain',
-			notes: 'Produced in a facility that also handles tree nuts.'
+			label: m.allergens_status_may_contain(),
+			notes: m.allergens_item_nuts_notes()
 		},
-		{ name: 'Celery', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Mustard', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Sesame', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Sulphur dioxide & sulphites', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Lupin', status: 'absent', label: 'Not present', notes: '—' },
-		{ name: 'Molluscs', status: 'absent', label: 'Not present', notes: '—' }
-	];
+		{ name: m.allergens_item_celery_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_mustard_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_sesame_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_sulphites_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_lupin_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() },
+		{ name: m.allergens_item_molluscs_name(), status: 'absent', label: m.allergens_status_not_present(), notes: m.allergens_notes_none() }
+	]);
 </script>
 
 <div class="page-head">
 	<div class="container">
-		<span class="eyebrow">Legal · UK Food Law</span>
-		<h1>Allergen information.</h1>
-		<p>Full allergen and ingredient information for all GOTERA products, provided in accordance with the UK Food Information to Consumers Regulation (FIC) and Natasha's Law.</p>
+		<span class="eyebrow">{m.allergens_eyebrow()}</span>
+		<h1>{m.allergens_page_title()}</h1>
+		<p>{m.allergens_page_intro()}</p>
 	</div>
 </div>
 
@@ -47,34 +49,34 @@
 	<div class="container">
 
 		<div class="legal-notice">
-			<strong>Important:</strong> If you have a food allergy or intolerance, please read all allergen information carefully before ordering. If you are unsure whether a product is safe for you, contact us before placing an order. Do not rely on product descriptions alone — always check the full ingredient and allergen information below.
+			<strong>{m.allergens_important_label()}</strong> {m.allergens_legal_notice()}
 		</div>
 
 		<!-- PRODUCT: INJERA -->
 		<div class="ingredient-block">
 			<div class="ingredient-head">
-				<h2>Injera — 100% Teff</h2>
-				<span class="gluten-free-badge">Gluten free recipe</span>
+				<h2>{m.allergens_injera_title()}</h2>
+				<span class="gluten-free-badge">{m.allergens_gluten_free_badge()}</span>
 			</div>
 			<div class="ingredient-body">
 
-				<p class="ingredient-text"><strong>Ingredients:</strong> Teff Flour (100%), Water, Live Fermentation Culture.</p>
-				<p class="ingredient-text layout-spacing">This product is made using a recipe with no gluten-containing ingredients. Teff is a naturally gluten-free grain.</p>
+				<p class="ingredient-text"><strong>{m.allergens_ingredients_label()}</strong> {m.allergens_injera_ingredients_list()}</p>
+				<p class="ingredient-text layout-spacing">{m.allergens_injera_gluten_free_desc()}</p>
 
 				<!-- KEY -->
 				<div class="key">
-					<div class="key-item"><span class="dot dot-present"></span>Contains</div>
-					<div class="key-item"><span class="dot dot-may"></span>May contain (cross-contamination risk)</div>
-					<div class="key-item"><span class="dot dot-absent"></span>Not present</div>
+					<div class="key-item"><span class="dot dot-present"></span>{m.allergens_key_contains()}</div>
+					<div class="key-item"><span class="dot dot-may"></span>{m.allergens_key_may_contain()}</div>
+					<div class="key-item"><span class="dot dot-absent"></span>{m.allergens_key_not_present()}</div>
 				</div>
 
 				<!-- ALLERGEN TABLE -->
 				<table class="allergen-table">
 					<thead>
 						<tr>
-							<th style="width: 40%">Allergen</th>
-							<th style="width: 30%">Status</th>
-							<th>Notes</th>
+							<th style="width: 40%">{m.allergens_table_header_allergen()}</th>
+							<th style="width: 30%">{m.allergens_table_header_status()}</th>
+							<th>{m.allergens_table_header_notes()}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -100,8 +102,8 @@
 
 				<!-- CROSS CONTAMINATION -->
 				<div class="cross-block">
-					<h3>Cross-contamination statement</h3>
-					<p>GOTERA injera is produced in a facility in Ethiopia that also handles <strong>soy</strong> and <strong>tree nuts</strong>. While production lines are cleaned between runs, we cannot guarantee the complete absence of these allergens in the final product. Customers with severe allergies to soy or tree nuts should consider this risk carefully before ordering.</p>
+					<h3>{m.allergens_cross_heading()}</h3>
+					<p>{@html m.allergens_cross_text()}</p>
 				</div>
 
 				<!-- GLUTEN FREE NOTE -->
@@ -112,8 +114,8 @@
 						</svg>
 					</div>
 					<div>
-						<h3>Gluten-free recipe</h3>
-						<p>GOTERA injera is made from 100% teff flour — a naturally gluten-free grain native to Ethiopia. No wheat, rye, barley, oats, spelt, or kamut are used in the recipe. This claim refers to the recipe ingredients only. Customers with coeliac disease should note the cross-contamination statement above and consult their healthcare provider if unsure.</p>
+						<h3>{m.allergens_cert_heading()}</h3>
+						<p>{m.allergens_cert_text()}</p>
 					</div>
 				</div>
 
@@ -123,26 +125,26 @@
 		<!-- ADD-ONS SECTION -->
 		<div class="ingredient-block">
 			<div class="ingredient-head">
-				<h2>Add-ons</h2>
+				<h2>{m.allergens_addons_heading()}</h2>
 			</div>
 			<div class="ingredient-body">
-				<p class="addon-intro">Full allergen information for each add-on product is provided on the individual product label and will be listed here as each product launches. If you have a specific allergy query about an add-on product, contact us before ordering.</p>
-				<div class="addon-placeholder">Add-on allergen information will be published here before each product is made available to order.</div>
+				<p class="addon-intro">{m.allergens_addons_intro()}</p>
+				<div class="addon-placeholder">{m.allergens_addons_placeholder()}</div>
 			</div>
 		</div>
 
 		<!-- CONTACT -->
 		<div class="contact-block">
 			<div>
-				<h3>Allergy query?</h3>
-				<p>If you have a food allergy or intolerance and need more information before ordering, contact us directly. We will respond within one business day.</p>
+				<h3>{m.allergens_contact_heading()}</h3>
+				<p>{m.allergens_contact_text()}</p>
 			</div>
-			<a href="mailto:hello@gotera.co.uk" class="btn">Email us</a>
+			<a href="mailto:hello@gotera.co.uk" class="btn">{m.allergens_contact_button()}</a>
 		</div>
 
 		<!-- REGULATORY NOTE -->
 		<div class="regulatory-note">
-			Allergen information is provided in accordance with <strong>Regulation (EU) No 1169/2011</strong> as retained in UK law, and <strong>Natasha's Law</strong> (UK Food Information Amendment 2019), which came into force 1 October 2021. The 14 allergens listed above are those required to be declared under UK food law. This information was last reviewed March 2026. GOTERA Foods Ltd reserves the right to update ingredient and allergen information as formulations or suppliers change — please check this page before each order if you have a food allergy.
+			{@html m.allergens_regulatory_note()}
 		</div>
 
 	</div>

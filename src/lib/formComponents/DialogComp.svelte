@@ -4,11 +4,12 @@
 	import type { Snippet, Component } from 'svelte';
 	import type { IconProps } from '@lucide/svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let {
 		title,
 		label,
-		eyebrow = 'Manage account',
+		eyebrow = m.dialogcomp_default_eyebrow(),
 		children,
 		variant = 'default',
 		class: className,

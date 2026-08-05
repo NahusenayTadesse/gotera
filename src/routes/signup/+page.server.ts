@@ -10,12 +10,13 @@ import { db } from '$lib/server/db';
 import { subscribers } from '$lib/server/db/schema';
 
 import { signupSchema, type SignupMessage } from './schema';
+import { m } from '$lib/paraglide/messages.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	if (!locals.user) {
+	if (locals.user) {
 		redirect(
 			303,
-			`/auth/signup?redirectTo=${encodeURIComponent(url.pathname + url.search)}`
+			`/signup?redirectTo=${encodeURIComponent(url.pathname + url.search)}`
 		);
 	}
 	return { form: await superValidate(zod4(signupSchema)) };
@@ -45,13 +46,13 @@ export const actions: Actions = {
 			// Better Auth throws APIError for things like "user already exists"
 			// or a weak password — surface those on the relevant field.
 			if (e instanceof APIError) {
-				const msg = e.body?.message ?? 'Could not create your account.';
+				const msg = e.body?.message ?? m.signup_create_account_error();
 				return setError(form, 'email', msg);
 			}
 			console.error('signUpEmail failed', e);
 			return message(
 				form,
-				{ type: 'error', text: 'Something went wrong. Please try again.' } satisfies SignupMessage,
+				{ type: 'error', text: m.signup_generic_error() } satisfies SignupMessage,
 				{ status: 500 }
 			);
 		}
@@ -77,7 +78,7 @@ export const actions: Actions = {
 			form,
 			{
 				type: 'success',
-				text: 'Account created. Check your email to verify.'
+				text: m.signup_success_message()
 			} satisfies SignupMessage
 		);
 	}

@@ -1,143 +1,154 @@
 <script>
+	import { m } from '$lib/paraglide/messages.js';
+
 	// 1. Static Content Data Array (keeps our template clean and readable)
-	const faqData = [
+	// Built as a derived value so it re-localizes when the active locale changes.
+	let faqData = $derived([
 		{
-			category: 'The product',
+			category: m.faq_cat_product(),
 			items: [
 				{
-					q: 'What is injera?',
-					a: 'Injera is a naturally fermented Ethiopian flatbread made from teff — a small, nutrient-dense grain native to the Horn of Africa. It has a distinctive spongy texture and a mild, slightly sour flavour from the fermentation process. It is the foundation of Ethiopian and Eritrean cuisine, used both as a plate and as a utensil.',
+					q: m.faq_product_q1_question(),
+					a: m.faq_product_q1_answer(),
 					defaultOpen: true // Match your original design choice
 				},
 				{
-					q: 'Where is GOTERA injera made?',
-					a: 'Made and packed in Ethiopia. We keep the product at its source — that is what makes it real.'
+					q: m.faq_product_q2_question(),
+					a: m.faq_product_q2_answer()
 				},
 				{
-					q: 'Is GOTERA injera gluten-free?',
-					a: 'Yes. GOTERA injera is made from 100% teff, which is naturally gluten-free. It is also vegan and high in iron. If you have a severe gluten intolerance or coeliac disease, please check the packaging for full allergen information once you receive your order.'
+					q: m.faq_product_q3_question(),
+					a: m.faq_product_q3_answer()
 				},
 				{
-					q: 'How fresh is the injera when it arrives?',
-					a: 'Each order is packed on dispatch day and shipped in insulated cold-chain packaging. It arrives at the correct temperature and carries a best-before date on the pack. You should consume it before that date.'
+					q: m.faq_product_q4_question(),
+					a: m.faq_product_q4_answer()
 				},
 				{
-					q: 'Can I freeze injera?',
-					a: 'Yes. Injera freezes well. Separate individual pieces with baking paper before freezing, and defrost at room temperature. Full storage guidance is printed on the packaging.'
+					q: m.faq_product_q5_question(),
+					a: m.faq_product_q5_answer()
 				},
 				{
-					q: "What if I don't like it?",
-					a: 'If a product arrives damaged or is not what you ordered, contact us within 48 hours at hello@gotera.co.uk and we will sort it. Food products cannot be returned, but we will always make it right if something has gone wrong on our side.'
+					q: m.faq_product_q6_question(),
+					a: m.faq_product_q6_answer()
 				}
 			]
 		},
 		{
-			category: 'Subscription',
+			category: m.faq_cat_subscription(),
 			items: [
 				{
-					q: 'How does the subscription work?',
-					a: 'You choose a plan, we deliver injera once a month. Payment is taken automatically on the same date each month. You manage everything — pausing, skipping, changing plan, adding products — from your account.'
+					q: m.faq_subscription_q1_question(),
+					a: m.faq_subscription_q1_answer()
 				},
 				{
-					q: 'Is there a minimum term?',
-					a: 'None. Cancel any time from your account. No cancellation fees.'
+					q: m.faq_subscription_q2_question(),
+					a: m.faq_subscription_q2_answer()
 				},
 				{
-					q: 'How do I cancel?',
-					a: 'Account → Cancel Subscription. Your subscription ends at the close of the current billing period. You won’t be charged again after that. You can also email hello@gotera.co.uk.'
+					q: m.faq_subscription_q3_question(),
+					a: m.faq_subscription_q3_answer()
 				},
 				{
-					q: 'Can I pause or skip a delivery?',
-					a: 'Yes. Pause your subscription entirely with no time limit, or skip a single month’s delivery — both from your account. Changes must be made before the cut-off date for the upcoming delivery, shown in your account.'
+					q: m.faq_subscription_q4_question(),
+					a: m.faq_subscription_q4_answer()
 				},
 				{
-					q: 'Can I change my plan?',
-					a: 'Yes. Switch between Starter (2 packs, £12/month) and Regular (4 packs, £24/month) any time from your account. Changes take effect from the next billing cycle.'
+					q: m.faq_subscription_q5_question(),
+					a: m.faq_subscription_q5_answer()
 				},
 				{
-					q: 'What are add-ons?',
-					a: 'Pantry products — currently Berbere (£3.50), Mitmita (£3.50), and Niter Kibbeh (£5.00) — that you can add to any monthly delivery. Select them from your account before the cut-off date. They are added to that month’s payment.'
+					q: m.faq_subscription_q6_question(),
+					a: m.faq_subscription_q6_answer()
 				}
 			]
 		},
 		{
-			category: 'Delivery',
+			category: m.faq_cat_delivery(),
 			items: [
 				{
-					q: 'Where do you deliver?',
-					a: 'London only at launch. We are expanding to other UK cities in 2026. Email hello@gotera.co.uk to register interest for your area.'
+					q: m.faq_delivery_q1_question(),
+					a: m.faq_delivery_q1_answer()
 				},
 				{
-					q: 'When do you deliver?',
-					a: 'Saturdays, between 8am and 6pm. You’ll receive a notification with a tighter window on the morning of your delivery.'
+					q: m.faq_delivery_q2_question(),
+					a: m.faq_delivery_q2_answer()
 				},
 				{
-					q: 'What is the cut-off date?',
-					a: 'The Sunday before your Saturday delivery at midnight. Changes — add-ons, address updates, skips — made after the cut-off apply to the following month. Your exact cut-off is shown in your account.'
+					q: m.faq_delivery_q3_question(),
+					a: m.faq_delivery_q3_answer()
 				},
 				{
-					q: "What if I'm not home?",
-					a: 'Set a safe place in your account and we’ll leave your order there. If no safe place is set and you’re not home, we’ll leave a card with instructions. Temperature-sensitive orders won’t be left in locations exposed to heat.'
+					q: m.faq_delivery_q4_question(),
+					a: m.faq_delivery_q4_answer()
 				},
 				{
-					q: "My order hasn't arrived. What do I do?",
-					a: 'Contact us within 48 hours at hello@gotera.co.uk. We respond within 4 hours on delivery days. Confirmed lost orders get a replacement or account credit. Full details on the Delivery page.'
+					q: m.faq_delivery_q5_question(),
+					a: m.faq_delivery_q5_answer()
 				}
 			]
 		},
 		{
-			category: 'Gifting',
+			category: m.faq_cat_gifting(),
 			items: [
 				{
-					q: 'How does a gift order work?',
-					a: 'Choose a gift size (single or double pack), add any pantry extras, enter the recipient’s address, and pay once. No subscription is created for the recipient. A confirmation goes to your email.'
+					q: m.faq_gifting_q1_question(),
+					a: m.faq_gifting_q1_answer()
 				},
 				{
-					q: 'Can I include a message?',
-					a: 'Yes. There is a message field in the gift checkout. Keep it short — it will be included with the order.'
+					q: m.faq_gifting_q2_question(),
+					a: m.faq_gifting_q2_answer()
 				},
 				{
-					q: 'Does the recipient need a GOTERA account?',
-					a: 'No. A gift is a one-time order. The recipient does not need an account and is not signed up to any subscription.'
+					q: m.faq_gifting_q3_question(),
+					a: m.faq_gifting_q3_answer()
 				}
 			]
 		},
 		{
-			category: 'Account',
+			category: m.faq_cat_account(),
 			items: [
 				{
-					q: 'How do I update my delivery address?',
-					a: 'Account → Your Details → Update Address. Changes before the cut-off apply to the next delivery. Changes after the cut-off apply the following month.'
+					q: m.faq_account_q1_question(),
+					a: m.faq_account_q1_answer()
 				},
 				{
-					q: 'How do I update my payment method?',
-					a: 'Account → Payment → Update Payment. Your new card is saved and used for all future billing.'
+					q: m.faq_account_q2_question(),
+					a: m.faq_account_q2_answer()
 				},
 				{
-					q: 'I forgot my password. What do I do?',
-					a: 'Use the "Forgot your password?" link on the sign in page. A reset link will be sent to your registered email address.'
+					q: m.faq_account_q3_question(),
+					a: m.faq_account_q3_answer()
 				}
 			]
 		}
-	];
+	]);
 
 	// Extract unique categories for tabs automatically
-	const categories = faqData.map((d) => d.category);
+	let categories = $derived(faqData.map((d) => d.category));
 
 	// 2. Svelte 5 Runes for State Management
-	let activeCategory = $state('The product');
+	// Tracked by index (not the localized label) so switching locales doesn't
+	// break the active-tab match.
+	let activeCategoryIndex = $state(0);
 
 	// Object state lookup to track open/closed questions dynamically
 	// Initializes with items marked as `defaultOpen` set to true
-	let openAnswers = $state(
-		faqData.reduce((acc, currentGroup) => {
-			currentGroup.items.forEach((item) => {
-				if (item.defaultOpen) acc[item.q] = true;
-			});
-			return acc;
-		}, {})
-	);
+	/** @type {Record<string, boolean>} */
+	let openAnswers = $state({});
 
+	$effect(() => {
+		/** @type {Record<string, boolean>} */
+		const initial = {};
+		faqData.forEach((group) => {
+			group.items.forEach((item) => {
+				if (item.defaultOpen) initial[item.q] = true;
+			});
+		});
+		openAnswers = { ...initial, ...openAnswers };
+	});
+
+	/** @param {string} question */
 	function toggle(question) {
 		openAnswers[question] = !openAnswers[question];
 	}
@@ -145,21 +156,21 @@
 
 <section class="hero">
 	<div class="container">
-		<span class="eyebrow">FAQ</span>
-		<h1>Common questions.</h1>
-		<p>Everything you need to know before subscribing — and after.</p>
+		<span class="eyebrow">{m.faq_hero_eyebrow()}</span>
+		<h1>{m.faq_hero_title()}</h1>
+		<p>{m.faq_hero_subtitle()}</p>
 	</div>
 </section>
 
 <div class="tabs">
 	<div class="container">
 		<div class="tab-list">
-			{#each categories as category}
+			{#each categories as category, index}
 				<button
 					type="button"
 					class="tab"
-					class:active={activeCategory === category}
-					onclick={() => (activeCategory = category)}
+					class:active={activeCategoryIndex === index}
+					onclick={() => (activeCategoryIndex = index)}
 				>
 					{category}
 				</button>
@@ -170,8 +181,8 @@
 
 <div class="faq-content">
 	<div class="container">
-		{#each faqData as group}
-			{#if activeCategory === group.category}
+		{#each faqData as group, index}
+			{#if activeCategoryIndex === index}
 				<div class="faq-group">
 					<h2 class="faq-group-title">{group.category}</h2>
 					<div class="faq-list">
@@ -200,11 +211,11 @@
 
 <section class="cta">
 	<div class="container cta-inner">
-		<span class="eyebrow">Still have questions?</span>
-		<h2>Ready when you are.</h2>
-		<p>No minimum term. Cancel any time. Start with one pack if you're not sure.</p>
-		<a href="/subscribe" class="btn">Choose Your Plan</a>
-		<p class="cta-contact">Or email us at <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a> — we respond within one working day.</p>
+		<span class="eyebrow">{m.faq_cta_eyebrow()}</span>
+		<h2>{m.faq_cta_title()}</h2>
+		<p>{m.faq_cta_subtitle()}</p>
+		<a href="/subscribe" class="btn">{m.faq_cta_button()}</a>
+		<p class="cta-contact">{m.faq_cta_contact_prefix()} <a href="mailto:hello@gotera.co.uk">hello@gotera.co.uk</a> {m.faq_cta_contact_suffix()}</p>
 	</div>
 </section>
 
