@@ -1,0 +1,1 @@
+import{o as e,s as t}from"./Cxhu7noS.js";import"./xihTtKlq.js";import{t as n}from"./8vGV0M7Y.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=e(a,r),s=[[`circle`,{cx:`12`,cy:`12`,r:`1`}],[`circle`,{cx:`19`,cy:`12`,r:`1`}],[`circle`,{cx:`5`,cy:`12`,r:`1`}]];n(i,t({name:`ellipsis`},()=>o,{get iconNode(){return s}}))}export{i as t};

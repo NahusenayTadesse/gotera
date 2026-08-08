@@ -1,6 +1,12 @@
-<script>
+<script lang="ts">
 	import Testimonial from "$lib/testimonial.svelte";
+	import Carousel from "$lib/components/carousel/carousel.svelte";
+	import Gallery from "$lib/components/gallery/gallery.svelte";
 	import { m } from '$lib/paraglide/messages.js';
+
+	const injera = (n: number) => `/injera/injera${n}.webp`;
+	const bandImages = [16, 17, 18, 19, 20, 21].map(injera);
+	const galleryImages = [22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map(injera);
 
   // Structured content matrices for sections to keep the markup completely DRY
   const originPanels = [
@@ -52,12 +58,11 @@
 </section>
 
 <!-- BRAND IMAGERY MODULE -->
-<div class="img-band">
-  <!-- <span class="ph-label">Brand photography — full width</span>
-  <span class="ph-sub">Injera being made · teff grain · or product in situ · warm natural light · 21:6 crop</span> -->
-
-  <img src="/injera.avif" alt={m.about_hero_image_alt()} />
-</div>
+<section class="img-band">
+  <div class="container">
+    <Carousel images={bandImages} autoPlay interval={4500} showThumbnails={false} aspectRatio="21/6" />
+  </div>
+</section>
 
 <!-- COMPONENT PILLARS BLOCK (ORIGIN & INGREDIENT) -->
 <section class="origin">
@@ -90,6 +95,15 @@
         </div>
       {/each}
     </div>
+  </div>
+</section>
+
+<!-- GALLERY MODULE -->
+<section class="gallery-section">
+  <div class="container">
+    <span class="eyebrow">{m.about_gallery_eyebrow()}</span>
+    <h2 class="gallery-section-title">{m.about_gallery_title()}</h2>
+    <Gallery images={galleryImages} layout="bento" />
   </div>
 </section>
 
@@ -238,15 +252,21 @@
   /* BRAND IMMERSION WIDE GRAPHIC */
   .img-band {
     width: 100%;
-    aspect-ratio: 21/6;
+    padding: 40px 0;
     background: var(--panel);
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
+  }
+
+  /* GALLERY MODULE */
+  .gallery-section {
+    padding: 72px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .gallery-section-title {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    margin-bottom: 24px;
   }
 
   /* ORIGIN DETAILS MATRIX */

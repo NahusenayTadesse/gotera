@@ -35,12 +35,17 @@
 <section class="how">
 	<div class="how-inner">
 		<header class="how-head">
-			<span class="eyebrow">{m.howitworks_eyebrow()}</span>
-			<h2>{m.howitworks_heading()}</h2>
+			<div class="how-head-text">
+				<span class="eyebrow">{m.howitworks_eyebrow()}</span>
+				<h2>{m.howitworks_heading()}</h2>
+			</div>
+			<div class="how-head-img">
+				<img src="/injera/injera7.webp" alt={m.howitworks_image_alt()} loading="lazy" />
+			</div>
 		</header>
 
 		<ol class="steps">
-			{#each steps as step}
+			{#each steps as step, i}
 				<li class="step">
 					<span class="step-num">{step.num}</span>
 					<h3 class="step-title">{step.title}</h3>
@@ -77,6 +82,9 @@
 		max-width: 30ch;
 		margin-bottom: 40px;
 	}
+	.how-head-img {
+		display: none;
+	}
 	.eyebrow {
 		display: block;
 		margin-bottom: 10px;
@@ -110,10 +118,10 @@
 	.step::before {
 		content: '';
 		position: absolute;
-		left: 17px;
+		left: 16.5px;
 		top: 42px;
 		bottom: 6px;
-		width: 1px;
+		width: 2px;
 		background: var(--border);
 	}
 	.step:last-child::before {
@@ -206,7 +214,28 @@
 			padding: 96px 24px;
 		}
 		.how-head {
+			max-width: none;
 			margin-bottom: 56px;
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			gap: 40px;
+		}
+		.how-head-text {
+			max-width: 30ch;
+		}
+		.how-head-img {
+			display: block;
+			width: 220px;
+			aspect-ratio: 4 / 3;
+			flex-shrink: 0;
+			overflow: hidden;
+			border-radius: 4px;
+		}
+		.how-head-img img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
 		}
 		.steps {
 			display: grid;
@@ -222,7 +251,7 @@
 			top: 17px;
 			bottom: auto;
 			width: auto;
-			height: 1px;
+			height: 2px;
 		}
 		.cta-row {
 			margin-top: 56px;

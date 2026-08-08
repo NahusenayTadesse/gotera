@@ -5,15 +5,18 @@
   let testimonials = $derived([
     {
       quote: m.testimonial_quote_1(),
-      attr: m.testimonial_attr_1()
+      attr: m.testimonial_attr_1(),
+      image: '/injera/injera26.webp'
     },
     {
       quote: m.testimonial_quote_2(),
-      attr: m.testimonial_attr_2()
+      attr: m.testimonial_attr_2(),
+      image: '/injera/injera28.webp'
     },
     {
       quote: m.testimonial_quote_3(),
-      attr: m.testimonial_attr_3()
+      attr: m.testimonial_attr_3(),
+      image: '/injera/injera30.webp'
     }
   ]);
 </script>
@@ -29,12 +32,12 @@
     <div class="proof-grid">
       <!-- Diaspora / authenticity -->
       <div class="proof-card">
-        <!-- <img
+        <img
           class="proof-card-avatar"
-          src="https://api.dicebear.com/9.x/notionists/svg?seed=Hirut&backgroundColor=f1e5d0"
-          alt=""
-          width="72" height="72" loading="lazy" aria-hidden="true"
-        > -->
+          src={testimonials[0].image}
+          alt={m.testimonial_photo_alt()}
+          width="72" height="72" loading="lazy"
+        >
         <div class="proof-card-quote">
           "{testimonials[0].quote}"
         </div>
@@ -44,12 +47,12 @@
 
       <!-- Health / vegan -->
       <div class="proof-card">
-        <!-- <img
+        <img
           class="proof-card-avatar"
-          src="https://api.dicebear.com/8.x/notionists/svg?beardVariant=variant01:seed=Meaza&backgroundColor=e3ece4"
-          alt=""
-          width="72" height="72" loading="lazy" aria-hidden="true"
-        > -->
+          src={testimonials[1].image}
+          alt={m.testimonial_photo_alt()}
+          width="72" height="72" loading="lazy"
+        >
         <div class="proof-card-quote">
           "{testimonials[1].quote}"
         </div>
@@ -58,12 +61,12 @@
 
       <!-- Gifting -->
       <div class="proof-card">
-        <!-- <img
+        <img
           class="proof-card-avatar"
-          src="https://api.dicebear.com/9.x/notionists/svg?seed=Dawit&backgroundColor=ede1e6"
-          alt=""
-          width="72" height="72" loading="lazy" aria-hidden="true"
-        > -->
+          src={testimonials[2].image}
+          alt={m.testimonial_photo_alt()}
+          width="72" height="72" loading="lazy"
+        >
         <div class="proof-card-quote">
           "{testimonials[2].quote}"
         </div>
@@ -488,6 +491,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
+	}
+	.proof-card-avatar {
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		object-fit: cover;
+		border: 1px solid var(--border);
 	}
 	.proof-card-ph {
 		width: 100%;

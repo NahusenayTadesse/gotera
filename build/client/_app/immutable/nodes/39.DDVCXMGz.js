@@ -1,0 +1,1 @@
+import{Ft as e,It as t,U as n,V as r,ot as i,v as a}from"../chunks/Cxhu7noS.js";import{w as o}from"../chunks/4GjcWxoK.js";import"../chunks/xihTtKlq.js";var s=n(`<a>paraglide</a>`);function c(n,c){t(c,!0);var l=s();i(e=>a(l,`href`,e),[()=>o(`/demo/paraglide`)]),r(n,l),e()}export{c as component};

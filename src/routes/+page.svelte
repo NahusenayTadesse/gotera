@@ -5,8 +5,21 @@ import type { PageData } from './$types';
 	import Final from '$lib/final.svelte';
 	import Testimonial from '$lib/testimonial.svelte';
 	import Truth from '$lib/Truth.svelte';
+	import Carousel from '$lib/components/carousel/carousel.svelte';
+	import Gallery from '$lib/components/gallery/gallery.svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { isMobile } from '$lib/global.svelte';
 	let { data }: { data: PageData } = $props();
+
+	const injera = (n: number) => `/injera/injera${n}.webp`;
+	const heroCarouselImages = [1, 2, 3, 4, 5, 6, 7, 8].map(injera);
+	const originGalleryImages = [9, 10, 11, 12, 13, 14, 15,16].map(injera);
+
+	// Background photos for cards that read better with imagery behind them.
+	const originPanelBg = injera(19);
+	const deliveryPanelBg = injera(21);
+	const featuredPlanBg = injera(6);
+	const giftCardBg = injera(24);
 	let heroVideoReady = $state(false);
 	let heroCardVideoReady = $state(false);
 
@@ -100,7 +113,7 @@ import type { PageData } from './$types';
 		<div class="hero-card">
 			<div class="hero-card-img">
 				<img
-					src="/hero.jpeg"
+					src="/injera/injera13.webp"
 					alt={m.home_hero_img_alt()}
 					style="width:100%;height:100%;object-fit:cover;object-position:center"
 				/>
@@ -108,7 +121,7 @@ import type { PageData } from './$types';
 				<video
 					class="hero-card-video"
 					class:hero-card-video--ready={heroCardVideoReady}
-					poster="/hero.jpeg"
+					poster="/injera/injera13.webp"
 					autoplay
 					muted
 					loop
@@ -116,7 +129,7 @@ import type { PageData } from './$types';
 					preload="metadata"
 					onloadeddata={() => (heroCardVideoReady = true)}
 				>
-					<source src="/hero.mp4" type="video/mp4" />
+					<source src="/output.webm" type="video/mp4" />
 				</video>
 			</div>
 			<div class="hero-card-body">
@@ -140,7 +153,7 @@ import type { PageData } from './$types';
 		<video
 			class="hero__video"
 			class:hero__video--ready={heroVideoReady}
-			poster="/hero.jpeg"
+			poster="/injera/injera13.webp"
 			autoplay
 			muted
 			loop
@@ -148,7 +161,7 @@ import type { PageData } from './$types';
 			preload="metadata"
 			onloadeddata={() => (heroVideoReady = true)}
 		>
-			<source src="/hero.mp4" type="video/mp4" />
+			<source src="/output.webm" type="video/mp4" />
 		</video>
 	</div>
 	<div class="hero__gradient"></div>
@@ -235,7 +248,21 @@ import type { PageData } from './$types';
 		</div>
 	</div>
 </section>
-<div class="container">	
+
+<!-- <section class="gallery-showcase">
+	<div class="container">
+		<div class="gallery-showcase-head">
+			<span class="eyebrow">{m.home_gallery_eyebrow()}</span>
+			<h2>{m.home_gallery_title()}</h2>
+			<p>{m.home_gallery_subtitle()}</p>
+		</div>
+		<div>
+			<Carousel images={heroCarouselImages} autoPlay interval={4000} aspectRatio={isMobile() ? '16/9' : '21/9'} />
+		</div>
+	</div>
+</section> -->
+
+<div class="container">
 <Truth />
 </div>
 
@@ -248,14 +275,18 @@ import type { PageData } from './$types';
 		</div>
 		{#if cards.length}
 			<div class="plans-grid">
-				{#each cards as card (card.slug)}
+				{#each cards as card, i (card.slug)}
 
 						{@const bullets = Array.isArray(card.bullets)
 							? card.bullets
 							: card.bullets
 								? [card.bullets]
 								: []}
-					<div class="plan" class:plan-featured={card.featured}>
+					<div
+						class="plan"
+						class:plan-featured={card.featured}
+						style={card.featured ? `background-image: linear-gradient(180deg, rgba(26,26,26,.88), rgba(26,26,26,.94)), url('${featuredPlanBg}')` : ''}
+					>
 						<h3>{card.title}</h3>
 						<p class="plan-desc">{card.desc}</p>
 						<div class="price">{fmtPrice(card.price)}</div>
@@ -283,12 +314,12 @@ import type { PageData } from './$types';
 <section class="origin">
 	<div class="container">
 		<div class="origin-grid">
-			<div class="origin-panel">
+			<div class="origin-panel origin-panel--photo" style="background-image: linear-gradient(180deg, rgba(26,26,26,.55), rgba(26,26,26,.8)), url('{originPanelBg}')">
 				<span class="eyebrow">{m.home_origin_eyebrow()}</span>
 				<h3>{m.home_origin_title()}</h3>
 				<p>{m.home_origin_desc1()}</p>
 			</div>
-			<div class="origin-panel">
+			<div class="origin-panel origin-panel--photo" style="background-image: linear-gradient(180deg, rgba(26,26,26,.55), rgba(26,26,26,.8)), url('{deliveryPanelBg}')">
 				<span class="eyebrow">{m.home_origin_delivery_eyebrow()}</span>
 				<h3>{m.home_origin_delivery_title()}</h3>
 				<p>
@@ -296,11 +327,15 @@ import type { PageData } from './$types';
 				</p>
 			</div>
 		</div>
+	
 	</div>
 </section>
-<div class="flex flex-col items-center justify-center">	
+<div class="flex flex-col items-center justify-center">
 
 <HowItWorks />
+	<!-- <div class="origin-gallery px-4!">
+			<Gallery images={originGalleryImages} layout="grid" columns={4} />
+		</div> -->
 </div>
 
 <Testimonial />
@@ -373,10 +408,7 @@ import type { PageData } from './$types';
 				>
 			</div>
 			<div class="gift-card">
-				<div class="gift-card-img">
-					<span class="ph-label">{m.home_gift_ph_label()}</span>
-					<span class="ph-sub">{m.home_gift_ph_sub()}</span>
-				</div>
+				<div class="gift-card-img" style="background-image: url('{giftCardBg}')"></div>
 				<div class="gift-card-body">
 					<h3>{data?.giftPlans[0]?.name}</h3>
 					<p>{data?.giftPlans[0]?.subtitle}</p>
@@ -546,19 +578,6 @@ import type { PageData } from './$types';
 	}
 	.hero-card-video--ready {
 		opacity: 1;
-	}
-	.ph-label {
-		font-size: 0.62rem;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
-		color: var(--taupe);
-		font-weight: 500;
-	}
-	.ph-sub {
-		font-size: 0.58rem;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: rgba(122, 116, 110, 0.5);
 	}
 	.hero-card-body {
 		padding: 22px 24px;
@@ -772,6 +791,21 @@ import type { PageData } from './$types';
 .plan-featured-btn:hover {
     background: #9a4f22;
 }
+	.gallery-showcase {
+		padding: 72px 0;
+		border-bottom: 1px solid var(--border);
+	}
+	.gallery-showcase-head {
+		margin-bottom: 28px;
+	}
+	.gallery-showcase-head h2 {
+		font-size: clamp(1.8rem, 4vw, 2.8rem);
+		margin-bottom: 8px;
+	}
+	.gallery-showcase-head p {
+		font-size: 0.9rem;
+		color: var(--taupe);
+	}
 	.origin {
 		padding: 72px 0;
 		border-bottom: 1px solid var(--border);
@@ -781,10 +815,16 @@ import type { PageData } from './$types';
 		grid-template-columns: 1fr 1fr;
 		gap: 24px;
 	}
+	.origin-gallery {
+		margin-top: 24px;
+		padding: 0 4px;
+	}
 	.origin-panel {
+		position: relative;
 		background: #fff;
 		border: 1px solid var(--border);
 		padding: 32px;
+		overflow: hidden;
 	}
 	.origin-panel h3 {
 		font-size: 1.6rem;
@@ -794,6 +834,22 @@ import type { PageData } from './$types';
 		font-size: 0.88rem;
 		color: var(--taupe);
 		line-height: 1.7;
+	}
+	.origin-panel--photo {
+		background-size: cover;
+		background-position: center;
+		border-color: transparent;
+		min-height: 260px;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+	}
+	.origin-panel--photo .eyebrow {
+		color: #f0c9a8;
+	}
+	.origin-panel--photo h3,
+	.origin-panel--photo p {
+		color: #fff;
 	}
 	.proof {
 		padding: 72px 0;
@@ -883,12 +939,9 @@ import type { PageData } from './$types';
 	.gift-card-img {
 		width: 100%;
 		aspect-ratio: 4/3;
-		background: var(--panel);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
+		background-color: var(--panel);
+		background-size: cover;
+		background-position: center;
 		border-bottom: 1px solid var(--border);
 	}
 	.gift-card-body {
@@ -919,6 +972,9 @@ import type { PageData } from './$types';
 		}
 		.proof-inner {
 			justify-content: flex-start;
+		}
+		.origin-gallery :global(.grid) {
+			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 		}
 	}
 	@media (max-width: 580px) {
