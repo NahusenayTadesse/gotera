@@ -28,12 +28,6 @@
 
 <svelte:head>
 	<title>{m.acctcancel_page_title()}</title>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap"
-		rel="stylesheet"
-	/>
 </svelte:head>
 
 <div class="wrap">
@@ -43,9 +37,10 @@
 		<p class="lead">
 			{m.acctcancel_lead({
 				count: data.plansList.length,
-				planWord: data.plansList.length === 1
-					? m.acctcancel_plan_word_singular()
-					: m.acctcancel_plan_word_plural()
+				planWord:
+					data.plansList.length === 1
+						? m.acctcancel_plan_word_singular()
+						: m.acctcancel_plan_word_plural()
 			})}
 		</p>
 
@@ -54,7 +49,11 @@
 			<fieldset class="plan-list">
 				<legend>{m.acctcancel_which_plan()}</legend>
 				{#each data.plansList as p (p.id)}
-					<label class="plan-row" class:active={$form.subscriptionId === p.id} class:disabled={p.cancelAtPeriodEnd}>
+					<label
+						class="plan-row"
+						class:active={$form.subscriptionId === p.id}
+						class:disabled={p.cancelAtPeriodEnd}
+					>
 						<input
 							type="radio"
 							name="subscriptionId"
@@ -65,10 +64,11 @@
 						<div class="plan-info">
 							<div class="plan-top">
 								<span class="plan-name">{p.planName}</span>
-								<span class="plan-price">£{p.price.toFixed(2)}</span>
+								<span class="plan-price">{p.price}</span>
 							</div>
 							<div class="plan-meta">
-								{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> · {/if}{p.freq}
+								{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> ·
+								{/if}{p.freq}
 							</div>
 							{#if p.cancelAtPeriodEnd}
 								<span class="plan-flag"
@@ -93,7 +93,10 @@
 				</div>
 
 				<fieldset class="reasons">
-					<legend>{m.acctcancel_reason_legend()} <span class="opt">({m.acctcancel_optional()})</span></legend>
+					<legend
+						>{m.acctcancel_reason_legend()}
+						<span class="opt">({m.acctcancel_optional()})</span></legend
+					>
 					{#each reasons as r (r.value)}
 						<label class="reason" class:active={$form.reason === r.value}>
 							<input type="radio" name="reason" value={r.value} bind:group={$form.reason} />
@@ -103,8 +106,16 @@
 				</fieldset>
 
 				<div class="field">
-					<label class="field-label" for="feedback">{m.acctcancel_feedback_label()} <span class="opt">({m.acctcancel_optional()})</span></label>
-					<textarea id="feedback" name="feedback" class="textarea" rows="3" bind:value={$form.feedback}></textarea>
+					<label class="field-label" for="feedback"
+						>{m.acctcancel_feedback_label()}
+						<span class="opt">({m.acctcancel_optional()})</span></label
+					>
+					<textarea
+						id="feedback"
+						name="feedback"
+						class="textarea"
+						rows="3"
+						bind:value={$form.feedback}></textarea>
 				</div>
 
 				<label class="confirm">
@@ -134,54 +145,272 @@
 </div>
 
 <style>
-	:global(:root) {
-		--cream: #faf8f4; --ink: #1a1a1a; --copper: #b5622a; --taupe: #7a746e; --border: #e8e4e0; --panel: #f5f2ed;
+	.wrap {
+		min-height: 100vh;
+		display: grid;
+		place-items: center;
+		padding: 40px 16px;
+		background: linear-gradient(180deg, #fcfbf8 0%, var(--cream) 100%);
+		font-family: 'Jost', sans-serif;
+		color: var(--ink);
 	}
-	.wrap { min-height: 100vh; display: grid; place-items: center; padding: 40px 16px; background: linear-gradient(180deg, #fcfbf8 0%, var(--cream) 100%); font-family: 'Jost', sans-serif; color: var(--ink); }
-	.card { width: min(540px, 100%); background: #fff; border: 1px solid var(--border); padding: 40px 36px; }
-	.eyebrow { display: block; margin-bottom: 10px; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--copper); }
-	h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-style: italic; font-size: clamp(1.9rem, 5vw, 2.5rem); line-height: 1.02; margin-bottom: 14px; }
-	.lead { font-size: 0.9rem; color: #433e39; line-height: 1.65; margin-bottom: 24px; }
-	.form { display: flex; flex-direction: column; gap: 18px; }
-	fieldset { border: none; padding: 0; margin: 0; }
-	legend { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--copper); font-weight: 500; margin-bottom: 10px; padding: 0; }
-	.opt { text-transform: none; letter-spacing: 0; color: rgba(122,116,110,.7); font-weight: 400; }
+	.card {
+		width: min(540px, 100%);
+		background: #fff;
+		border: 1px solid var(--border);
+		padding: 40px 36px;
+	}
+	.eyebrow {
+		display: block;
+		margin-bottom: 10px;
+		font-size: 0.7rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--copper);
+	}
+	h1 {
+		font-family: 'Cormorant Garamond', serif;
+		font-weight: 600;
+		font-style: italic;
+		font-size: clamp(1.9rem, 5vw, 2.5rem);
+		line-height: 1.02;
+		margin-bottom: 14px;
+	}
+	.lead {
+		font-size: 0.9rem;
+		color: #433e39;
+		line-height: 1.65;
+		margin-bottom: 24px;
+	}
+	.form {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+	}
+	fieldset {
+		border: none;
+		padding: 0;
+		margin: 0;
+	}
+	legend {
+		font-size: 0.66rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: var(--copper);
+		font-weight: 500;
+		margin-bottom: 10px;
+		padding: 0;
+	}
+	.opt {
+		text-transform: none;
+		letter-spacing: 0;
+		color: rgba(122, 116, 110, 0.7);
+		font-weight: 400;
+	}
 	/* Plan chooser */
-	.plan-list { display: flex; flex-direction: column; gap: 8px; }
-	.plan-row { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--border); cursor: pointer; transition: border-color 0.12s, background 0.12s; }
-	.plan-row:hover:not(.disabled) { border-color: rgba(181,98,42,.35); }
-	.plan-row.active { border-color: var(--copper); background: #fbf4ee; }
-	.plan-row.disabled { opacity: 0.55; cursor: not-allowed; }
-	.plan-row input { margin-top: 3px; accent-color: var(--copper); flex-shrink: 0; }
-	.plan-info { flex: 1; }
-	.plan-top { display: flex; justify-content: space-between; align-items: baseline; }
-	.plan-name { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 500; color: var(--ink); }
-	.plan-price { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; color: var(--copper); }
-	.plan-meta { font-size: 0.76rem; color: var(--taupe); margin-top: 2px; }
-	.plan-addr { color: var(--ink); font-weight: 500; }
-	.plan-flag { display: inline-block; margin-top: 6px; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #b23a2a; }
+	.plan-list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.plan-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 14px;
+		border: 1px solid var(--border);
+		cursor: pointer;
+		transition:
+			border-color 0.12s,
+			background 0.12s;
+	}
+	.plan-row:hover:not(.disabled) {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.plan-row.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.plan-row.disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.plan-row input {
+		margin-top: 3px;
+		accent-color: var(--copper);
+		flex-shrink: 0;
+	}
+	.plan-info {
+		flex: 1;
+	}
+	.plan-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+	}
+	.plan-name {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.15rem;
+		font-weight: 500;
+		color: var(--ink);
+	}
+	.plan-price {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.1rem;
+		color: var(--copper);
+	}
+	.plan-meta {
+		font-size: 0.76rem;
+		color: var(--taupe);
+		margin-top: 2px;
+	}
+	.plan-addr {
+		color: var(--ink);
+		font-weight: 500;
+	}
+	.plan-flag {
+		display: inline-block;
+		margin-top: 6px;
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: #b23a2a;
+	}
 	/* Keep note */
-	.keep-note { font-size: 0.85rem; color: #433e39; line-height: 1.6; padding: 14px; background: var(--panel); border: 1px solid var(--border); }
-	.keep-note strong { color: var(--ink); }
+	.keep-note {
+		font-size: 0.85rem;
+		color: #433e39;
+		line-height: 1.6;
+		padding: 14px;
+		background: var(--panel);
+		border: 1px solid var(--border);
+	}
+	.keep-note strong {
+		color: var(--ink);
+	}
 	/* Reasons */
-	.reasons { display: flex; flex-direction: column; gap: 8px; }
-	.reason { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); cursor: pointer; font-size: 0.88rem; color: #433e39; transition: border-color 0.12s, background 0.12s; }
-	.reason:hover { border-color: rgba(181,98,42,.35); }
-	.reason.active { border-color: var(--copper); background: #fbf4ee; }
-	.reason input { accent-color: var(--copper); }
-	.field { display: flex; flex-direction: column; }
-	.field-label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--copper); font-weight: 500; margin-bottom: 8px; }
-	.textarea { width: 100%; border: 1px solid rgba(122,116,110,.22); background: #fff; padding: 10px 12px; font-family: 'Jost', sans-serif; font-size: 0.9rem; color: var(--ink); resize: vertical; line-height: 1.5; }
-	.textarea:focus { outline: none; border-color: var(--copper); }
-	.confirm { display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; color: #433e39; cursor: pointer; line-height: 1.5; }
-	.confirm input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--copper); flex-shrink: 0; }
-	.confirm strong { color: var(--ink); }
-	.form-error { display: block; font-size: 0.76rem; color: #b23a2a; }
-	.actions { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
-	.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 20px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 500; border-radius: 2px; cursor: pointer; font-family: 'Jost', sans-serif; text-decoration: none; border: 1px solid transparent; flex: 1; }
-	.btn-ghost { border-color: var(--border); background: #fff; color: var(--ink); }
-	.btn-ghost:hover { background: var(--panel); }
-	.btn-danger { background: #fff; border-color: #b23a2a; color: #b23a2a; }
-	.btn-danger:hover:not([disabled]) { background: #b23a2a; color: #fff; }
-	.btn-danger[disabled] { opacity: 0.5; cursor: not-allowed; }
+	.reasons {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.reason {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 12px 14px;
+		border: 1px solid var(--border);
+		cursor: pointer;
+		font-size: 0.88rem;
+		color: #433e39;
+		transition:
+			border-color 0.12s,
+			background 0.12s;
+	}
+	.reason:hover {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.reason.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.reason input {
+		accent-color: var(--copper);
+	}
+	.field {
+		display: flex;
+		flex-direction: column;
+	}
+	.field-label {
+		font-size: 0.66rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: var(--copper);
+		font-weight: 500;
+		margin-bottom: 8px;
+	}
+	.textarea {
+		width: 100%;
+		border: 1px solid rgba(122, 116, 110, 0.22);
+		background: #fff;
+		padding: 10px 12px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.9rem;
+		color: var(--ink);
+		resize: vertical;
+		line-height: 1.5;
+	}
+	.textarea:focus {
+		outline: none;
+		border-color: var(--copper);
+	}
+	.confirm {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		font-size: 0.85rem;
+		color: #433e39;
+		cursor: pointer;
+		line-height: 1.5;
+	}
+	.confirm input {
+		margin-top: 2px;
+		width: 16px;
+		height: 16px;
+		accent-color: var(--copper);
+		flex-shrink: 0;
+	}
+	.confirm strong {
+		color: var(--ink);
+	}
+	.form-error {
+		display: block;
+		font-size: 0.76rem;
+		color: #b23a2a;
+	}
+	.actions {
+		display: flex;
+		gap: 10px;
+		margin-top: 6px;
+		flex-wrap: wrap;
+	}
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 46px;
+		padding: 0 20px;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		font-weight: 500;
+		border-radius: 2px;
+		cursor: pointer;
+		font-family: 'Jost', sans-serif;
+		text-decoration: none;
+		border: 1px solid transparent;
+		flex: 1;
+	}
+	.btn-ghost {
+		border-color: var(--border);
+		background: #fff;
+		color: var(--ink);
+	}
+	.btn-ghost:hover {
+		background: var(--panel);
+	}
+	.btn-danger {
+		background: #fff;
+		border-color: #b23a2a;
+		color: #b23a2a;
+	}
+	.btn-danger:hover:not([disabled]) {
+		background: #b23a2a;
+		color: #fff;
+	}
+	.btn-danger[disabled] {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 </style>

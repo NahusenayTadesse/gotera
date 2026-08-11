@@ -2,6 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { alias } from 'drizzle-orm/mysql-core';
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { z } from 'zod/v4';
 
 // Adjust to your project's paths.
 import { db } from '$lib/server/db';
@@ -16,16 +17,26 @@ import {
 	addons as addonsTable
 } from '$lib/server/db/schema';
 import { auth } from '$lib/server/auth';
-
-// Cut-off is derived (no field on deliveries). Change the rule/offset to match ops.
-const CUTOFF_DAYS = 4;
-
-const weekdayOf = (d: Date) => new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(d);
-const monthOf = (d: Date) => new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(d);
-const fullDateLabel = (d: Date) => `${weekdayOf(d)}, ${d.getDate()} ${monthOf(d)}`;
+import { fullDate, instantDate } from '$lib/format';
+import { cutoffDateFor, isPastCutoff } from '$lib/delivery';
 
 const intervalLabel = (i: string) =>
 	i === 'monthly' ? 'monthly' : i === 'bi_monthly' ? 'bi-monthly' : 'one-time';
+
+// Hand-parsed form fields are easy to get wrong (`Number('x')` is NaN, and
+// `NaN < 1` is false), so every mutating action validates through a schema.
+const deliveryIdSchema = z.object({ deliveryId: z.string().min(1) });
+const subscriptionIdSchema = z.object({ subscriptionId: z.string().min(1) });
+const addAddonSchema = z.object({
+	addonId: z.string().min(1),
+	deliveryId: z.string().min(1),
+	quantity: z.coerce.number().int().min(1).max(20)
+});
+
+function parseForm<T extends z.ZodType>(schema: T, data: FormData): z.infer<T> | null {
+	const result = schema.safeParse(Object.fromEntries(data));
+	return result.success ? result.data : null;
+}
 
 async function getSubscriber(userId: string) {
 	const [sub] = await db.select().from(subscribers).where(eq(subscribers.userId, userId));
@@ -37,15 +48,33 @@ async function getOwnedSubscription(subscriberId: string, subscriptionId: string
 	const [row] = await db
 		.select()
 		.from(subscriptions)
-		.where(
-			and(eq(subscriptions.id, subscriptionId), eq(subscriptions.subscriberId, subscriberId))
-		);
+		.where(and(eq(subscriptions.id, subscriptionId), eq(subscriptions.subscriberId, subscriberId)));
 	return row ?? null;
+}
+
+/** Ownership, availability and cut-off in one place — used by `skip` and `addAddon`. */
+async function getChangeableDelivery(subscriberId: string, deliveryId: string) {
+	const [delivery] = await db
+		.select({ id: deliveries.id, scheduledDate: deliveries.scheduledDate })
+		.from(deliveries)
+		.where(
+			and(
+				eq(deliveries.id, deliveryId),
+				eq(deliveries.subscriberId, subscriberId),
+				eq(deliveries.status, 'scheduled')
+			)
+		);
+
+	if (!delivery) return { delivery: null, error: 'That delivery is no longer available.' as const };
+	if (isPastCutoff(delivery.scheduledDate)) {
+		return { delivery: null, error: 'The cut-off for this delivery has passed.' as const };
+	}
+	return { delivery, error: null };
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Private page — adjust to your Better Auth session.
-	if (!locals.user) throw redirect(303, '/signin');
+	if (!locals.user) throw redirect(303, '/login');
 
 	const sub = await getSubscriber(locals.user.id);
 	if (!sub) return { subscriptions: [], addons: [] };
@@ -135,13 +164,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const delivery = nextDeliveryBySub.get(r.id);
 		let nextDelivery = null;
 		if (delivery) {
-			const d = new Date(delivery.scheduledDate);
-			const cut = new Date(d);
-			cut.setDate(cut.getDate() - CUTOFF_DAYS);
 			nextDelivery = {
 				id: delivery.id,
-				dateLabel: fullDateLabel(d),
-				cutoffLabel: fullDateLabel(cut),
+				dateLabel: fullDate(delivery.scheduledDate),
+				cutoffLabel: fullDate(cutoffDateFor(delivery.scheduledDate)),
+				// Drives whether the UI offers Skip / Add at all.
+				pastCutoff: isPastCutoff(delivery.scheduledDate),
 				addressLine: `${delivery.line1}, ${delivery.city}`
 			};
 		}
@@ -150,14 +178,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 			id: r.id,
 			planName: r.planName,
 			packsLabel: `${r.packs} packs · ${intervalLabel(r.interval)}`,
+			interval: r.interval,
 			quantity: qty,
 			unitPricePence: r.pricePence,
 			pricePence: r.pricePence * qty + addonsPence,
 			status: r.status, // 'pending' | 'active' | 'paused' | 'cancelled'
 			cancelAtPeriodEnd: r.cancelAtPeriodEnd,
-			nextPaymentDate: r.currentPeriodEnd ? fullDateLabel(new Date(r.currentPeriodEnd)) : null,
+			nextPaymentDate: r.currentPeriodEnd ? instantDate(r.currentPeriodEnd) : null,
 			pendingPlanName: r.pendingPlanName,
-			pendingPlanAt: r.pendingPlanAt ? fullDateLabel(new Date(r.pendingPlanAt)) : null,
+			pendingPlanAt: r.pendingPlanAt ? instantDate(r.pendingPlanAt) : null,
 			addressLine: r.addressLine1 ? `${r.addressLine1}, ${r.addressCity}` : null,
 			nextDelivery
 		};
@@ -183,14 +212,24 @@ export const actions: Actions = {
 		const sub = await getSubscriber(locals.user.id);
 		if (!sub) return fail(400, { message: 'No subscription found.' });
 
-		const id = String((await request.formData()).get('deliveryId') ?? '');
-		if (!id) return fail(400, { message: 'Missing delivery.' });
+		const input = parseForm(deliveryIdSchema, await request.formData());
+		if (!input) return fail(400, { message: 'Missing delivery.' });
 
-		// Ownership enforced in the WHERE clause.
+		// Ownership, 'scheduled' status and the cut-off are all enforced before the write,
+		// so a dispatched or delivered order can never be flipped to 'skipped'.
+		const { delivery, error } = await getChangeableDelivery(sub.id, input.deliveryId);
+		if (!delivery) return fail(400, { message: error });
+
 		await db
 			.update(deliveries)
 			.set({ status: 'skipped' })
-			.where(and(eq(deliveries.id, id), eq(deliveries.subscriberId, sub.id)));
+			.where(
+				and(
+					eq(deliveries.id, delivery.id),
+					eq(deliveries.subscriberId, sub.id),
+					eq(deliveries.status, 'scheduled')
+				)
+			);
 
 		return { message: 'Delivery skipped.' };
 	},
@@ -201,18 +240,17 @@ export const actions: Actions = {
 		const sub = await getSubscriber(locals.user.id);
 		if (!sub) return fail(400, { message: 'No subscription found.' });
 
-		const subscriptionId = String((await request.formData()).get('subscriptionId') ?? '');
-		const owned = await getOwnedSubscription(sub.id, subscriptionId);
+		const input = parseForm(subscriptionIdSchema, await request.formData());
+		if (!input) return fail(400, { message: 'That plan could not be found.' });
+
+		const owned = await getOwnedSubscription(sub.id, input.subscriptionId);
 		if (!owned) return fail(400, { message: 'That plan could not be found.' });
 		if (owned.status !== 'active') {
 			return fail(400, { message: 'Only active plans can be paused.' });
 		}
 
 		// ── Stripe hook point: pause_collection on this subscription ──
-		await db
-			.update(subscriptions)
-			.set({ status: 'paused' })
-			.where(eq(subscriptions.id, subscriptionId));
+		await db.update(subscriptions).set({ status: 'paused' }).where(eq(subscriptions.id, owned.id));
 
 		return { message: 'Plan paused.' };
 	},
@@ -222,18 +260,17 @@ export const actions: Actions = {
 		const sub = await getSubscriber(locals.user.id);
 		if (!sub) return fail(400, { message: 'No subscription found.' });
 
-		const subscriptionId = String((await request.formData()).get('subscriptionId') ?? '');
-		const owned = await getOwnedSubscription(sub.id, subscriptionId);
+		const input = parseForm(subscriptionIdSchema, await request.formData());
+		if (!input) return fail(400, { message: 'That plan could not be found.' });
+
+		const owned = await getOwnedSubscription(sub.id, input.subscriptionId);
 		if (!owned) return fail(400, { message: 'That plan could not be found.' });
 		if (owned.status !== 'paused') {
 			return fail(400, { message: 'Only paused plans can be resumed.' });
 		}
 
 		// ── Stripe hook point: remove pause_collection on this subscription ──
-		await db
-			.update(subscriptions)
-			.set({ status: 'active' })
-			.where(eq(subscriptions.id, subscriptionId));
+		await db.update(subscriptions).set({ status: 'active' }).where(eq(subscriptions.id, owned.id));
 
 		return { message: 'Plan resumed.' };
 	},
@@ -244,44 +281,33 @@ export const actions: Actions = {
 		const sub = await getSubscriber(locals.user.id);
 		if (!sub) return fail(400, { message: 'No subscription found.' });
 
-		const data = await request.formData();
-		const addonId = String(data.get('addonId') ?? '');
-		const deliveryId = String(data.get('deliveryId') ?? '');
-		const quantity = Math.max(0, Number(data.get('quantity') ?? 0));
-		if (!addonId || !deliveryId || quantity < 1) return fail(400, { message: 'Nothing to add.' });
+		const input = parseForm(addAddonSchema, await request.formData());
+		if (!input) return fail(400, { message: 'Nothing to add.' });
 
-		// Ownership + availability enforced together.
-		const [delivery] = await db
-			.select({ id: deliveries.id })
-			.from(deliveries)
-			.where(
-				and(
-					eq(deliveries.id, deliveryId),
-					eq(deliveries.subscriberId, sub.id),
-					eq(deliveries.status, 'scheduled')
-				)
-			);
-		if (!delivery) return fail(400, { message: 'That delivery is no longer available.' });
+		const { delivery, error } = await getChangeableDelivery(sub.id, input.deliveryId);
+		if (!delivery) return fail(400, { message: error });
 
-		const [addon] = await db.select().from(addonsTable).where(eq(addonsTable.id, addonId));
+		const [addon] = await db.select().from(addonsTable).where(eq(addonsTable.id, input.addonId));
 		if (!addon) return fail(400, { message: 'Unknown add-on.' });
 
 		const [existing] = await db
 			.select()
 			.from(deliveryAddons)
-			.where(and(eq(deliveryAddons.deliveryId, delivery.id), eq(deliveryAddons.addonId, addonId)));
+			.where(
+				and(eq(deliveryAddons.deliveryId, delivery.id), eq(deliveryAddons.addonId, input.addonId))
+			);
 
 		if (existing) {
 			await db
 				.update(deliveryAddons)
-				.set({ quantity: existing.quantity + quantity })
+				.set({ quantity: existing.quantity + input.quantity })
 				.where(eq(deliveryAddons.id, existing.id));
 		} else {
 			await db.insert(deliveryAddons).values({
 				id: crypto.randomUUID(),
 				deliveryId: delivery.id,
-				addonId,
-				quantity
+				addonId: input.addonId,
+				quantity: input.quantity
 			});
 		}
 
@@ -292,5 +318,8 @@ export const actions: Actions = {
 		await auth.api.signOut({
 			headers: event.request.headers
 		});
+		// Clear the page's data and land somewhere public — without this the customer
+		// stays on /account looking at a signed-in view they no longer have a session for.
+		redirect(303, '/login');
 	}
 };

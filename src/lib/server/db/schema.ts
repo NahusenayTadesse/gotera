@@ -107,7 +107,10 @@ export const subscriberAddons = mysqlTable(
 		quantity: int('quantity').default(1).notNull(),
 		...secureFields
 	},
-	(table) => [unique('subscriber_addon_uniq').on(table.subscriberId, table.addonId)]
+	// Scoped to the subscription, not the subscriber: a person holding two plans can
+	// legitimately have the same recurring add-on on each, and the per-subscription
+	// pricing on the account page assumes exactly that.
+	(table) => [unique('subscriber_addon_uniq').on(table.subscriptionId, table.addonId)]
 );
 
 // ── Deliveries ──
@@ -149,7 +152,8 @@ export const deliveryAddons = mysqlTable('delivery_addons', {
 	addonId: varchar('addon_id', { length: 36 })
 		.notNull()
 		.references(() => addons.id),
-	quantity: int('quantity').default(1).notNull()
+	quantity: int('quantity').default(1).notNull(),
+	...secureFields
 });
 
 // ── Referrals ──

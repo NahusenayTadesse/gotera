@@ -1,42 +1,68 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { toast } from 'svelte-sonner';
+	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
+	import { money, monthlyEquivalentPence } from '$lib/format';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	// Per-add-on quantity steppers (client state; posted on Add).
-	let quantities = $state<Record<string, number>>(
-		Object.fromEntries(data.addons.map((a) => [a.id, 0]))
-	);
+	// Per-add-on quantity steppers (client state; posted on Add). Reading through
+	// `qtyOf` keeps this correct when the catalogue changes underneath us.
+	let quantities = $state<Record<string, number>>({});
+	const qtyOf = (id: string) => quantities[id] ?? 0;
 
 	// Counts for the summary header.
 	const activeCount = $derived(data.subscriptions.filter((s) => s.status === 'active').length);
 	const pausedCount = $derived(data.subscriptions.filter((s) => s.status === 'paused').length);
-	// pricePence already includes each subscription's quantity, so this stays correct.
+	// Only plans that are actually billing count toward the recurring total, and each
+	// is normalised to a monthly figure so bi-monthly plans aren't double-counted.
+	// pricePence already includes each subscription's quantity.
 	const totalMonthlyPence = $derived(
 		data.subscriptions
-		
-			.reduce((sum, s) => sum + s.pricePence, 0)
+			.filter((s) => s.status === 'active' && !s.cancelAtPeriodEnd)
+			.reduce((sum, s) => sum + monthlyEquivalentPence(s.pricePence, s.interval), 0)
 	);
 	// Total units across all subscriptions, for the summary chip.
-	const totalUnits = $derived(
-		data.subscriptions.reduce((sum, s) => sum + (s.quantity ?? 1), 0)
-	);
+	const totalUnits = $derived(data.subscriptions.reduce((sum, s) => sum + (s.quantity ?? 1), 0));
 
-	// Which subscription's upcoming delivery add-ons should land on.
-	const deliverableSubs = $derived(data.subscriptions.filter((s) => s.nextDelivery));
-	let selectedSubId = $derived(deliverableSubs[0]?.id ?? '');
+	// Which subscription's upcoming delivery add-ons should land on. Only deliveries
+	// still inside their cut-off can be changed.
+	const deliverableSubs = $derived(
+		data.subscriptions.filter((s) => s.nextDelivery && !s.nextDelivery.pastCutoff)
+	);
+	// Plain state, not derived: `update()` after every action would otherwise reset the
+	// picker to the first plan and silently send the next add-on to the wrong delivery.
+	let selectedSubId = $state('');
+	$effect(() => {
+		if (!deliverableSubs.some((s) => s.id === selectedSubId)) {
+			selectedSubId = deliverableSubs[0]?.id ?? '';
+		}
+	});
 	const selectedDelivery = $derived(
 		deliverableSubs.find((s) => s.id === selectedSubId)?.nextDelivery ?? null
 	);
 
+	// Tracks which form is mid-flight so its button can be disabled — double-clicking
+	// "Add" would otherwise add the item twice.
+	let pending = $state<string | null>(null);
+
 	function updateQty(id: string, change: number) {
-		quantities[id] = Math.max(0, (quantities[id] ?? 0) + change);
+		quantities[id] = Math.max(0, qtyOf(id) + change);
 	}
 
-	const gbp = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+	const gbp = (pence: number) => money(pence);
+
+	// A cancellation redirects back here with ?cancelled=1; without this the customer
+	// gets no acknowledgement that it worked.
+	let cancelNoticeShown = false;
+	$effect(() => {
+		if (page.url.searchParams.get('cancelled') === '1' && !cancelNoticeShown) {
+			cancelNoticeShown = true;
+			toast.success(m.account_cancel_confirmed());
+		}
+	});
 
 	const statusLabel: Record<string, string> = $derived({
 		pending: m.account_status_pending(),
@@ -52,9 +78,11 @@
 	});
 
 	// Shared enhance handler: toast the action's message and refresh data.
-	function withToast(resetAddonId?: string) {
-		return () =>
-			async ({ result, update }: any) => {
+	// `formKey` marks this form as in-flight so its submit button can be disabled.
+	function withToast(formKey: string, resetAddonId?: string) {
+		return () => {
+			pending = formKey;
+			return async ({ result, update }: any) => {
 				const msg = result?.data?.message;
 				if (result.type === 'success') {
 					if (msg) toast.success(msg);
@@ -63,10 +91,15 @@
 					toast.error(msg ?? m.account_toast_error_generic());
 				}
 				await update();
+				pending = null;
 			};
+		};
 	}
 </script>
 
+<svelte:head>
+	<title>{m.account_page_title()}</title>
+</svelte:head>
 
 {#if data.subscriptions.length === 0}
 	<!-- No active subscriptions -->
@@ -88,14 +121,25 @@
 		<div class="summary-count">
 			<span class="summary-n">{data.subscriptions.length}</span>
 			<span class="summary-label"
-				>{data.subscriptions.length === 1 ? m.account_subscription_singular() : m.account_subscription_plural()}</span
+				>{data.subscriptions.length === 1
+					? m.account_subscription_singular()
+					: m.account_subscription_plural()}</span
 			>
 		</div>
 		<div class="summary-breakdown">
-			{#if activeCount}<span class="summary-chip chip-active">{m.account_chip_active({ count: activeCount })}</span>{/if}
-			{#if pausedCount}<span class="summary-chip chip-paused">{m.account_chip_paused({ count: pausedCount })}</span>{/if}
-			{#if totalUnits > data.subscriptions.length}<span class="summary-chip">{m.account_chip_units({ count: totalUnits })}</span>{/if}
-			<span class="summary-total">{gbp(totalMonthlyPence)} <span class="summary-total-label">{m.account_month_combined()}</span></span>
+			{#if activeCount}<span class="summary-chip chip-active"
+					>{m.account_chip_active({ count: activeCount })}</span
+				>{/if}
+			{#if pausedCount}<span class="summary-chip chip-paused"
+					>{m.account_chip_paused({ count: pausedCount })}</span
+				>{/if}
+			{#if totalUnits > data.subscriptions.length}<span class="summary-chip"
+					>{m.account_chip_units({ count: totalUnits })}</span
+				>{/if}
+			<span class="summary-total"
+				>{gbp(totalMonthlyPence)}
+				<span class="summary-total-label">{m.account_month_combined()}</span></span
+			>
 		</div>
 	</div>
 
@@ -106,9 +150,13 @@
 				<h2>
 					{sub.planName}
 					{#if sub.quantity > 1}<span class="qty-pill">×{sub.quantity}</span>{/if}
-					<span class="status-pill status-{sub.status}">{statusLabel[sub.status] ?? sub.status}</span>
+					<span class="status-pill status-{sub.status}"
+						>{statusLabel[sub.status] ?? sub.status}</span
+					>
 				</h2>
-				<a href="/account/change-plan?subscriptionId={sub.id}" class="block-action">{m.account_change_plan_link()}</a>
+				<a href="/account/change-plan?subscriptionId={sub.id}" class="block-action"
+					>{m.account_change_plan_link()}</a
+				>
 			</div>
 
 			<div class="plan-meta-row">
@@ -119,12 +167,17 @@
 
 			{#if sub.cancelAtPeriodEnd}
 				<div class="notice notice-warning">
-					{#if sub.nextPaymentDate}{m.account_notice_cancelling_with_date({ date: sub.nextPaymentDate })}{:else}{m.account_notice_cancelling()}{/if}
+					{#if sub.nextPaymentDate}{m.account_notice_cancelling_with_date({
+							date: sub.nextPaymentDate
+						})}{:else}{m.account_notice_cancelling()}{/if}
 				</div>
 			{:else if sub.pendingPlanName}
 				<div class="notice">
 					{#if sub.pendingPlanAt}
-						{m.account_notice_switching_with_date({ plan: sub.pendingPlanName, date: sub.pendingPlanAt })}
+						{m.account_notice_switching_with_date({
+							plan: sub.pendingPlanName,
+							date: sub.pendingPlanAt
+						})}
 					{:else}
 						{m.account_notice_switching({ plan: sub.pendingPlanName })}
 					{/if}
@@ -137,14 +190,18 @@
 					{#if sub.nextDelivery}
 						<div class="delivery-date">{sub.nextDelivery.dateLabel}</div>
 						<div class="delivery-detail">{sub.nextDelivery.addressLine}</div>
-						<span class="cutoff">{m.account_cutoff_label({ cutoff: sub.nextDelivery.cutoffLabel })}</span>
+						{#if sub.nextDelivery.pastCutoff}
+							<span class="cutoff cutoff-closed">{m.account_cutoff_passed()}</span>
+						{:else}
+							<span class="cutoff"
+								>{m.account_cutoff_label({ cutoff: sub.nextDelivery.cutoffLabel })}</span
+							>
+						{/if}
 					{:else}
 						<div class="delivery-date">{m.account_no_delivery_scheduled()}</div>
 						<div class="delivery-detail">
 							{#if sub.status === 'paused'}
 								{m.account_delivery_note_paused()}
-							{:else if sub.status === 'cancelled'}
-								{m.account_delivery_note_cancelled()}
 							{:else if sub.addressLine}
 								{m.account_delivery_note_usually_sent({ address: sub.addressLine })}
 							{:else}
@@ -154,26 +211,38 @@
 					{/if}
 				</div>
 				<div class="delivery-btns">
-					{#if sub.nextDelivery}
-						<form method="POST" action="?/skip" use:enhance={withToast()}>
+					{#if sub.nextDelivery && !sub.nextDelivery.pastCutoff}
+						<form method="POST" action="?/skip" use:enhance={withToast(`skip:${sub.id}`)}>
 							<input type="hidden" name="deliveryId" value={sub.nextDelivery.id} />
-							<button type="submit" class="btn-ghost btn-full">{m.account_skip_delivery()}</button>
+							<button
+								type="submit"
+								class="btn-ghost btn-full"
+								disabled={pending === `skip:${sub.id}`}>{m.account_skip_delivery()}</button
+							>
 						</form>
 					{/if}
 
 					{#if sub.status === 'paused'}
-						<form method="POST" action="?/resume" use:enhance={withToast()}>
+						<form method="POST" action="?/resume" use:enhance={withToast(`resume:${sub.id}`)}>
 							<input type="hidden" name="subscriptionId" value={sub.id} />
-							<button type="submit" class="btn-ghost btn-full">{m.account_resume_plan()}</button>
+							<button
+								type="submit"
+								class="btn-ghost btn-full"
+								disabled={pending === `resume:${sub.id}`}>{m.account_resume_plan()}</button
+							>
 						</form>
 					{:else if sub.status === 'active' && !sub.cancelAtPeriodEnd}
-						<form method="POST" action="?/pause" use:enhance={withToast()}>
+						<form method="POST" action="?/pause" use:enhance={withToast(`pause:${sub.id}`)}>
 							<input type="hidden" name="subscriptionId" value={sub.id} />
-							<button type="submit" class="btn-ghost btn-full">{m.account_pause_plan()}</button>
+							<button
+								type="submit"
+								class="btn-ghost btn-full"
+								disabled={pending === `pause:${sub.id}`}>{m.account_pause_plan()}</button
+							>
 						</form>
 					{/if}
 
-					{#if sub.status !== 'cancelled' && !sub.cancelAtPeriodEnd}
+					{#if !sub.cancelAtPeriodEnd}
 						<a href="/account/cancel?subscriptionId={sub.id}" class="btn-ghost btn-full">
 							{m.account_cancel_plan()}
 						</a>
@@ -181,29 +250,32 @@
 				</div>
 			</div>
 
-			<div class="stats-row">
+			<!-- A description list: each label genuinely describes the value under it. -->
+			<dl class="stats-row">
 				<div class="stat">
-					<span class="stat-label">{m.account_stat_plan_label()}</span>
-					<div class="stat-value">{sub.planName}</div>
-					<div class="stat-sub">
-						{sub.packsLabel}{#if sub.quantity > 1} · {m.account_qty_label({ quantity: sub.quantity })}{/if}
-					</div>
+					<dt class="stat-label">{m.account_stat_plan_label()}</dt>
+					<dd class="stat-value">{sub.planName}</dd>
+					<dd class="stat-sub">
+						{sub.packsLabel}{#if sub.quantity > 1}
+							· {m.account_qty_label({ quantity: sub.quantity })}{/if}
+					</dd>
 				</div>
 				<div class="stat">
-					<span class="stat-label">{m.account_stat_next_payment_label()}</span>
-					<div class="stat-value">{gbp(sub.pricePence)}</div>
-					<div class="stat-sub">
-						{#if sub.quantity > 1}{gbp(sub.unitPricePence)} × {sub.quantity} · {/if}{sub.nextPaymentDate ?? '—'}
-					</div>
+					<dt class="stat-label">{m.account_stat_next_payment_label()}</dt>
+					<dd class="stat-value">{gbp(sub.pricePence)}</dd>
+					<dd class="stat-sub">
+						{#if sub.quantity > 1}{gbp(sub.unitPricePence)} × {sub.quantity} ·
+						{/if}{sub.nextPaymentDate ?? '—'}
+					</dd>
 				</div>
 				<div class="stat">
-					<span class="stat-label">{m.account_stat_status_label()}</span>
-					<div class="stat-value" class:green={sub.status === 'active'}>
+					<dt class="stat-label">{m.account_stat_status_label()}</dt>
+					<dd class="stat-value" class:green={sub.status === 'active'}>
 						{statusLabel[sub.status] ?? sub.status}
-					</div>
-					<div class="stat-sub">{statusSub[sub.status] ?? ''}</div>
+					</dd>
+					<dd class="stat-sub">{statusSub[sub.status] ?? ''}</dd>
 				</div>
-			</div>
+			</dl>
 		</div>
 	{/each}
 
@@ -212,7 +284,9 @@
 		<div class="block-header">
 			<h2>{m.account_add_to_delivery_title()}</h2>
 			{#if selectedDelivery}
-				<span class="block-action text-normal">{m.account_before_cutoff({ cutoff: selectedDelivery.cutoffLabel })}</span>
+				<span class="block-action text-normal"
+					>{m.account_before_cutoff({ cutoff: selectedDelivery.cutoffLabel })}</span
+				>
 			{/if}
 		</div>
 
@@ -242,22 +316,34 @@
 							<div class="addon-desc">{item.desc}</div>
 							<div class="addon-foot">
 								<div class="qty">
-									<button type="button" class="qty-btn" onclick={() => updateQty(item.id, -1)}
-										>−</button
+									<button
+										type="button"
+										class="qty-btn"
+										aria-label={m.account_qty_decrease({ name: item.name })}
+										onclick={() => updateQty(item.id, -1)}>−</button
 									>
-									<div class="qty-n">{quantities[item.id]}</div>
-									<button type="button" class="qty-btn" onclick={() => updateQty(item.id, 1)}
-										>+</button
+									<div class="qty-n" aria-live="polite">{qtyOf(item.id)}</div>
+									<button
+										type="button"
+										class="qty-btn"
+										aria-label={m.account_qty_increase({ name: item.name })}
+										onclick={() => updateQty(item.id, 1)}>+</button
 									>
 								</div>
-								<form method="POST" action="?/addAddon" use:enhance={withToast(item.id)}>
+								<form
+									method="POST"
+									action="?/addAddon"
+									use:enhance={withToast(`addon:${item.id}`, item.id)}
+								>
 									<input type="hidden" name="addonId" value={item.id} />
 									<input type="hidden" name="deliveryId" value={selectedDelivery?.id ?? ''} />
-									<input type="hidden" name="quantity" value={quantities[item.id]} />
+									<input type="hidden" name="quantity" value={qtyOf(item.id)} />
 									<button
 										type="submit"
 										class="btn-outline"
-										disabled={!selectedDelivery || quantities[item.id] < 1}
+										disabled={!selectedDelivery ||
+											qtyOf(item.id) < 1 ||
+											pending === `addon:${item.id}`}
 									>
 										{m.account_add_button()}
 									</button>
@@ -273,100 +359,483 @@
 {/if}
 
 <style>
-  h2 { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; display: flex; align-items: center; gap: 12px; }
-  p { line-height: 1.65; color: #4a4440; }
+	h2 {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.5rem;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	p {
+		line-height: 1.65;
+		color: #4a4440;
+	}
 
-  /* SUMMARY HEADER */
-  .summary-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; background: #fff; border: 1px solid var(--border); padding: 20px 26px; margin-bottom: 32px; }
-  .summary-count { display: flex; align-items: baseline; gap: 8px; }
-  .summary-n { font-family: 'Cormorant Garamond', serif; font-size: 2.2rem; font-style: italic; color: var(--ink); line-height: 1; }
-  .summary-label { font-size: .78rem; letter-spacing: .04em; color: var(--taupe); text-transform: uppercase; }
-  .summary-breakdown { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .summary-chip { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--panel); color: var(--taupe); }
-  .chip-active { color: var(--success, #2f7d4f); border-color: rgba(47,125,79,.3); background: rgba(47,125,79,.08); }
-  .chip-paused { color: #9a7b1f; border-color: rgba(154,123,31,.3); background: rgba(154,123,31,.08); }
-  .summary-total { font-size: .95rem; color: var(--ink); font-weight: 500; }
-  .summary-total-label { font-size: .72rem; font-weight: 400; color: var(--taupe); text-transform: none; letter-spacing: 0; }
+	/* SUMMARY HEADER */
+	.summary-bar {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 14px;
+		background: #fff;
+		border: 1px solid var(--border);
+		padding: 20px 26px;
+		margin-bottom: 32px;
+	}
+	.summary-count {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+	.summary-n {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 2.2rem;
+		font-style: italic;
+		color: var(--ink);
+		line-height: 1;
+	}
+	.summary-label {
+		font-size: 0.78rem;
+		letter-spacing: 0.04em;
+		color: var(--taupe);
+		text-transform: uppercase;
+	}
+	.summary-breakdown {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.summary-chip {
+		font-size: 0.68rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-weight: 500;
+		padding: 4px 10px;
+		border-radius: 20px;
+		border: 1px solid var(--border);
+		background: var(--panel);
+		color: var(--taupe);
+	}
+	.chip-active {
+		color: var(--success, #2f7d4f);
+		border-color: rgba(47, 125, 79, 0.3);
+		background: rgba(47, 125, 79, 0.08);
+	}
+	.chip-paused {
+		color: #9a7b1f;
+		border-color: rgba(154, 123, 31, 0.3);
+		background: rgba(154, 123, 31, 0.08);
+	}
+	.summary-total {
+		font-size: 0.95rem;
+		color: var(--ink);
+		font-weight: 500;
+	}
+	.summary-total-label {
+		font-size: 0.72rem;
+		font-weight: 400;
+		color: var(--taupe);
+		text-transform: none;
+		letter-spacing: 0;
+	}
 
-  /* PLAN META (packs/frequency/address, shown per card) */
-  .plan-meta-row { display: flex; gap: 6px; flex-wrap: wrap; font-size: .78rem; color: var(--taupe); margin-bottom: 14px; }
+	/* PLAN META (packs/frequency/address, shown per card) */
+	.plan-meta-row {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+		font-size: 0.78rem;
+		color: var(--taupe);
+		margin-bottom: 14px;
+	}
 
-  /* QUANTITY PILL (next to plan name) */
-  .qty-pill { font-family: 'Jost', sans-serif; font-size: .62rem; font-weight: 600; letter-spacing: .06em; padding: 4px 9px; border-radius: 20px; border: 1px solid rgba(181,98,42,.3); color: var(--copper); background: rgba(181,98,42,.06); }
+	/* QUANTITY PILL (next to plan name) */
+	.qty-pill {
+		font-family: 'Jost', sans-serif;
+		font-size: 0.62rem;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		padding: 4px 9px;
+		border-radius: 20px;
+		border: 1px solid rgba(181, 98, 42, 0.3);
+		color: var(--copper);
+		background: rgba(181, 98, 42, 0.06);
+	}
 
-  .block { margin-bottom: 44px; }
-  .block-header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-  .block-action { font-size: .75rem; color: var(--copper); letter-spacing: .04em; text-decoration: none; }
-  .block-action:hover { text-decoration: underline; }
-  .text-normal { color: var(--taupe); cursor: default; }
-  .text-normal:hover { text-decoration: none; }
+	.block {
+		margin-bottom: 44px;
+	}
+	.block-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 16px;
+		margin-bottom: 18px;
+		padding-bottom: 12px;
+		border-bottom: 1px solid var(--border);
+	}
+	.block-action {
+		font-size: 0.75rem;
+		color: var(--copper);
+		letter-spacing: 0.04em;
+		text-decoration: none;
+	}
+	.block-action:hover {
+		text-decoration: underline;
+	}
+	.text-normal {
+		color: var(--taupe);
+		cursor: default;
+	}
+	.text-normal:hover {
+		text-decoration: none;
+	}
 
-  /* STATUS PILL */
-  .status-pill { font-family: 'Jost', sans-serif; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 500; padding: 4px 9px; border-radius: 20px; border: 1px solid var(--border); color: var(--taupe); background: var(--panel); }
-  .status-pill.status-active { color: var(--success, #2f7d4f); border-color: rgba(47,125,79,.3); background: rgba(47,125,79,.08); }
-  .status-pill.status-paused { color: #9a7b1f; border-color: rgba(154,123,31,.3); background: rgba(154,123,31,.08); }
-  .status-pill.status-cancelled { color: #b23a2a; border-color: rgba(178,58,42,.3); background: rgba(178,58,42,.06); }
-  .status-pill.status-pending { color: var(--taupe); }
+	/* STATUS PILL */
+	.status-pill {
+		font-family: 'Jost', sans-serif;
+		font-size: 0.6rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		font-weight: 500;
+		padding: 4px 9px;
+		border-radius: 20px;
+		border: 1px solid var(--border);
+		color: var(--taupe);
+		background: var(--panel);
+	}
+	.status-pill.status-active {
+		color: var(--success, #2f7d4f);
+		border-color: rgba(47, 125, 79, 0.3);
+		background: rgba(47, 125, 79, 0.08);
+	}
+	.status-pill.status-paused {
+		color: #9a7b1f;
+		border-color: rgba(154, 123, 31, 0.3);
+		background: rgba(154, 123, 31, 0.08);
+	}
+	.status-pill.status-cancelled {
+		color: #b23a2a;
+		border-color: rgba(178, 58, 42, 0.3);
+		background: rgba(178, 58, 42, 0.06);
+	}
+	.status-pill.status-pending {
+		color: var(--taupe);
+	}
 
-  /* NOTICES */
-  .notice { font-size: .82rem; color: #433e39; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--copper); padding: 10px 14px; margin-bottom: 14px; }
-  .notice-warning { border-left-color: #b23a2a; }
-  .notice strong { color: var(--ink); }
+	/* NOTICES */
+	.notice {
+		font-size: 0.82rem;
+		color: #433e39;
+		background: var(--panel);
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--copper);
+		padding: 10px 14px;
+		margin-bottom: 14px;
+	}
+	.notice-warning {
+		border-left-color: #b23a2a;
+	}
 
-  /* DELIVERY PANEL ELEMENT */
-  .delivery-card { background: #fff; border: 1px solid var(--border); border-left: 3px solid var(--copper); padding: 26px 28px; display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center; margin-bottom: 1px; }
-  .delivery-card-eyebrow { font-size: .65rem; letter-spacing: .18em; text-transform: uppercase; color: var(--copper); margin-bottom: 8px; display: block; font-weight: 500; }
-  .delivery-date { font-family: 'Cormorant Garamond', serif; font-size: 2.6rem; font-style: italic; color: var(--ink); line-height: 1; margin-bottom: 6px; }
-  .delivery-detail { font-size: .82rem; color: var(--taupe); margin-bottom: 12px; }
-  .delivery-detail strong { color: var(--ink); font-weight: 500; }
-  .cutoff { display: inline-block; font-size: .72rem; color: var(--copper); background: rgba(181, 98, 42, .06); border: 1px solid rgba(181, 98, 42, .2); padding: 4px 10px; letter-spacing: .06em; }
-  .delivery-btns { display: flex; flex-direction: column; gap: 8px; min-width: 168px; }
+	/* DELIVERY PANEL ELEMENT */
+	.delivery-card {
+		background: #fff;
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--copper);
+		padding: 26px 28px;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 32px;
+		align-items: center;
+		margin-bottom: 1px;
+	}
+	.delivery-card-eyebrow {
+		font-size: 0.65rem;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--copper);
+		margin-bottom: 8px;
+		display: block;
+		font-weight: 500;
+	}
+	.delivery-date {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 2.6rem;
+		font-style: italic;
+		color: var(--ink);
+		line-height: 1;
+		margin-bottom: 6px;
+	}
+	.delivery-detail {
+		font-size: 0.82rem;
+		color: var(--taupe);
+		margin-bottom: 12px;
+	}
+	.cutoff {
+		display: inline-block;
+		font-size: 0.72rem;
+		color: var(--copper);
+		background: rgba(181, 98, 42, 0.06);
+		border: 1px solid rgba(181, 98, 42, 0.2);
+		padding: 4px 10px;
+		letter-spacing: 0.06em;
+	}
+	.cutoff-closed {
+		color: var(--taupe);
+		background: var(--panel);
+		border-color: var(--border);
+	}
+	.delivery-btns {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 168px;
+	}
 
-  /* BUTTON SYSTEM */
-  .btn, .btn-outline, .btn-ghost { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 16px; border-radius: 2px; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all .15s; white-space: nowrap; text-decoration: none; font-family: inherit; }
-  .btn { background: var(--copper); color: #fff; border-color: var(--copper); }
-  .btn:hover { background: #9a4f22; border-color: #9a4f22; }
-  .btn-outline { border-color: rgba(181, 98, 42, .3); color: var(--copper); background: transparent; }
-  .btn-outline:hover { background: rgba(181, 98, 42, .05); }
-  .btn-ghost { background: var(--panel); border-color: var(--border); color: var(--ink); }
-  .btn-ghost:hover { background: var(--border); }
-  .btn-full { width: 100%; }
+	/* BUTTON SYSTEM */
+	.btn,
+	.btn-outline,
+	.btn-ghost {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 40px;
+		padding: 0 16px;
+		border-radius: 2px;
+		font-size: 0.7rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		font-weight: 500;
+		cursor: pointer;
+		border: 1px solid transparent;
+		transition: all 0.15s;
+		white-space: nowrap;
+		text-decoration: none;
+		font-family: inherit;
+	}
+	.btn {
+		background: var(--copper);
+		color: #fff;
+		border-color: var(--copper);
+	}
+	.btn:hover {
+		background: #9a4f22;
+		border-color: #9a4f22;
+	}
+	.btn-outline {
+		border-color: rgba(181, 98, 42, 0.3);
+		color: var(--copper);
+		background: transparent;
+	}
+	.btn-outline:hover {
+		background: rgba(181, 98, 42, 0.05);
+	}
+	.btn-ghost {
+		background: var(--panel);
+		border-color: var(--border);
+		color: var(--ink);
+	}
+	.btn-ghost:hover {
+		background: var(--border);
+	}
+	.btn-full {
+		width: 100%;
+	}
 
-  /* STATS SEGMENT */
-  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-top: none; }
-  .stat { background: #fff; padding: 22px 24px; }
-  .stat-label { font-size: .63rem; letter-spacing: .16em; text-transform: uppercase; color: var(--taupe); margin-bottom: 8px; display: block; font-weight: 500; }
-  .stat-value { font-family: 'Cormorant Garamond', serif; font-size: 1.9rem; line-height: 1; color: var(--ink); margin-bottom: 4px; }
-  .stat-sub { font-size: .78rem; color: var(--taupe); }
-  .stat-value.green { color: var(--success); }
+	/* STATS SEGMENT */
+	.stats-row {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 1px;
+		background: var(--border);
+		border: 1px solid var(--border);
+		border-top: none;
+		margin: 0;
+	}
+	.stat {
+		background: #fff;
+		padding: 22px 24px;
+	}
+	.stat-label {
+		font-size: 0.63rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--taupe);
+		margin-bottom: 8px;
+		display: block;
+		font-weight: 500;
+	}
+	.stat-value {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.9rem;
+		line-height: 1;
+		color: var(--ink);
+		margin: 0 0 4px;
+	}
+	.stat-sub {
+		font-size: 0.78rem;
+		color: var(--taupe);
+		margin: 0;
+	}
+	.stat-value.green {
+		color: var(--success);
+	}
 
-  /* ADD-TO-DELIVERY TARGET PICKER */
-  .empty-note { font-size: .85rem; color: var(--taupe); margin-bottom: 16px; }
-  .target-label { display: block; font-size: .63rem; letter-spacing: .16em; text-transform: uppercase; color: var(--taupe); font-weight: 500; margin-bottom: 6px; }
-  .target-select { width: 100%; max-width: 360px; border: 1px solid var(--border); background: #fff; padding: 10px 12px; font-family: 'Jost', sans-serif; font-size: .85rem; color: var(--ink); margin-bottom: 20px; }
+	/* ADD-TO-DELIVERY TARGET PICKER */
+	.empty-note {
+		font-size: 0.85rem;
+		color: var(--taupe);
+		margin-bottom: 16px;
+	}
+	.target-label {
+		display: block;
+		font-size: 0.63rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--taupe);
+		font-weight: 500;
+		margin-bottom: 6px;
+	}
+	.target-select {
+		width: 100%;
+		max-width: 360px;
+		border: 1px solid var(--border);
+		background: #fff;
+		padding: 10px 12px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.85rem;
+		color: var(--ink);
+		margin-bottom: 20px;
+	}
 
-  /* ADDONS TILES */
-  .addons-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .addon { background: #fff; border: 1px solid var(--border); overflow: hidden; }
-  .addon-img-placeholder { width: 100%; height: 140px; background: var(--panel); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); }
-  .addon-img-placeholder span { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--taupe); font-weight: 500; }
-  .addon-body { padding: 16px; }
-  .addon-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; }
-  .addon-name { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; font-weight: 600; }
-  .addon-price { font-size: .8rem; color: var(--copper); font-weight: 500; margin-top: 3px; }
-  .addon-desc { font-size: .81rem; color: var(--taupe); margin-bottom: 14px; line-height: 1.5; }
-  .addon-foot { display: flex; justify-content: space-between; align-items: center; }
+	/* ADDONS TILES */
+	.addons-row {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 12px;
+	}
+	.addon {
+		background: #fff;
+		border: 1px solid var(--border);
+		overflow: hidden;
+	}
+	.addon-img-placeholder {
+		width: 100%;
+		height: 140px;
+		background: var(--panel);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-bottom: 1px solid var(--border);
+	}
+	.addon-img-placeholder span {
+		font-size: 0.68rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--taupe);
+		font-weight: 500;
+	}
+	.addon-body {
+		padding: 16px;
+	}
+	.addon-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin-bottom: 5px;
+	}
+	.addon-name {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.2rem;
+		font-weight: 600;
+	}
+	.addon-price {
+		font-size: 0.8rem;
+		color: var(--copper);
+		font-weight: 500;
+		margin-top: 3px;
+	}
+	.addon-desc {
+		font-size: 0.81rem;
+		color: var(--taupe);
+		margin-bottom: 14px;
+		line-height: 1.5;
+	}
+	.addon-foot {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
 
-  /* QUANTITY CONTROLLER */
-  .qty { display: flex; align-items: center; border: 1px solid var(--border); }
-  .qty-btn { width: 30px; height: 30px; background: #fff; border: none; color: var(--ink); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .qty-btn:hover { background: var(--panel); }
-  .qty-n { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: .84rem; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+	/* QUANTITY CONTROLLER */
+	.qty {
+		display: flex;
+		align-items: center;
+		border: 1px solid var(--border);
+	}
+	.qty-btn {
+		width: 30px;
+		height: 30px;
+		background: #fff;
+		border: none;
+		color: var(--ink);
+		font-size: 1rem;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.qty-btn:hover {
+		background: var(--panel);
+	}
+	.qty-n {
+		width: 30px;
+		height: 30px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.84rem;
+		border-left: 1px solid var(--border);
+		border-right: 1px solid var(--border);
+	}
 
-  .see-all { display: inline-flex; align-items: center; gap: 5px; margin-top: 16px; font-size: .76rem; color: var(--copper); letter-spacing: .04em; text-decoration: none; }
-  .see-all:hover { text-decoration: underline; }
+	.see-all {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		margin-top: 16px;
+		font-size: 0.76rem;
+		color: var(--copper);
+		letter-spacing: 0.04em;
+		text-decoration: none;
+	}
+	.see-all:hover {
+		text-decoration: underline;
+	}
 
-  @media(max-width: 1020px) { .addons-row { grid-template-columns: 1fr 1fr; } }
-  @media(max-width: 800px) { .delivery-card { grid-template-columns: 1fr; } .delivery-btns { flex-direction: row; flex-wrap: wrap; } .stats-row { grid-template-columns: 1fr 1fr; } }
-  @media(max-width: 560px) { .addons-row, .stats-row { grid-template-columns: 1fr; } }
+	@media (max-width: 1020px) {
+		.addons-row {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+	@media (max-width: 800px) {
+		.delivery-card {
+			grid-template-columns: 1fr;
+		}
+		.delivery-btns {
+			flex-direction: row;
+			flex-wrap: wrap;
+		}
+		.stats-row {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+	@media (max-width: 560px) {
+		.addons-row,
+		.stats-row {
+			grid-template-columns: 1fr;
+		}
+	}
 </style>

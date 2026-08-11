@@ -6,13 +6,11 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { stripe } from '$lib/server/stripe';
 import { db } from '$lib/server/db';
 import { subscribers, subscriptions, plans, addresses } from '$lib/server/db/schema';
+import { instantDate, money } from '$lib/format';
 import { cancelSubscriptionSchema, type CancelMessage } from './schema';
-
-const dateFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = locals.user;
-	console.log('user', user);
 	if (!user) redirect(302, '/login?redirectTo=/account/cancel');
 
 	const [subscriber] = await db.select().from(subscribers).where(eq(subscribers.userId, user.id));
@@ -54,21 +52,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			id: r.id,
 			planName: r.planName,
 			freq: r.planFreq,
-			price: r.pricePence / 100,
+			price: money(r.pricePence),
 			status: r.status,
 			cancelAtPeriodEnd: r.cancelAtPeriodEnd,
-			periodEndLabel: r.currentPeriodEnd ? dateFmt.format(new Date(r.currentPeriodEnd)) : null,
+			periodEndLabel: r.currentPeriodEnd ? instantDate(r.currentPeriodEnd) : null,
 			addressLabel: addr?.label ?? addr?.line1 ?? null
 		};
 	});
 
 	const form = await superValidate(zod4(cancelSubscriptionSchema));
-	// Preselect if ?id= was passed (e.g. from a "cancel" link on the account page).
-	const preselect = url.searchParams.get('id');
-	if (preselect && plansList.some((p) => p.id === preselect)) {
+	// Preselect from the account page's "Cancel plan" link, which passes
+	// ?subscriptionId=. `id` is accepted as a fallback for older links.
+	const preselect = url.searchParams.get('subscriptionId') ?? url.searchParams.get('id');
+	const cancellable = plansList.filter((p) => !p.cancelAtPeriodEnd);
+	if (preselect && cancellable.some((p) => p.id === preselect)) {
 		form.data.subscriptionId = preselect;
-	} else if (plansList.length === 1) {
-		form.data.subscriptionId = plansList[0].id;
+	} else if (cancellable.length === 1) {
+		form.data.subscriptionId = cancellable[0].id;
 	}
 
 	return { form, plansList };
@@ -87,6 +87,7 @@ export const actions: Actions = {
 			.select({
 				id: subscriptions.id,
 				stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+				cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
 				status: subscriptions.status
 			})
 			.from(subscriptions)
@@ -94,14 +95,32 @@ export const actions: Actions = {
 			.where(and(eq(subscriptions.id, form.data.subscriptionId), eq(subscribers.userId, user.id)));
 
 		if (!owned) {
-			return message(form, { type: 'error', text: 'Subscription not found.' } satisfies CancelMessage, {
-				status: 404
-			});
+			return message(
+				form,
+				{ type: 'error', text: 'Subscription not found.' } satisfies CancelMessage,
+				{
+					status: 404
+				}
+			);
 		}
 		if (owned.status === 'cancelled') {
-			return message(form, { type: 'error', text: 'That plan is already cancelled.' } satisfies CancelMessage, {
-				status: 400
-			});
+			return message(
+				form,
+				{ type: 'error', text: 'That plan is already cancelled.' } satisfies CancelMessage,
+				{
+					status: 400
+				}
+			);
+		}
+		if (owned.cancelAtPeriodEnd) {
+			return message(
+				form,
+				{
+					type: 'error',
+					text: 'That plan is already scheduled to cancel.'
+				} satisfies CancelMessage,
+				{ status: 400 }
+			);
 		}
 
 		try {
@@ -114,20 +133,31 @@ export const actions: Actions = {
 						cancel_feedback: form.data.feedback ?? ''
 					}
 				});
-				// Optimistically flag it so the UI can show "cancelling soon".
+				// Optimistically flag it so the UI can show "cancelling soon". Any pending
+				// plan switch is dropped — a plan that's ending can't also be changing.
 				await db
 					.update(subscriptions)
-					.set({ cancelAtPeriodEnd: true })
+					.set({ cancelAtPeriodEnd: true, pendingPlanId: null, pendingPlanAt: null })
 					.where(eq(subscriptions.id, owned.id));
 			} else {
 				// Pending / never paid — no Stripe sub, cancel locally.
-				await db.update(subscriptions).set({ status: 'cancelled' }).where(eq(subscriptions.id, owned.id));
+				await db
+					.update(subscriptions)
+					.set({ status: 'cancelled', pendingPlanId: null, pendingPlanAt: null })
+					.where(eq(subscriptions.id, owned.id));
 			}
 		} catch (e) {
 			console.error('cancel subscription failed', e);
-			return message(form, { type: 'error', text: 'Could not cancel this plan. Please try again.' } satisfies CancelMessage, {
-				status: 400
-			});
+			return message(
+				form,
+				{
+					type: 'error',
+					text: 'Could not cancel this plan. Please try again.'
+				} satisfies CancelMessage,
+				{
+					status: 400
+				}
+			);
 		}
 
 		redirect(303, '/account?cancelled=1');

@@ -12,12 +12,11 @@ import {
 	addons as addonsTable
 } from '$lib/server/db/schema';
 
-const dateLabel = (d: Date | string) =>
-	new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-		new Date(d)
-	);
+import { money, shortDate } from '$lib/format';
 
-const gbp = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+// Cap the page — a long-standing subscriber shouldn't pull every delivery they've
+// ever had on each visit.
+const PAGE_SIZE = 50;
 
 const statusText: Record<string, string> = {
 	delivered: 'Delivered',
@@ -31,13 +30,23 @@ async function getSubscriber(userId: string) {
 	return sub ?? null;
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(303, '/signin');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) throw redirect(303, '/login');
 
 	const sub = await getSubscriber(locals.user.id);
-	if (!sub) return { orders: [] };
+	if (!sub) return { orders: [], hasMore: false, limit: PAGE_SIZE };
+
+	const limit = Math.min(
+		Math.max(Number(url.searchParams.get('limit')) || PAGE_SIZE, PAGE_SIZE),
+		500
+	);
 
 	// Past deliveries only — 'scheduled' ones are upcoming, not history yet.
+	//
+	// NOTE: the amount is reconstructed from today's `plans.pricePence`, so a future
+	// price change rewrites what past orders appear to have cost. The real fix is an
+	// `amount_pence` snapshot on `deliveries`, written at fulfilment; until that column
+	// exists this at least accounts for the subscription's quantity.
 	const rows = await db
 		.select({
 			id: deliveries.id,
@@ -45,13 +54,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 			status: deliveries.status,
 			planName: plans.name,
 			packs: plans.packs,
+			quantity: subscriptions.quantity,
 			pricePence: plans.pricePence
 		})
 		.from(deliveries)
 		.innerJoin(subscriptions, eq(subscriptions.id, deliveries.subscriptionId))
 		.innerJoin(plans, eq(plans.id, subscriptions.planId))
 		.where(and(eq(deliveries.subscriberId, sub.id), ne(deliveries.status, 'scheduled')))
-		.orderBy(desc(deliveries.scheduledDate));
+		.orderBy(desc(deliveries.scheduledDate))
+		.limit(limit + 1);
+
+	const hasMore = rows.length > limit;
+	if (hasMore) rows.pop();
 
 	const deliveryIds = rows.map((r) => r.id);
 
@@ -79,21 +93,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const orders = rows.map((r) => {
 		const addonsForDelivery = addonsByDelivery.get(r.id) ?? [];
 		const addonPence = addonsForDelivery.reduce((s, a) => s + a.pricePence * a.quantity, 0);
+		const qty = r.quantity ?? 1;
 
 		const addonSummary = addonsForDelivery.map((a) => `${a.quantity}× ${a.name}`).join(', ');
+		const packsLabel = qty > 1 ? `${r.packs} packs ×${qty}` : `${r.packs} packs`;
 		const items = addonSummary
-			? `${r.planName} · ${r.packs} packs + ${addonSummary}`
-			: `${r.planName} · ${r.packs} packs`;
+			? `${r.planName} · ${packsLabel} + ${addonSummary}`
+			: `${r.planName} · ${packsLabel}`;
 
 		return {
 			id: r.id,
-			date: dateLabel(r.scheduledDate),
+			date: shortDate(r.scheduledDate),
 			items,
-			amount: gbp(r.pricePence + addonPence),
+			// Plan price scales with quantity; add-ons carry their own.
+			amount: money(r.pricePence * qty + addonPence),
 			status: statusText[r.status] ?? r.status,
 			statusKey: r.status
 		};
 	});
 
-	return { orders };
+	return { orders, hasMore, limit };
 };

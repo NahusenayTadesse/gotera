@@ -32,7 +32,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		email: locals.user.email,
 		phone: sub?.phone ?? null,
 		address: addr,
-		emailForm: await superValidate({ email: locals.user.email }, zod4(emailSchema), { id: 'email' }),
+		emailForm: await superValidate({ email: locals.user.email }, zod4(emailSchema), {
+			id: 'email'
+		}),
 		phoneForm: await superValidate({ phone: sub?.phone ?? '' }, zod4(phoneSchema), { id: 'phone' }),
 		addressForm: await superValidate(
 			{
@@ -51,29 +53,44 @@ export const actions: Actions = {
 	// Phone → subscribers.phone
 	updatePhone: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(phoneSchema), { id: 'phone' });
+		// The load guards the page, but actions are reachable on their own — without
+		// this a session-less POST throws on `locals.user` and surfaces as a 500.
+		if (!locals.user) return fail(401, { form });
 		if (!form.valid) return fail(400, { form });
 
-		const sub = await getSubscriber(locals.user!.id);
+		const sub = await getSubscriber(locals.user.id);
 		if (!sub) {
-			return message(form, { type: 'error', text: 'No subscriber profile found.' } satisfies DetailsMessage, {
-				status: 400
-			});
+			return message(
+				form,
+				{ type: 'error', text: 'No subscriber profile found.' } satisfies DetailsMessage,
+				{
+					status: 400
+				}
+			);
 		}
 
 		await db.update(subscribers).set({ phone: form.data.phone }).where(eq(subscribers.id, sub.id));
-		return message(form, { type: 'success', text: 'Phone number updated.' } satisfies DetailsMessage);
+		return message(form, {
+			type: 'success',
+			text: 'Phone number updated.'
+		} satisfies DetailsMessage);
 	},
 
 	// Address → primary addresses row (update, or create if none)
 	updateAddress: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(addressSchema), { id: 'address' });
+		if (!locals.user) return fail(401, { form });
 		if (!form.valid) return fail(400, { form });
 
-		const sub = await getSubscriber(locals.user!.id);
+		const sub = await getSubscriber(locals.user.id);
 		if (!sub) {
-			return message(form, { type: 'error', text: 'No subscriber profile found.' } satisfies DetailsMessage, {
-				status: 400
-			});
+			return message(
+				form,
+				{ type: 'error', text: 'No subscriber profile found.' } satisfies DetailsMessage,
+				{
+					status: 400
+				}
+			);
 		}
 
 		const values = {
@@ -98,15 +115,19 @@ export const actions: Actions = {
 			});
 		}
 
-		return message(form, { type: 'success', text: 'Delivery address updated.' } satisfies DetailsMessage);
+		return message(form, {
+			type: 'success',
+			text: 'Delivery address updated.'
+		} satisfies DetailsMessage);
 	},
 
 	// Email → Better Auth changeEmail (verification required; not a direct write)
 	updateEmail: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(emailSchema), { id: 'email' });
+		if (!locals.user) return fail(401, { form });
 		if (!form.valid) return fail(400, { form });
 
-		if (form.data.email === locals.user!.email) {
+		if (form.data.email === locals.user.email) {
 			return setError(form, 'email', "That's already your email.");
 		}
 
@@ -120,9 +141,13 @@ export const actions: Actions = {
 				return setError(form, 'email', e.body?.message ?? 'Could not change your email.');
 			}
 			console.error('changeEmail failed', e);
-			return message(form, { type: 'error', text: 'Could not change your email.' } satisfies DetailsMessage, {
-				status: 500
-			});
+			return message(
+				form,
+				{ type: 'error', text: 'Could not change your email.' } satisfies DetailsMessage,
+				{
+					status: 500
+				}
+			);
 		}
 
 		// NOTE: user.email updates only after the verification link is confirmed.

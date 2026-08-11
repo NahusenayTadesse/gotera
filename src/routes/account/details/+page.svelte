@@ -63,6 +63,10 @@
 	);
 </script>
 
+<svelte:head>
+	<title>{m.acctdetails_page_title()}</title>
+</svelte:head>
+
 <div class="block">
 	<div class="block-header">
 		<h2>{m.acctdetails_heading()}</h2>
@@ -144,8 +148,8 @@
 						</div>
 						<div class="af full">
 							<label class="af-label" for="line2"
-								>{m.acctdetails_line2_label()} <span class="opt">{m.acctdetails_optional()}</span
-								></label
+								>{m.acctdetails_line2_label()}
+								<span class="opt">{m.acctdetails_optional()}</span></label
 							>
 							<input id="line2" class="edit-input" name="line2" bind:value={$addressForm.line2} />
 						</div>

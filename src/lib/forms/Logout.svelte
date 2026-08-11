@@ -9,19 +9,58 @@
 	let open = $state(false);
 	let deleting = $state(false);
 
+	/** @type {HTMLButtonElement | undefined} */
+	let trigger = $state();
+	/** @type {HTMLDivElement | undefined} */
+	let dialog = $state();
+
 	function close() {
 		if (deleting) return; // don't let a backdrop click cut off an in-flight request
 		open = false;
+		// Send focus back where it came from, rather than dropping it on <body>.
+		trigger?.focus();
 	}
 
+	/** @param {KeyboardEvent} e */
 	function onKeydown(e) {
 		if (e.key === 'Escape') close();
 	}
+
+	// Keep Tab inside the dialog while it is open — otherwise focus wanders into the
+	// page behind it, which a screen reader still announces as reachable.
+	/** @param {KeyboardEvent} e */
+	function trapFocus(e) {
+		if (e.key !== 'Tab' || !dialog) return;
+		const focusable = /** @type {NodeListOf<HTMLElement>} */ (
+			dialog.querySelectorAll(
+				'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			)
+		);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
+	}
+
+	// Move focus into the dialog as it opens.
+	$effect(() => {
+		if (open) {
+			/** @type {HTMLButtonElement | null | undefined} */ (
+				dialog?.querySelector('button')
+			)?.focus();
+		}
+	});
 </script>
 
-	<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} />
 
-<button type="button" class="logout-trigger" onclick={() => (open = true)}>
+<button type="button" class="logout-trigger" bind:this={trigger} onclick={() => (open = true)}>
 	<LogOut size={16} />
 	{m.logoutform_logout()}
 </button>
@@ -30,15 +69,22 @@
 	<div class="dialog-overlay" onclick={close} role="presentation">
 		<div
 			class="dialog-box"
+			bind:this={dialog}
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={trapFocus}
 			role="dialog"
 			aria-modal="true"
-		
 			aria-labelledby="logout-title"
+			tabindex="-1"
 		>
 			<div class="dialog-header">
 				<span class="eyebrow">{m.logoutform_eyebrow()}</span>
-				<button type="button" class="dialog-close" onclick={close} aria-label={m.logoutform_close_label()}>
+				<button
+					type="button"
+					class="dialog-close"
+					onclick={close}
+					aria-label={m.logoutform_close_label()}
+				>
 					<X size={16} />
 				</button>
 			</div>

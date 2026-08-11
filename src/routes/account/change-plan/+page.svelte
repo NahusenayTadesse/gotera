@@ -3,14 +3,14 @@
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
-	import { cancelSchema } from './schema';
+	import { changePlanSchema } from './schema';
 	import type { PageData } from './$types';
 	import { m } from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
 	const { form, errors, enhance, submitting, message } = superForm(data.form, {
-		validators: zod4Client(cancelSchema),
+		validators: zod4Client(changePlanSchema),
 		onUpdated({ form }) {
 			if (form.message?.type === 'error') {
 				toast.error(form.message.text);
@@ -21,29 +21,31 @@
 		}
 	});
 
-	const reasons = [
-		{ value: 'too_expensive', label: m.acctplan_reason_too_expensive() },
-		{ value: 'too_much_food', label: m.acctplan_reason_too_much_food() },
-		{ value: 'taking_a_break', label: m.acctplan_reason_taking_a_break() },
-		{ value: 'moving', label: m.acctplan_reason_moving() },
-		{ value: 'quality', label: m.acctplan_reason_quality() },
-		{ value: 'other', label: m.acctplan_reason_other() }
-	];
+	// A plan on its way out can't also be switched — cancelling wins.
+	const changeable = $derived(data.subscriptionsList.filter((p) => !p.cancelAtPeriodEnd));
 
-	// Cancellable plans only — an already-cancelling plan can't be re-selected
-	const cancellable = $derived(data.plansList.filter((p) => !p.cancelAtPeriodEnd));
+	const selected = $derived(
+		data.subscriptionsList.find((p) => p.id === $form.subscriptionId) ?? null
+	);
 
-	const selected = $derived(data.plansList.find((p) => p.id === $form.subscriptionId) ?? null);
+	// Never offer the plan they are already on as a destination.
+	const alternatives = $derived(
+		selected ? data.planOptions.filter((p) => p.id !== selected.planId) : data.planOptions
+	);
+
+	const target = $derived(data.planOptions.find((p) => p.id === $form.planId) ?? null);
+
+	// Changing which subscription is selected invalidates a destination that is no
+	// longer on offer (you can't switch a plan to itself).
+	$effect(() => {
+		if ($form.planId && !alternatives.some((p) => p.id === $form.planId)) {
+			$form.planId = '';
+		}
+	});
 </script>
 
 <svelte:head>
 	<title>{m.acctplan_page_title()}</title>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap"
-		rel="stylesheet"
-	/>
 </svelte:head>
 
 <div class="wrap">
@@ -51,7 +53,7 @@
 		<span class="eyebrow">{m.acctplan_eyebrow()}</span>
 		<h1>{m.acctplan_heading()}</h1>
 
-		{#if data.plansList.length === 0}
+		{#if changeable.length === 0}
 			<p class="lead">{m.acctplan_empty_lead()}</p>
 			<div class="actions">
 				<a href="/account" class="btn btn-ghost">{m.acctplan_back_to_account()}</a>
@@ -59,18 +61,19 @@
 		{:else}
 			<p class="lead">
 				{m.acctplan_lead({
-					count: data.plansList.length,
-					planWord: data.plansList.length === 1
-						? m.acctplan_plan_word_singular()
-						: m.acctplan_plan_word_plural()
+					count: changeable.length,
+					planWord:
+						changeable.length === 1
+							? m.acctplan_plan_word_singular()
+							: m.acctplan_plan_word_plural()
 				})}
 			</p>
 
 			<form method="POST" use:enhance class="form">
-				<!-- Choose which subscription to cancel -->
+				<!-- Which subscription is being changed -->
 				<fieldset class="plan-list">
 					<legend>{m.acctplan_which_plan()}</legend>
-					{#each data.plansList as p (p.id)}
+					{#each data.subscriptionsList as p (p.id)}
 						<label
 							class="plan-row"
 							class:active={$form.subscriptionId === p.id}
@@ -90,17 +93,22 @@
 												>{m.acctplan_qty_pill({ quantity: p.quantity })}</span
 											>{/if}</span
 									>
-									<span class="plan-price">£{p.price.toFixed(2)}</span>
+									<span class="plan-price">{p.price}</span>
 								</div>
 								<div class="plan-meta">
-									{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> · {/if}{p.freq}{#if p.quantity > 1}
-										· £{p.unitPrice.toFixed(2)} × {p.quantity}{/if}
+									{#if p.addressLabel}<span class="plan-addr">{p.addressLabel}</span> ·
+									{/if}{p.freq}{#if p.quantity > 1}
+										· {p.unitPrice} × {p.quantity}{/if}
 								</div>
 								{#if p.cancelAtPeriodEnd}
 									<span class="plan-flag"
 										>{m.acctplan_already_cancelling()}{p.periodEndLabel
 											? ` — ${m.acctplan_ends_on({ date: p.periodEndLabel })}`
 											: ''}</span
+									>
+								{:else if p.pendingPlanName}
+									<span class="plan-note"
+										>{m.acctplan_pending_switch({ plan: p.pendingPlanName })}</span
 									>
 								{/if}
 							</div>
@@ -110,74 +118,79 @@
 				{#if $errors.subscriptionId}<span class="form-error">{$errors.subscriptionId}</span>{/if}
 
 				{#if selected && !selected.cancelAtPeriodEnd}
-					<div class="keep-note">
-						{#if selected.periodEndLabel}
-							{m.acctplan_keep_note_prefix()} <strong>{selected.periodEndLabel}</strong>. {m.acctplan_keep_note_suffix()}
+					<!-- What it becomes -->
+					<fieldset class="plan-list">
+						<legend>{m.acctplan_choose_new()}</legend>
+
+						{#if alternatives.length === 0}
+							<p class="empty-note">{m.acctplan_no_alternatives()}</p>
 						{:else}
-							{m.acctplan_keep_note_no_date()}
+							{#each data.planOptions as option (option.id)}
+								{@const isCurrent = option.id === selected.planId}
+								<label
+									class="plan-row"
+									class:active={$form.planId === option.id}
+									class:disabled={isCurrent}
+								>
+									<input
+										type="radio"
+										name="planId"
+										value={option.id}
+										bind:group={$form.planId}
+										disabled={isCurrent}
+									/>
+									<div class="plan-info">
+										<div class="plan-top">
+											<span class="plan-name">{option.name}</span>
+											<span class="plan-price">{option.price}</span>
+										</div>
+										<div class="plan-meta">
+											{option.freq}{#if option.subtitle}
+												· {option.subtitle}{/if}
+										</div>
+										{#if isCurrent}
+											<span class="plan-note">{m.acctplan_current_badge()}</span>
+										{/if}
+									</div>
+								</label>
+							{/each}
 						{/if}
-					</div>
-
-					<fieldset class="reasons">
-						<legend>{m.acctplan_reason_legend()} <span class="opt">({m.acctplan_optional()})</span></legend>
-						{#each reasons as r (r.value)}
-							<label class="reason" class:active={$form.reason === r.value}>
-								<input type="radio" name="reason" value={r.value} bind:group={$form.reason} />
-								<span>{r.label}</span>
-							</label>
-						{/each}
 					</fieldset>
+					{#if $errors.planId}<span class="form-error">{$errors.planId}</span>{/if}
 
-					<div class="field">
-						<label class="field-label" for="feedback"
-							>{m.acctplan_feedback_label()} <span class="opt">({m.acctplan_optional()})</span></label
-						>
-						<textarea
-							id="feedback"
-							name="feedback"
-							class="textarea"
-							rows="3"
-							bind:value={$form.feedback}
-						></textarea>
-					</div>
-
-					<label class="confirm">
-						<input type="checkbox" name="confirm" bind:checked={$form.confirm} />
-						<span
-							>{m.acctplan_confirm_prefix()} <strong>{selected.planName}</strong>{#if selected.quantity > 1}
-								{m.acctplan_qty_suffix({ quantity: selected.quantity })}{/if}
-							{selected.periodEndLabel
-								? m.acctplan_confirm_will_end_on({ date: selected.periodEndLabel })
-								: m.acctplan_confirm_will_end()}</span
-						>
-					</label>
-					{#if $errors.confirm}<span class="form-error">{$errors.confirm}</span>{/if}
+					{#if target}
+						<div class="keep-note">
+							{#if selected.periodEndLabel}
+								{m.acctplan_switch_note_prefix()}
+								<strong>{selected.periodEndLabel}</strong>. {m.acctplan_switch_note_suffix()}
+							{:else}
+								{m.acctplan_switch_note_no_date()}
+							{/if}
+						</div>
+					{/if}
 				{/if}
 
 				<div class="actions">
-					<a href="/account" class="btn btn-ghost">{m.acctplan_keep_all_button()}</a>
+					<a href="/account" class="btn btn-ghost">{m.acctplan_never_mind_button()}</a>
 					<button
 						type="submit"
-						class="btn btn-danger"
-						disabled={$submitting || !selected || selected.cancelAtPeriodEnd || !$form.confirm}
+						class="btn btn-primary"
+						disabled={$submitting || !selected || selected.cancelAtPeriodEnd || !target}
 					>
 						{$submitting ? m.acctplan_submitting() : m.acctplan_submit_button()}
 					</button>
 				</div>
 			</form>
+
+			<p class="footnote">
+				{m.acctplan_cancel_prompt()}
+				<a href="/account/cancel">{m.acctplan_cancel_link()}</a>
+			</p>
 		{/if}
 	</div>
 </div>
 
 <style>
-	:global(:root) {
-		--cream: #faf8f4;
-		--ink: #1a1a1a;
-		--copper: #b5622a;
-		--taupe: #7a746e;
-		--border: #e8e4e0;
-		--panel: #f5f2ed;
-	}
 	.wrap {
 		min-height: 100vh;
 		display: grid;
@@ -234,12 +247,6 @@
 		font-weight: 500;
 		margin-bottom: 10px;
 		padding: 0;
-	}
-	.opt {
-		text-transform: none;
-		letter-spacing: 0;
-		color: rgba(122, 116, 110, 0.7);
-		font-weight: 400;
 	}
 	/* Plan chooser */
 	.plan-list {
@@ -326,7 +333,19 @@
 		letter-spacing: 0.1em;
 		color: #b23a2a;
 	}
-	/* Keep note */
+	.plan-note {
+		display: inline-block;
+		margin-top: 6px;
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--taupe);
+	}
+	.empty-note {
+		font-size: 0.85rem;
+		color: var(--taupe);
+	}
+	/* What happens next */
 	.keep-note {
 		font-size: 0.85rem;
 		color: #433e39;
@@ -336,81 +355,6 @@
 		border: 1px solid var(--border);
 	}
 	.keep-note strong {
-		color: var(--ink);
-	}
-	/* Reasons */
-	.reasons {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-	.reason {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 12px 14px;
-		border: 1px solid var(--border);
-		cursor: pointer;
-		font-size: 0.88rem;
-		color: #433e39;
-		transition:
-			border-color 0.12s,
-			background 0.12s;
-	}
-	.reason:hover {
-		border-color: rgba(181, 98, 42, 0.35);
-	}
-	.reason.active {
-		border-color: var(--copper);
-		background: #fbf4ee;
-	}
-	.reason input {
-		accent-color: var(--copper);
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-	}
-	.field-label {
-		font-size: 0.66rem;
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
-		color: var(--copper);
-		font-weight: 500;
-		margin-bottom: 8px;
-	}
-	.textarea {
-		width: 100%;
-		border: 1px solid rgba(122, 116, 110, 0.22);
-		background: #fff;
-		padding: 10px 12px;
-		font-family: 'Jost', sans-serif;
-		font-size: 0.9rem;
-		color: var(--ink);
-		resize: vertical;
-		line-height: 1.5;
-	}
-	.textarea:focus {
-		outline: none;
-		border-color: var(--copper);
-	}
-	.confirm {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		font-size: 0.85rem;
-		color: #433e39;
-		cursor: pointer;
-		line-height: 1.5;
-	}
-	.confirm input {
-		margin-top: 2px;
-		width: 16px;
-		height: 16px;
-		accent-color: var(--copper);
-		flex-shrink: 0;
-	}
-	.confirm strong {
 		color: var(--ink);
 	}
 	.form-error {
@@ -449,17 +393,30 @@
 	.btn-ghost:hover {
 		background: var(--panel);
 	}
-	.btn-danger {
-		background: #fff;
-		border-color: #b23a2a;
-		color: #b23a2a;
-	}
-	.btn-danger:hover:not([disabled]) {
-		background: #b23a2a;
+	.btn-primary {
+		background: var(--copper);
+		border-color: var(--copper);
 		color: #fff;
 	}
-	.btn-danger[disabled] {
+	.btn-primary:hover:not([disabled]) {
+		background: #9a4f22;
+		border-color: #9a4f22;
+	}
+	.btn-primary[disabled] {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+	.footnote {
+		margin-top: 22px;
+		padding-top: 16px;
+		border-top: 1px solid var(--border);
+		font-size: 0.8rem;
+		color: var(--taupe);
+	}
+	.footnote a {
+		color: var(--copper);
+	}
+	.footnote a:hover {
+		text-decoration: underline;
 	}
 </style>

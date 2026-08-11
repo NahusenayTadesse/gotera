@@ -4,6 +4,10 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
+<svelte:head>
+	<title>{m.accthistory_page_title()}</title>
+</svelte:head>
+
 <div class="block">
 	<div class="block-header">
 		<h2>{m.accthistory_heading()}</h2>
@@ -36,6 +40,12 @@
 				</tbody>
 			</table>
 		</div>
+
+		{#if data.hasMore}
+			<a class="load-more" href="?limit={data.limit + 50}" data-sveltekit-noscroll>
+				{m.accthistory_load_more()}
+			</a>
+		{/if}
 	{/if}
 </div>
 
@@ -120,5 +130,18 @@
 		text-align: center;
 		font-size: 0.88rem;
 		color: var(--taupe);
+	}
+
+	.load-more {
+		display: inline-flex;
+		align-items: center;
+		margin-top: 16px;
+		font-size: 0.76rem;
+		letter-spacing: 0.04em;
+		color: var(--copper);
+		text-decoration: none;
+	}
+	.load-more:hover {
+		text-decoration: underline;
 	}
 </style>
