@@ -8,8 +8,9 @@ import { alias } from 'drizzle-orm/mysql-core';
 import { db } from '$lib/server/db';
 import { addresses, plans, subscribers, subscriptions } from '$lib/server/db/schema';
 import { instantDate, money } from '$lib/format';
+import { sendPlanChanged, notifyAdminPlanChanged } from '$lib/server/email';
 import { changePlanSchema, type ChangePlanMessage } from './schema';
-// import { stripe } from '$lib/server/stripe';
+import { stripe } from '$lib/server/stripe';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) redirect(302, '/login?redirectTo=/account/change-plan');
@@ -137,9 +138,13 @@ export const actions: Actions = {
 				status: subscriptions.status,
 				cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
 				currentPeriodEnd: subscriptions.currentPeriodEnd,
-				stripeSubscriptionId: subscriptions.stripeSubscriptionId
+				stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+				pendingPlanId: subscriptions.pendingPlanId,
+				pendingPlanAt: subscriptions.pendingPlanAt,
+				planName: plans.name
 			})
 			.from(subscriptions)
+			.innerJoin(plans, eq(plans.id, subscriptions.planId))
 			.where(
 				and(
 					eq(subscriptions.id, form.data.subscriptionId),
@@ -174,7 +179,12 @@ export const actions: Actions = {
 
 		// The target must be a real, live, recurring plan — not a one-off or a gift.
 		const [target] = await db
-			.select({ id: plans.id, name: plans.name })
+			.select({
+				id: plans.id,
+				name: plans.name,
+				pricePence: plans.pricePence,
+				stripePriceId: plans.stripePriceId
+			})
 			.from(plans)
 			.where(
 				and(eq(plans.id, form.data.planId), eq(plans.active, true), eq(plans.kind, 'subscription'))
@@ -191,19 +201,86 @@ export const actions: Actions = {
 		// Switch at the end of the paid period so nobody is charged or refunded mid-cycle.
 		const effectiveAt = owned.currentPeriodEnd ? new Date(owned.currentPeriodEnd) : new Date();
 
-		// ── Stripe hook point ──
-		// Swap the subscription item's price with `proration_behavior: 'none'` and
-		// `billing_cycle_anchor: 'unchanged'` so Stripe applies it at the same moment.
-		// Do this BEFORE the DB write, so a Stripe failure can't leave the account
-		// promising a switch that never happens.
-		// if (owned.stripeSubscriptionId && targetStripePriceId) {
-		// 	await stripe.subscriptions.update(owned.stripeSubscriptionId, { ... });
-		// }
-
+		// Record the pending switch BEFORE touching Stripe. The `customer.subscription.updated`
+		// webhook fires the moment we swap the price, and it needs to already see the pending
+		// switch to know the new price shouldn't become the live plan until renewal. If Stripe
+		// then fails we roll this back below, so a failure can't leave the account promising a
+		// switch that never happens.
 		await db
 			.update(subscriptions)
 			.set({ pendingPlanId: target.id, pendingPlanAt: effectiveAt })
 			.where(eq(subscriptions.id, owned.id));
+
+		const rollbackPending = () =>
+			db
+				.update(subscriptions)
+				.set({ pendingPlanId: owned.pendingPlanId, pendingPlanAt: owned.pendingPlanAt })
+				.where(eq(subscriptions.id, owned.id));
+
+		// `proration_behavior: 'none'` and `billing_cycle_anchor: 'unchanged'` mean nobody is
+		// charged or refunded now — the new price simply lands on the next invoice, at the
+		// same renewal date.
+		if (owned.stripeSubscriptionId) {
+			if (!target.stripePriceId) {
+				console.error('plan change blocked: no stripePriceId on plan', target.id);
+				await rollbackPending();
+				return message(
+					form,
+					{
+						type: 'error',
+						text: 'That plan is not available right now. Please contact us.'
+					} satisfies ChangePlanMessage,
+					{ status: 400 }
+				);
+			}
+
+			try {
+				const stripeSub = await stripe.subscriptions.retrieve(owned.stripeSubscriptionId);
+				const item = stripeSub.items.data[0];
+				if (!item) throw new Error(`no items on subscription ${owned.stripeSubscriptionId}`);
+
+				await stripe.subscriptions.update(owned.stripeSubscriptionId, {
+					items: [{ id: item.id, price: target.stripePriceId, quantity: item.quantity }],
+					proration_behavior: 'none',
+					billing_cycle_anchor: 'unchanged'
+				});
+			} catch (e) {
+				console.error('stripe plan change failed', e);
+				await rollbackPending();
+				return message(
+					form,
+					{
+						type: 'error',
+						text: 'We could not change your plan. Please try again.'
+					} satisfies ChangePlanMessage,
+					{ status: 400 }
+				);
+			}
+		}
+
+		// Confirmations. The switch is already saved — a mail failure shouldn't fail the form.
+		try {
+			const effectiveLabel = instantDate(effectiveAt);
+			const toPlanPriceLabel = money(target.pricePence);
+
+			await sendPlanChanged(subscriber.email, {
+				name: subscriber.fullName ?? 'there',
+				fromPlanName: owned.planName,
+				toPlanName: target.name,
+				toPlanPriceLabel,
+				effectiveLabel
+			});
+			await notifyAdminPlanChanged({
+				name: subscriber.fullName ?? '—',
+				email: subscriber.email,
+				fromPlanName: owned.planName,
+				toPlanName: target.name,
+				toPlanPriceLabel,
+				effectiveLabel
+			});
+		} catch (e) {
+			console.error('plan change emails failed', e);
+		}
 
 		return message(form, {
 			type: 'success',

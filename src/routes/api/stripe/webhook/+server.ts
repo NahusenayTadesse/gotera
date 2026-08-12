@@ -59,16 +59,34 @@ async function syncSubscription(sub: Stripe.Subscription) {
 
     const quantity = sub.items.data[0]?.quantity ?? subRow.quantity ?? 1;
     const periodEnd = sub.items.data[0]?.current_period_end;
+    const nextPeriodEnd = periodEnd ? new Date(periodEnd * 1000) : null;
+
+    // A scheduled plan switch (see /account/change-plan) puts the new price on the Stripe
+    // subscription straight away, but it only bills — and only counts — from the next
+    // renewal. Until the period actually rolls over, keep showing the plan they're still
+    // being delivered, and hold on to the pending switch.
+    // Measure the rollover against the date the switch was scheduled for, not against the
+    // stored period end: a renewal pushes the period a whole month past it, while ordinary
+    // drift between our copy and Stripe's is seconds. A day of grace keeps that drift from
+    // being mistaken for a renewal and applying the new plan early.
+    const ROLLOVER_GRACE_MS = 24 * 60 * 60 * 1000;
+    const periodRolledOver =
+        !!nextPeriodEnd &&
+        !!subRow.pendingPlanAt &&
+        nextPeriodEnd.getTime() > subRow.pendingPlanAt.getTime() + ROLLOVER_GRACE_MS;
+    const switchStillPending =
+        !!subRow.pendingPlanId && plan?.id === subRow.pendingPlanId && !periodRolledOver;
+
     await db
         .update(subscriptions)
         .set({
             status: mapStatus(sub.status),
-            planId: plan?.id ?? subRow.planId,
+            planId: switchStillPending ? subRow.planId : (plan?.id ?? subRow.planId),
             quantity,
-            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+            currentPeriodEnd: nextPeriodEnd,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
-            pendingPlanId: null,
-            pendingPlanAt: null
+            pendingPlanId: switchStillPending ? subRow.pendingPlanId : null,
+            pendingPlanAt: switchStillPending ? subRow.pendingPlanAt : null
         })
         .where(eq(subscriptions.id, subRow.id));
 }

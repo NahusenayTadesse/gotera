@@ -82,6 +82,33 @@ export const notifyAdminPaymentFailed = (data: { name: string; email: string }) 
 };
 
 
+/* ── Plan change / cancellation ── */
+
+export const sendPlanChanged = (to: string, data: Parameters<typeof t.customerPlanChanged>[0]) => {
+	const { subject, html } = t.customerPlanChanged(data);
+	return sendEmail(to, subject, html);
+};
+
+export const notifyAdminPlanChanged = (data: Parameters<typeof t.adminPlanChanged>[0]) => {
+	const { subject, html } = t.adminPlanChanged(data);
+	return sendEmail(SMTP_USER, subject, html);
+};
+
+export const sendSubscriptionCancelled = (
+	to: string,
+	data: Parameters<typeof t.customerSubscriptionCancelled>[0]
+) => {
+	const { subject, html } = t.customerSubscriptionCancelled(data);
+	return sendEmail(to, subject, html);
+};
+
+export const notifyAdminSubscriptionCancelled = (
+	data: Parameters<typeof t.adminSubscriptionCancelled>[0]
+) => {
+	const { subject, html } = t.adminSubscriptionCancelled(data);
+	return sendEmail(SMTP_USER, subject, html);
+};
+
 export const sendMagicLink = (to: string, url: string) => {
 	const { subject, html } = t.customerMagicLink(url);
 

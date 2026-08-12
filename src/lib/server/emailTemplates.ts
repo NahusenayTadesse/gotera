@@ -81,6 +81,15 @@ function fallbackLink(url: string) {
 	<p style="margin:0; word-break:break-all;"><a href="${url}" style="color:${C.copper}; font-size:13px;">${url}</a></p>`;
 }
 
+/** Escape free-text (cancellation feedback etc.) before it lands in the HTML. */
+function esc(s: string) {
+	return s
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
 /** Detail rows for confirmation / admin emails. */
 function detailRow(label: string, value: string) {
 	return `<tr>
@@ -302,6 +311,168 @@ export const customerOrderConfirmed = (data: {
 			<p style="margin:0 0 6px;">We deliver on Saturdays across London. There's nothing more you need to do.</p>
 			${button('View your order', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Address wrong? Reply to this email and we'll fix it before dispatch.</p>
+		`
+	})
+});
+
+/** Sent to the person who BOUGHT the gift, confirming it's booked in. */
+export const customerGiftReceived = (data: {
+	buyerName: string;
+	recipientName: string;
+	amountLabel: string;
+}) => ({
+	subject: `Your gift for ${data.recipientName} is confirmed`,
+	html: layout({
+		heading: 'Gift confirmed',
+		preheader: `Your injera gift for ${data.recipientName} is booked in.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.buyerName},</p>
+			<p style="margin:0 0 6px;">Thank you — your payment has gone through and the gift is booked in. We'll deliver it to ${data.recipientName} on our next Saturday run.</p>
+			${detailTable(
+				detailRow('Recipient', data.recipientName) +
+					detailRow('Total paid', data.amountLabel) +
+					detailRow('Status', 'Confirmed')
+			)}
+			<p style="margin:0 0 6px;">There's nothing more you need to do. This is a one-time gift — nothing renews.</p>
+			${button('View your order', `${SITE}/account`)}
+			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Wrong address or spelling? Reply to this email and we'll fix it before dispatch.</p>
+		`
+	})
+});
+
+/** SMTP health check — no customer ever sees this. */
+export const adminTest = () => ({
+	subject: 'GOTERA test email',
+	html: layout({
+		heading: 'Test email',
+		preheader: 'SMTP is working.',
+		body: `
+			<p style="margin:0 0 6px;">If you're reading this, the GOTERA mail transport is configured correctly and transactional email is going out.</p>
+			${detailTable(detailRow('Sent', new Date().toUTCString()))}
+		`
+	})
+});
+
+/* ──────────────────── PLAN CHANGE / CANCELLATION ──────────────────── */
+
+export const customerPlanChanged = (data: {
+	name: string;
+	fromPlanName: string;
+	toPlanName: string;
+	toPlanPriceLabel: string;
+	effectiveLabel: string;
+}) => ({
+	subject: `Your plan changes to ${data.toPlanName} on ${data.effectiveLabel}`,
+	html: layout({
+		heading: 'Plan change scheduled',
+		preheader: `${data.fromPlanName} → ${data.toPlanName}, from ${data.effectiveLabel}.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.name},</p>
+			<p style="margin:0 0 6px;">Your plan change is booked in. Nothing changes on this billing period — the new plan starts at your next renewal, so you're not charged or refunded mid-cycle.</p>
+			${detailTable(
+				detailRow('Current plan', data.fromPlanName) +
+					detailRow('New plan', data.toPlanName) +
+					detailRow('New price', data.toPlanPriceLabel) +
+					detailRow('Starts', data.effectiveLabel)
+			)}
+			<p style="margin:0 0 6px;">Deliveries carry on as normal until then.</p>
+			${button('View your account', `${SITE}/account`)}
+			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Changed your mind? You can switch back from your account before ${data.effectiveLabel}.</p>
+		`
+	})
+});
+
+export const adminPlanChanged = (data: {
+	name: string;
+	email: string;
+	fromPlanName: string;
+	toPlanName: string;
+	toPlanPriceLabel: string;
+	effectiveLabel: string;
+}) => ({
+	subject: `Plan change: ${data.name} → ${data.toPlanName}`,
+	html: layout({
+		heading: 'Plan change',
+		preheader: `${data.name} switched ${data.fromPlanName} → ${data.toPlanName}.`,
+		body: `
+			<p style="margin:0 0 6px;">A subscriber scheduled a plan change.</p>
+			${detailTable(
+				detailRow('Customer', data.name) +
+					detailRow('Email', data.email) +
+					detailRow('From', data.fromPlanName) +
+					detailRow('To', data.toPlanName) +
+					detailRow('New price', data.toPlanPriceLabel) +
+					detailRow('Effective', data.effectiveLabel)
+			)}
+			${button('Open admin', `${SITE}/admin`)}
+		`
+	})
+});
+
+export const customerSubscriptionCancelled = (data: {
+	name: string;
+	planName: string;
+	/** Last day of the paid period, or null when the plan stopped immediately. */
+	endsLabel: string | null;
+}) => ({
+	subject: 'Your GOTERA subscription has been cancelled',
+	html: layout({
+		heading: 'Subscription cancelled',
+		preheader: data.endsLabel
+			? `Your ${data.planName} plan runs until ${data.endsLabel}.`
+			: `Your ${data.planName} plan has been cancelled.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.name},</p>
+			<p style="margin:0 0 6px;">${
+				data.endsLabel
+					? "Your plan is cancelled and won't renew. You've already paid for this period, so deliveries continue until it ends."
+					: 'Your plan has been cancelled. There are no further deliveries and you will not be charged again.'
+			}</p>
+			${detailTable(
+				detailRow('Plan', data.planName) +
+					detailRow(
+						data.endsLabel ? 'Deliveries until' : 'Cancelled',
+						data.endsLabel ?? 'Immediately'
+					) +
+					detailRow('Renewals', 'Stopped')
+			)}
+			<p style="margin:0 0 6px;">Thank you for eating with us. Whenever you want injera again, your account is still here — start a new plan in a couple of taps.</p>
+			${button('Start again', `${SITE}/subscribe`)}
+			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Cancelled by mistake? Reply to this email${
+				data.endsLabel ? ` before ${data.endsLabel}` : ''
+			} and we'll put it back.</p>
+		`
+	})
+});
+
+export const adminSubscriptionCancelled = (data: {
+	name: string;
+	email: string;
+	planName: string;
+	endsLabel: string | null;
+	reason?: string | null;
+	feedback?: string | null;
+}) => ({
+	subject: `Cancellation: ${data.name} (${data.planName})`,
+	html: layout({
+		heading: 'Subscription cancelled',
+		preheader: `${data.name} cancelled the ${data.planName} plan.`,
+		body: `
+			<p style="margin:0 0 6px;">A subscriber cancelled.</p>
+			${detailTable(
+				detailRow('Customer', data.name) +
+					detailRow('Email', data.email) +
+					detailRow('Plan', data.planName) +
+					detailRow('Ends', data.endsLabel ?? 'Immediately (no paid period)') +
+					(data.reason ? detailRow('Reason', esc(data.reason)) : '')
+			)}
+			${
+				data.feedback
+					? `<p style="margin:0 0 6px; color:${C.taupe}; font-size:13px;">Feedback:</p>
+			<p style="margin:0 0 14px; padding:12px 14px; background:${C.panel}; color:${C.body}; font-size:14px; line-height:1.6;">${esc(data.feedback)}</p>`
+					: ''
+			}
+			${button('Open admin', `${SITE}/admin`)}
 		`
 	})
 });
