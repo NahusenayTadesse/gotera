@@ -54,6 +54,14 @@ export const sendPaymentFailed = (to: string, data: { name: string }) => {
 	return sendEmail(to, subject, html);
 };
 
+export const sendDeliveryDelayed = (
+	to: string,
+	data: { name: string; deliveryLabel: string; message: string }
+) => {
+	const { subject, html } = t.customerDeliveryDelayed(data);
+	return sendEmail(to, subject, html);
+};
+
 /* ── Admin sends (go to ADMIN_EMAIL) ── */
 
 export const notifyAdminNewSubscriber = (data: {

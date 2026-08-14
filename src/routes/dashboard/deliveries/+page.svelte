@@ -13,12 +13,14 @@
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
+	import DelayEmailDialog from './DelayEmailDialog.svelte';
 	import { X } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
 	let { data }: { data: PageData } = $props();
 
 	let filteredRows = $state(data.rows);
+	let selectedRows = $state<typeof data.rows>([]);
 
 	const statuses = [
 		{ value: 'scheduled', name: 'Scheduled' },
@@ -49,7 +51,10 @@
 	// on the empty default.
 	$effect.pre(() => {
 		if (editingId) {
-			const row = data.rows.find((r) => r.id === editingId);
+			const row = data.rows.find(
+				(r): r is Extract<(typeof data.rows)[number], { type: 'subscription' }> =>
+					r.id === editingId && r.type === 'subscription'
+			);
 			if (row) {
 				$form.id = row.id;
 				$form.status = row.status;
@@ -68,7 +73,8 @@
 </svelte:head>
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<h1 class="dash-heading text-2xl font-semibold">Upcoming Deliveries</h1>
+	<h1 class="dash-heading text-2xl font-semibold">Deliveries &amp; Orders</h1>
+	<DelayEmailDialog delayEmailForm={data.delayEmailForm} rows={selectedRows} />
 </div>
 
 {#if editingId}
@@ -109,9 +115,9 @@
 
 <FilterMenu
 	data={data.rows}
-	filterKeys={['status', 'planName']}
+	filterKeys={['type', 'status', 'planName']}
 	bind:filteredList={filteredRows}
 	class="mb-4"
 />
 
-<DataTable data={filteredRows} {columns} fileName="Deliveries" />
+<DataTable data={filteredRows} {columns} fileName="Deliveries" bind:selected={selectedRows} />

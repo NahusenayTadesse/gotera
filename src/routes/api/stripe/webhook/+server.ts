@@ -296,9 +296,19 @@ if (session.mode === 'payment') {
 	const [before] = await db.select().from(guestOrders).where(eq(guestOrders.id, guestOrderId));
 	const alreadyPaid = before?.status === 'paid' || before?.status === 'fulfilled';
  
+	// The guest never gave us an email or a name before Stripe — Checkout collected
+	// both, so this is the only place they can be recorded. Keep the recipient name
+	// the form captured; only fall back to the billing name when there wasn't one.
 	await db
 		.update(guestOrders)
-		.set({ status: 'paid', addressId, stripePaymentIntentId: session.payment_intent as string })
+		.set({
+			status: 'paid',
+			addressId,
+			buyerEmail: email ?? before?.buyerEmail ?? null,
+			buyerName: name ?? before?.buyerName ?? null,
+			recipientName: before?.recipientName ?? name ?? null,
+			stripePaymentIntentId: session.payment_intent as string
+		})
 		.where(eq(guestOrders.id, guestOrderId));
 
     
@@ -341,13 +351,15 @@ if (session.mode === 'payment') {
 
 			
 				// kind === 'order' — a one-off for the buyer themselves.
-				await sendOrderConfirmed(email, {
-					name: name ?? 'there',
-					amountLabel,
-					deliveryLabel,
-					addressLines,
-					addonNames
-				});
+				if (email) {
+					await sendOrderConfirmed(email, {
+						name: name ?? 'there',
+						amountLabel,
+						deliveryLabel,
+						addressLines,
+						addonNames
+					});
+				}
 				await notifyAdminOrder({
 					buyerName: name ?? 'Guest',
 					buyerEmail: email ?? 'Unknown',
@@ -356,9 +368,9 @@ if (session.mode === 'payment') {
 					addressLines,
 					addonNames
 				});
-                 
 
-                await sendMagicLink(email, name, request)
+				// Give the guest an account so the order shows up under /account.
+				if (email) await sendMagicLink(email, name ?? 'there', request);
 
 			}
 		

@@ -110,29 +110,35 @@ async function guestCheckout(opts: {
 	addons: AddonRow[];
 	quantity: number;
 	addressId: string;
-	buyerEmail: string | null;
-	buyerName: string | null;
+	buyerEmail?: string | null;
+	buyerName?: string | null;
 	recipientName: string;
 	recipientAddress: { phone: string | null, line1: string; line2: string | null; city: string; postcode: string };
 	successUrl: string;
 	cancelUrl: string;
 }): Promise<string> {
-	const giftOrderId = crypto.randomUUID();
+	const guestOrderId = crypto.randomUUID();
 	await db.insert(guestOrders).values({
-		id: giftOrderId,
+		id: guestOrderId,
 		buyerEmail: opts.buyerEmail ?? null,
-		quantity: opts.quantity,   
+		buyerName: opts.buyerName ?? null,
+		// The buyer only enters email/name on the Stripe page, so those are filled
+		// in by the webhook from session.customer_details. Everything the form did
+		// collect has to be written here or it is lost.
+		recipientName: opts.recipientName,
+		addressId: opts.addressId,
+		quantity: opts.quantity,
 		recipientAddress: opts.recipientAddress,
 		status: 'pending'
 	});
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',
-		billing_address_collection: 'required', 
+		billing_address_collection: 'required',
 		line_items: [{ price: opts.plan.stripePriceId!, quantity: opts.quantity }, ...addonLineItems(opts.addons)],
 		success_url: opts.successUrl,
 		cancel_url: opts.cancelUrl,
-		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
-		metadata: { guestOrderId: giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(','), quantity: String(opts.quantity), }
+		payment_intent_data: { metadata: { guestOrderId, kind: opts.plan.kind } },
+		metadata: { guestOrderId, kind: opts.plan.kind, addressId: opts.addressId, addonIds: opts.addons.map((a) => a.id).join(','), quantity: String(opts.quantity), }
 	});
 	return session.url!;
 }
@@ -470,6 +476,8 @@ export const actions: Actions = {
 				quantity: form.data.quantity, 
 				addons: chosenAddons,
 				recipientName: recipientName,
+				buyerEmail: form.data.buyerEmail ?? null,
+				buyerName: form.data.buyerName ?? null,
 				addressId,
 				recipientAddress: {
 					line1: form.data.line1,

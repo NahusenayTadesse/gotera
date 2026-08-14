@@ -1,0 +1,1 @@
+ALTER TABLE `guest_orders` ADD `buyer_name` varchar(255);

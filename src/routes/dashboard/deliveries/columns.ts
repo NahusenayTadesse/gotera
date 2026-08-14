@@ -1,10 +1,20 @@
 import { renderComponent } from '$lib/components/ui/data-table/index.js';
 import Statuses from '$lib/components/Table/statuses.svelte';
+import TypeBadge from '$lib/components/dashboard/TypeBadge.svelte';
 import RowActions from '$lib/components/dashboard/RowActions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
+import SelectHeader from '$lib/components/Table/select-header.svelte';
+import SelectCell from '$lib/components/Table/select-cell.svelte';
 import { formatEthiopianDate } from '$lib/global.svelte';
 
 export const columns = [
+	{
+		id: 'select',
+		header: ({ table }) => renderComponent(SelectHeader, { table }),
+		cell: ({ row }) => renderComponent(SelectCell, { row }),
+		enableSorting: false,
+		enableHiding: false
+	},
 	{
 		id: 'index',
 		header: '#',
@@ -15,9 +25,16 @@ export const columns = [
 		enableSorting: false
 	},
 	{
+		accessorKey: 'type',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, { name: 'Type', onclick: column.getToggleSortingHandler() }),
+		sortable: true,
+		cell: ({ row }) => renderComponent(TypeBadge, { type: row.original.type })
+	},
+	{
 		accessorKey: 'scheduledDate',
 		header: ({ column }) =>
-			renderComponent(DataTableSort, { name: 'Scheduled', onclick: column.getToggleSortingHandler() }),
+			renderComponent(DataTableSort, { name: 'Date', onclick: column.getToggleSortingHandler() }),
 		sortable: true,
 		cell: (info) => formatEthiopianDate(new Date(info.getValue()))
 	},
@@ -53,6 +70,19 @@ export const columns = [
 	{
 		accessorKey: 'actions',
 		header: 'Actions',
-		cell: ({ row }) => renderComponent(RowActions, { id: row.original.id, label: 'delivery' })
+		cell: ({ row }) => {
+			const { id, type } = row.original;
+			if (type === 'subscription') {
+				return renderComponent(RowActions, { id, label: 'delivery' });
+			}
+			const base = type === 'guest' ? '/dashboard/orders/guest' : '/dashboard/orders/one-time';
+			return renderComponent(RowActions, {
+				id,
+				label: type === 'guest' ? 'guest order' : 'one-time order',
+				editHref: `${base}?edit=${id}`,
+				deleteAction: '?/deleteOrder',
+				hiddenFields: { type }
+			});
+		}
 	}
 ];

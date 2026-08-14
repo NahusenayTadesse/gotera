@@ -181,6 +181,26 @@ export const customerUpcomingDelivery = (data: {
 	})
 });
 
+export const customerDeliveryDelayed = (data: {
+	name: string;
+	deliveryLabel: string;
+	message: string;
+}) => ({
+	subject: `Update on your delivery for ${data.deliveryLabel}`,
+	html: layout({
+		heading: 'Your delivery is delayed',
+		preheader: `Your delivery for ${data.deliveryLabel} has been delayed.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.name},</p>
+			<p style="margin:0 0 14px;">We're sorry to say your delivery scheduled for <strong>${data.deliveryLabel}</strong> has been delayed.</p>
+			<p style="margin:0 0 6px; color:${C.taupe}; font-size:13px;">Message from the GOTERA team:</p>
+			<p style="margin:0 0 14px; padding:12px 14px; background:${C.panel}; color:${C.body}; font-size:14px; line-height:1.6;">${esc(data.message)}</p>
+			<p style="margin:0 0 6px;">We're sorry for the inconvenience and appreciate your patience.</p>
+			${button('View your account', `${SITE}/account`)}
+		`
+	})
+});
+
 export const customerPaymentFailed = (data: { name: string }) => ({
 	subject: 'Payment issue with your GOTERA subscription',
 	html: layout({

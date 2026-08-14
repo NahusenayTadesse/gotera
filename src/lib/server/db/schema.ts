@@ -194,6 +194,7 @@ export const guestOrders = mysqlTable('guest_orders', {
 		.primaryKey()
 		.$defaultFn(() => crypto.randomUUID()),
 	buyerEmail: varchar('buyer_email', { length: 255 }),
+	buyerName: varchar('buyer_name', { length: 255 }),
 	recipientName: varchar('recipient_name', { length: 255 }),
 	recipientAddress: json('recipient_address').notNull(),
 	stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }).unique(),
