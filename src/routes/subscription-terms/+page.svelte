@@ -4,6 +4,11 @@
   let { data } = $props();
 </script>
 
+<svelte:head>
+	<title>{m.subterms_meta_title()}</title>
+	<meta name="description" content={m.subterms_meta_description()} />
+</svelte:head>
+
 <section class="hero">
 	<div class="container">
 		<span class="eyebrow">{m.subterms_eyebrow()}</span>

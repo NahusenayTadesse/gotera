@@ -37,6 +37,11 @@
 	]);
 </script>
 
+<svelte:head>
+	<title>{m.allergens_meta_title()}</title>
+	<meta name="description" content={m.allergens_meta_description()} />
+</svelte:head>
+
 <div class="page-head">
 	<div class="container">
 		<span class="eyebrow">{m.allergens_eyebrow()}</span>

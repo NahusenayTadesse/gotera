@@ -36,6 +36,7 @@
 	const navigation = [
 		{ title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
+		{ title: 'Bulk Email', url: '/dashboard/bulk-email', icon: Mail },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
 		{
 			title: 'Orders',

@@ -13,6 +13,7 @@
 		children,
 		variant = 'default',
 		class: className,
+		contentClass = '',
 		IconComp,
 		open = $bindable(false)
 	}: {
@@ -22,6 +23,8 @@
 		label?: string;
 		eyebrow?: string;
 		class: string;
+		/** Extra classes for the dialog panel itself — e.g. widen it past the default `sm:max-w-sm`. */
+		contentClass?: string;
 		children: Snippet;
 		variant?: 'default' | 'destructive' | 'outline' | 'ghost';
 		IconComp?: Component<IconProps>;
@@ -55,10 +58,10 @@
 
 
 
-		<Dialog.Content class="bg-[#faf8f3]">
-	
+		<Dialog.Content class="bg-[#faf8f3] {contentClass}">
+
 							{@render children()}
-			
+
 		</Dialog.Content>
 
 </Dialog.Root>

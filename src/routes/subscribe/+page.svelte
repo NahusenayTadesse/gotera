@@ -327,6 +327,7 @@ function submitAfterAuth() {
 
 <svelte:head>
     <title>{m.subscribe_page_title()}</title>
+	<meta name="description" content={m.subscribe_meta_description()} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link

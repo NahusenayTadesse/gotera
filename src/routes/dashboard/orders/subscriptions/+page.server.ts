@@ -5,6 +5,8 @@ import { eq, desc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { subscriptions, subscribers, plans } from '$lib/server/db/schema';
 import { contentCrud } from '$lib/server/crud';
+import { sendBulkEmailAction } from '$lib/server/bulkEmail';
+import { bulkEmailSchema } from '$lib/schemas/bulkEmail';
 import { subscriptionSchema } from './schema';
 
 const crud = contentCrud({
@@ -15,8 +17,9 @@ const crud = contentCrud({
 });
 
 export const load: PageServerLoad = async () => {
-	const [form, rows, subscriberOptions, planOptions] = await Promise.all([
+	const [form, bulkEmailForm, rows, subscriberOptions, planOptions] = await Promise.all([
 		superValidate(zod4(subscriptionSchema)),
+		superValidate(zod4(bulkEmailSchema)),
 		db
 			.select({
 				id: subscriptions.id,
@@ -40,7 +43,10 @@ export const load: PageServerLoad = async () => {
 		db.select({ value: plans.id, name: plans.name }).from(plans)
 	]);
 
-	return { form, rows, subscriberOptions, planOptions };
+	return { form, bulkEmailForm, rows, subscriberOptions, planOptions };
 };
 
-export const actions: Actions = crud.actions;
+export const actions: Actions = {
+	...crud.actions,
+	sendBulkEmail: sendBulkEmailAction
+};

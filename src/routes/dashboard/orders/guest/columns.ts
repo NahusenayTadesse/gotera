@@ -2,9 +2,18 @@ import { renderComponent } from '$lib/components/ui/data-table/index.js';
 import Statuses from '$lib/components/Table/statuses.svelte';
 import RowActions from '$lib/components/dashboard/RowActions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
+import SelectHeader from '$lib/components/Table/select-header.svelte';
+import SelectCell from '$lib/components/Table/select-cell.svelte';
 import { formatEthiopianDate } from '$lib/global.svelte';
 
 export const columns = [
+	{
+		id: 'select',
+		header: ({ table }) => renderComponent(SelectHeader, { table }),
+		cell: ({ row }) => renderComponent(SelectCell, { row }),
+		enableSorting: false,
+		enableHiding: false
+	},
 	{
 		id: 'index',
 		header: '#',

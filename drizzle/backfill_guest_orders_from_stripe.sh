@@ -57,5 +57,7 @@ print((b.get("email") or c.get("receipt_email") or "") + "\t" + (b.get("name") o
     [ -n "$sets" ] && sets="$sets, "
     sets="${sets}buyer_name = coalesce(buyer_name, '$(esc "$name")')"
   fi
-  echo "UPDATE guest_orders SET $sets WHERE id = '$(esc "$order_id")';"
+  # updated_at is ON UPDATE CURRENT_TIMESTAMP and doubles as the correlation key
+  # for the user-matching backfill. Pin it so the paid-at time survives.
+  echo "UPDATE guest_orders SET $sets, updated_at = updated_at WHERE id = '$(esc "$order_id")';"
 done

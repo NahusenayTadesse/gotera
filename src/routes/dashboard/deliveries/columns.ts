@@ -39,11 +39,18 @@ export const columns = [
 		cell: (info) => formatEthiopianDate(new Date(info.getValue()))
 	},
 	{
-		accessorKey: 'subscriberEmail',
+		accessorKey: 'subscriberName',
 		header: ({ column }) =>
 			renderComponent(DataTableSort, { name: 'Customer', onclick: column.getToggleSortingHandler() }),
 		sortable: true,
-		cell: ({ row }) => row.original.subscriberName || row.original.subscriberEmail || '—'
+		cell: ({ row }) => row.original.subscriberName || '—'
+	},
+		{
+		accessorKey: 'subscriberEmail',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, { name: 'Customer Email', onclick: column.getToggleSortingHandler() }),
+		sortable: true,
+		cell: ({ row }) => row.original.subscriberEmail || '—'
 	},
 	{
 		accessorKey: 'planName',

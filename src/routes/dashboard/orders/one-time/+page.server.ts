@@ -6,6 +6,8 @@ import { db } from '$lib/server/db';
 import { giftOrders } from '$lib/server/db/schema';
 import { contentCrud } from '$lib/server/crud';
 import { parseJsonColumn } from '$lib/components/dashboard/format';
+import { sendBulkEmailAction } from '$lib/server/bulkEmail';
+import { bulkEmailSchema } from '$lib/schemas/bulkEmail';
 import { orderSchema } from './schema';
 
 type Address = { line1: string; line2?: string | null; city: string; postcode: string };
@@ -18,8 +20,9 @@ const crud = contentCrud({
 });
 
 export const load: PageServerLoad = async () => {
-	const [form, rawRows] = await Promise.all([
+	const [form, bulkEmailForm, rawRows] = await Promise.all([
 		superValidate(zod4(orderSchema)),
+		superValidate(zod4(bulkEmailSchema)),
 		db.select().from(giftOrders).orderBy(desc(giftOrders.createdAt))
 	]);
 
@@ -32,11 +35,12 @@ export const load: PageServerLoad = async () => {
 		})
 	}));
 
-	return { form, rows };
+	return { form, bulkEmailForm, rows };
 };
 
 // Orders are created by the checkout flow; admins only edit/delete existing ones.
 export const actions: Actions = {
 	edit: crud.actions.edit,
-	delete: crud.actions.delete
+	delete: crud.actions.delete,
+	sendBulkEmail: sendBulkEmailAction
 };

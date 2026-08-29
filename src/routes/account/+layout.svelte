@@ -66,6 +66,10 @@
 	);
 </script>
 
+<svelte:head>
+	<meta name="robots" content="noindex" />
+</svelte:head>
+
 <div class="page-header">
 	<div class="container">
 		<div class="page-header-inner">

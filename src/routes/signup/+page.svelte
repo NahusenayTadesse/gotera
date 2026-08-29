@@ -42,6 +42,7 @@
 
 <svelte:head>
 	<title>{m.signup_page_title()}</title>
+	<meta name="description" content={m.signup_meta_description()} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link

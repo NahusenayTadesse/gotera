@@ -39,6 +39,7 @@
 
 <svelte:head>
 	<title>{m.layout_title()}</title>
+	<link rel="canonical" href={page.url.origin + page.url.pathname} />
 
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 

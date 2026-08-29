@@ -62,6 +62,7 @@
 		"zod": "^4.4.3"
 	},
 	"dependencies": {
+		"@friendofsvelte/tipex": "^0.2.0",
 		"@tanstack/table-core": "^8.21.3",
 		"bits-ui": "^2.18.1",
 		"browser-image-compression": "^2.0.2",

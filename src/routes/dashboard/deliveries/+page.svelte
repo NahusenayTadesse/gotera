@@ -13,7 +13,7 @@
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import DelayEmailDialog from './DelayEmailDialog.svelte';
+	import BulkEmailDialog from '$lib/components/dashboard/BulkEmailDialog.svelte';
 	import { X } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -74,7 +74,10 @@
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
 	<h1 class="dash-heading text-2xl font-semibold">Deliveries &amp; Orders</h1>
-	<DelayEmailDialog delayEmailForm={data.delayEmailForm} rows={selectedRows} />
+	<BulkEmailDialog
+		bulkEmailForm={data.bulkEmailForm}
+		rows={selectedRows.map((r) => ({ id: r.id, email: r.subscriberEmail, name: r.subscriberName }))}
+	/>
 </div>
 
 {#if editingId}

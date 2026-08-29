@@ -81,6 +81,7 @@ import type { PageData } from './$types';
 
 <svelte:head>
 	<title>{m.home_meta_title()}</title>
+	<meta name="description" content={m.home_meta_description()} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -129,7 +130,7 @@ import type { PageData } from './$types';
 					preload="metadata"
 					onloadeddata={() => (heroCardVideoReady = true)}
 				>
-					<source src="/output.webm" type="video/mp4" />
+					<source src="/output.webm" type="video/webm" />
 				</video>
 			</div>
 			<div class="hero-card-body">
@@ -161,7 +162,7 @@ import type { PageData } from './$types';
 			preload="metadata"
 			onloadeddata={() => (heroVideoReady = true)}
 		>
-			<source src="/output.webm" type="video/mp4" />
+			<source src="/output.webm" type="video/webm" />
 		</video>
 	</div>
 	<div class="hero__gradient"></div>

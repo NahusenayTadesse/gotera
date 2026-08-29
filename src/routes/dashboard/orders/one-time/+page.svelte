@@ -13,12 +13,14 @@
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
+	import BulkEmailDialog from '$lib/components/dashboard/BulkEmailDialog.svelte';
 	import { X } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
 	let { data }: { data: PageData } = $props();
 
 	let filteredRows = $state(data.rows);
+	let selectedRows = $state<typeof data.rows>([]);
 
 	const statuses = [
 		{ value: 'pending', name: 'Pending' },
@@ -65,6 +67,10 @@
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
 	<h1 class="dash-heading text-2xl font-semibold">One-Time & Gift Orders</h1>
+	<BulkEmailDialog
+		bulkEmailForm={data.bulkEmailForm}
+		rows={selectedRows.map((r) => ({ id: r.id, email: r.buyerEmail, name: r.buyerName || r.recipientName }))}
+	/>
 </div>
 
 {#if editingId}
@@ -117,4 +123,4 @@
 
 <FilterMenu data={data.rows} filterKeys={['status']} bind:filteredList={filteredRows} class="mb-4" />
 
-<DataTable data={filteredRows} {columns} fileName="One-Time and Gift Orders" />
+<DataTable data={filteredRows} {columns} fileName="One-Time and Gift Orders" bind:selected={selectedRows} />

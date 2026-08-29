@@ -54,14 +54,6 @@ export const sendPaymentFailed = (to: string, data: { name: string }) => {
 	return sendEmail(to, subject, html);
 };
 
-export const sendDeliveryDelayed = (
-	to: string,
-	data: { name: string; deliveryLabel: string; message: string }
-) => {
-	const { subject, html } = t.customerDeliveryDelayed(data);
-	return sendEmail(to, subject, html);
-};
-
 /* ── Admin sends (go to ADMIN_EMAIL) ── */
 
 export const notifyAdminNewSubscriber = (data: {
@@ -157,5 +149,12 @@ export async function notifyAdminOrder(data: Parameters<typeof adminNewOrder>[0]
 	const { subject, html } = adminNewOrder(data);
 	return sendEmail(SMTP_USER, subject, html );
 }
+
+/* ── Bulk / marketing send (dashboard bulk email sender) ── */
+
+export const sendBulkEmail = (to: string, data: Parameters<typeof t.customerBulkEmail>[0]) => {
+	const { subject, html } = t.customerBulkEmail(data);
+	return sendEmail(to, subject, html);
+};
 
  

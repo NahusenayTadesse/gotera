@@ -75,6 +75,11 @@
 	]);
 </script>
 
+<svelte:head>
+	<title>{m.terms_meta_title()}</title>
+	<meta name="description" content={m.terms_meta_description()} />
+</svelte:head>
+
 <section class="hero">
 	<div class="container">
 		<span class="eyebrow">{m.terms_eyebrow()}</span>

@@ -9,6 +9,7 @@
 
 <svelte:head>
 	<title>{m.login_page_title()}</title>
+	<meta name="description" content={m.login_meta_description()} />
 </svelte:head>
 
 <div class="flex h-screen w-full items-center justify-center px-4">

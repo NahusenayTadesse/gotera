@@ -154,6 +154,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{m.faq_meta_title()}</title>
+	<meta name="description" content={m.faq_meta_description()} />
+</svelte:head>
+
 <section class="hero">
 	<div class="container">
 		<span class="eyebrow">{m.faq_hero_eyebrow()}</span>

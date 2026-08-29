@@ -28,6 +28,7 @@
 
 <svelte:head>
 	<title>{m.forgotpw_meta_title()}</title>
+	<meta name="description" content={m.forgotpw_meta_description()} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link

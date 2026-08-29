@@ -11,6 +11,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { CircleAlert } from '@lucide/svelte';
 	import GalleryUpload from './GalleryUpload.svelte';
+	import RichTextEditor from './RichTextEditor.svelte';
 
 	let {
 		label,
@@ -48,6 +49,9 @@
 		<input type="hidden" {name} bind:value={$form[name]} />
 	{:else if type === 'dateMultiple'}
 		<DatePicker bind:data={$form[name]} {oldDays} {year} {futureDays} />
+		<input type="hidden" {name} bind:value={$form[name]} />
+	{:else if type === 'richtext'}
+		<RichTextEditor bind:value={$form[name]} {placeholder} />
 		<input type="hidden" {name} bind:value={$form[name]} />
 	{:else if type === 'combo'}
 		<ComboboxComp {name} bind:value={$form[name]} {items} {required} />

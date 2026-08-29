@@ -10,6 +10,10 @@
 	let { children, data } = $props();
 </script>
 
+<svelte:head>
+	<meta name="robots" content="noindex" />
+</svelte:head>
+
 <div class="dashboard-theme bg-background text-foreground">
 	<Sidebar.Provider>
 		<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
