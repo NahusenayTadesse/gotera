@@ -131,6 +131,7 @@ import type { PageData } from './$types';
 					onloadeddata={() => (heroCardVideoReady = true)}
 				>
 					<source src="/output.webm" type="video/webm" />
+					<source src="/hero.mp4" type="video/mp4" />
 				</video>
 			</div>
 			<div class="hero-card-body">
@@ -163,6 +164,7 @@ import type { PageData } from './$types';
 			onloadeddata={() => (heroVideoReady = true)}
 		>
 			<source src="/output.webm" type="video/webm" />
+			<source src="/hero.mp4" type="video/mp4" />
 		</video>
 	</div>
 	<div class="hero__gradient"></div>
