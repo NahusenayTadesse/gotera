@@ -1,0 +1,1 @@
+import{n as e}from"./Bi76Sbi7.js";var t=()=>`Authentic Ethiopian injera made with 100% teff, delivered monthly to your door in London. Vegan, gluten-free, and packed with iron.`,n=()=>`ከ100% ጤፍ የተሰራ እውነተኛ የኢትዮጵያ እንጀራ በየወሩ እስከ ለንደን ቤትዎ ድረስ ይደርሳል። ቬጋን፣ ግሉተን-ነጻ እና በብረት የበለጸገ።`,r=((r={},i={})=>(i.locale??e())===`am`?n(r):t(r));export{r as t};

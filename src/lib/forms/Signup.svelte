@@ -211,7 +211,7 @@ async function signInWithGoogle() {
 </div>
 
 <style>
-	:global(:root) { --cream: #faf8f4; --ink: #1a1a1a; --copper: #b5622a; --taupe: #7a746e; --border: #e8e4e0; --panel: #f5f2ed; }
+	:global(:root) { --cream: #faf8f4; --ink: #1a1a1a; --copper: #a45926; --taupe: #6f6964; --border: #e8e4e0; --panel: #f5f2ed; }
 	.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 40px 16px; background: linear-gradient(180deg, #fcfbf8 0%, var(--cream) 100%); font-family: 'Jost', sans-serif; color: var(--ink); }
 	.auth-card { width: min(440px, 100%); background: #fff; border: 1px solid var(--border); padding: 40px 36px; }
 	.eyebrow { display: block; margin-bottom: 10px; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--copper); }

@@ -33,6 +33,29 @@
 	const nonWhiteBG = $derived(
 		page.url.pathname === '/' || page.url.pathname.startsWith('/subscribe')
 	);
+
+	// Svelte never parses template expressions inside a literal <script> tag
+	// (not even {@html} placed within one) — it's passed through as raw text.
+	// So the whole tag, opening/closing included, has to be built as one HTML
+	// string and injected via a single {@html} outside the tag. '<' is escaped
+	// so the JSON payload can't prematurely close the script or inject markup.
+	const organizationJsonLdScript = $derived(
+		`<script type="application/ld+json">${JSON.stringify({
+			'@context': 'https://schema.org',
+			'@type': 'Organization',
+			name: 'GOTERA',
+			legalName: 'GOTERA Foods Ltd',
+			url: 'https://gotera.co.uk',
+			logo: 'https://gotera.co.uk/logo192.jpg',
+			image: 'https://gotera.co.uk/og-image.jpg',
+			email: 'hello@gotera.co.uk',
+			description: m.home_meta_description(),
+			areaServed: {
+				'@type': 'City',
+				name: 'London'
+			}
+		}).replace(/</g, '\\u003c')}<\/script>`
+	);
 </script>
 
 <svelte:window onscroll={handleScroll} />
@@ -40,6 +63,30 @@
 <svelte:head>
 	<title>{m.layout_title()}</title>
 	<link rel="canonical" href={page.url.origin + page.url.pathname} />
+
+	{#each locales as locale (locale)}
+		<link
+			rel="alternate"
+			hreflang={locale}
+			href={page.url.origin + localizeHref(page.url.pathname, { locale })}
+		/>
+	{/each}
+	<link
+		rel="alternate"
+		hreflang="x-default"
+		href={page.url.origin + localizeHref(page.url.pathname, { locale: 'en' })}
+	/>
+
+	<meta property="og:site_name" content="GOTERA" />
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={page.url.origin + page.url.pathname} />
+	<meta property="og:image" content={page.url.origin + '/og-image.jpg'} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:image" content={page.url.origin + '/og-image.jpg'} />
+
+	{@html organizationJsonLdScript}
 
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 
@@ -144,7 +191,7 @@
 				</div>
 
 				<div>
-					<h4>{m.layout_footer_site_heading()}</h4>
+					<h2>{m.layout_footer_site_heading()}</h2>
 
 					<div class="footer-links">
 						<a href="/">{m.layout_footer_home()}</a>
@@ -155,7 +202,7 @@
 				</div>
 
 				<div>
-					<h4>{m.layout_footer_legal_heading()}</h4>
+					<h2>{m.layout_footer_legal_heading()}</h2>
 
 					<div class="footer-links">
 						<a href="/privacy">{m.layout_footer_privacy()}</a>
@@ -183,9 +230,9 @@
 	:global(:root) {
 		--cream: #faf8f4;
 		--ink: #1a1a1a;
-		--copper: #b5622a;
+		--copper: #a45926;
 		--copper-logo: #9a4f22;
-		--taupe: #7a746e;
+		--taupe: #6f6964;
 		--border: #e8e4e0;
 		--panel: #f5f2ed;
 		--white: #fff;
@@ -519,7 +566,7 @@
 		color: var(--taupe);
 	}
 
-	.footer h4 {
+	.footer h2 {
 		font-size: 0.68rem;
 		letter-spacing: 0.16em;
 		text-transform: uppercase;

@@ -66,7 +66,7 @@
 		--cream-card: #faf8f3;
 		--ink: #16130f;
 		--ink-soft: #2a2620;
-		--copper: #b0622f;
+		--copper: #a45926;
 		--muted: #8b8578;
 		--line: #e2ddd2;
 		--serif: Georgia, 'Times New Roman', serif;

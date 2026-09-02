@@ -159,8 +159,8 @@
 	:root {
 		--cream: #FAF8F4;
 		--ink: #1A1A1A;
-		--copper: #B5622A;
-		--taupe: #7A746E;
+		--copper: #a45926;
+		--taupe: #6f6964;
 		--border: #E8E4E0;
 		--panel: #F5F2ED;
 		--max: 860px;

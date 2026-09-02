@@ -82,6 +82,10 @@ import type { PageData } from './$types';
 <svelte:head>
 	<title>{m.home_meta_title()}</title>
 	<meta name="description" content={m.home_meta_description()} />
+	<meta property="og:title" content={m.home_meta_title()} />
+	<meta property="og:description" content={m.home_meta_description()} />
+	<meta name="twitter:title" content={m.home_meta_title()} />
+	<meta name="twitter:description" content={m.home_meta_description()} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
@@ -127,7 +131,7 @@ import type { PageData } from './$types';
 					muted
 					loop
 					playsinline
-					preload="metadata"
+					preload="auto"
 					onloadeddata={() => (heroCardVideoReady = true)}
 				>
 					<source src="/output.webm" type="video/webm" />
@@ -146,7 +150,7 @@ import type { PageData } from './$types';
 	<div class="hero__img">
 		<div class="img-ph" style="width:100%;height:100%">
 			<img
-				src="/hero.jpeg"
+				src="/hero.webp"
 				alt={m.home_hero_img_alt()}
 				style="width:100%;height:100%;object-fit:cover;object-position:center"
 			/>
@@ -160,7 +164,7 @@ import type { PageData } from './$types';
 			muted
 			loop
 			playsinline
-			preload="metadata"
+			preload="auto"
 			onloadeddata={() => (heroVideoReady = true)}
 		>
 			<source src="/output.webm" type="video/webm" />
@@ -229,22 +233,22 @@ import type { PageData } from './$types';
 		</div>
 		<div class="pillars-grid">
 			<div class="pillar">
-				<div class="pillar-num">01</div>
+				<div class="pillar-num" aria-hidden="true">01</div>
 				<h3>{m.home_pillar1_title()}</h3>
 				<p>{m.home_pillar1_desc()}</p>
 			</div>
 			<div class="pillar">
-				<div class="pillar-num">02</div>
+				<div class="pillar-num" aria-hidden="true">02</div>
 				<h3>{m.home_pillar2_title()}</h3>
 				<p>{m.home_pillar2_desc()}</p>
 			</div>
 			<div class="pillar">
-				<div class="pillar-num">03</div>
+				<div class="pillar-num" aria-hidden="true">03</div>
 				<h3>{m.home_pillar3_title()}</h3>
 				<p>{m.home_pillar3_desc()}</p>
 			</div>
 			<div class="pillar">
-				<div class="pillar-num">04</div>
+				<div class="pillar-num" aria-hidden="true">04</div>
 				<h3>{m.home_pillar4_title()}</h3>
 				<p>{m.home_pillar4_desc()}</p>
 			</div>
@@ -428,8 +432,8 @@ import type { PageData } from './$types';
 	:global(:root) {
 		--cream: #faf8f4;
 		--ink: #1a1a1a;
-		--copper: #b5622a;
-		--taupe: #7a746e;
+		--copper: #a45926;
+		--taupe: #6f6964;
 		--border: #e8e4e0;
 		--panel: #f5f2ed;
 		--white: #fff;

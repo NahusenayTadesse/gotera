@@ -60,8 +60,8 @@
   --cream:        #FAF8F4;
   --panel:        #F5F2ED;
   --border:       #E8E4E0;
-  --taupe:        #7A746E;
-  --copper:       #B5622A;   /* accent — buttons, prices, eyebrows, accents */
+  --taupe: #6f6964;
+  --copper: #a45926;   /* accent — buttons, prices, eyebrows, accents */
   --copper-logo:  #9A4F22;   /* logo and footer wordmark only */
   --copper-dark:  #7A3D18;   /* active/hover state */
   --ink:          #1A1A1A;

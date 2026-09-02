@@ -144,8 +144,8 @@
 	:global(:root) {
 		--cream: #faf8f4;
 		--ink: #1a1a1a;
-		--copper: #b5622a;
-		--taupe: #7a746e;
+		--copper: #a45926;
+		--taupe: #6f6964;
 		--border: #e8e4e0;
 		--panel: #f5f2ed;
 	}
