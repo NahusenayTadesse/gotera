@@ -1,5 +1,7 @@
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from './db';
-import { deliverySkipDates } from './db/schema';
+import { deliverySkipDates, stock } from './db/schema';
+import { MAIN_SCOPE } from './stock';
 import { shiftDays, toCalendarString, todayInTimeZone, type CalendarDate } from '$lib/format';
 
 function dayOfWeek(value: CalendarDate): number {
@@ -26,7 +28,8 @@ export const MIN_LEAD_DAYS = 3;
 
 /**
  * The next Saturday on/after `from` (a CalendarDate, default: today in the business time
- * zone) that isn't in `delivery_skip_dates` and is at least `MIN_LEAD_DAYS` away.
+ * zone) that isn't in `delivery_skip_dates`, isn't already at full capacity in `stock`,
+ * and is at least `MIN_LEAD_DAYS` away.
  * Deliveries only ever run on Saturdays, and skips are the exception — this is the single
  * place that turns "a Saturday" into "the Saturday we're actually delivering on", so every
  * order, subscription and reschedule agrees with what the admin dashboard shows. Returns a
@@ -40,9 +43,44 @@ export async function nextDeliveryDate(from: CalendarDate = todayInTimeZone()): 
 
 	let candidate = shiftDays(from, daysUntilSaturday);
 
+	const [skips, fullDates] = await Promise.all([
+		db.select({ date: deliverySkipDates.date }).from(deliverySkipDates),
+		// Saturdays whose main-product capacity is already taken. A date with no stock row
+		// yet is simply not in this set — capacity is created lazily at the default, so an
+		// unseeded date is treated as open rather than full.
+		db
+			.select({ date: stock.deliveryDate })
+			.from(stock)
+			.where(and(eq(stock.scopeKey, MAIN_SCOPE), sql`${stock.used} >= ${stock.capacity}`))
+	]);
+
+	const unavailable = new Set([
+		...skips.map((s) => toCalendarString(s.date)),
+		...fullDates.map((s) => toCalendarString(s.date))
+	]);
+
+	while (unavailable.has(candidate)) candidate = shiftDays(candidate, 7);
+
+	return toLocalMidnight(candidate);
+}
+
+/**
+ * What `nextDeliveryDate` would return if no date were full — i.e. skip dates and the
+ * lead time still apply, but capacity doesn't.
+ *
+ * Used only to decide whether a customer was actually pushed back by stock, so the
+ * "we moved you" email and notification don't fire for someone who was always going to
+ * get that Saturday anyway (because of a bank holiday skip, say).
+ */
+export async function nextDeliveryDateIgnoringCapacity(
+	from: CalendarDate = todayInTimeZone()
+): Promise<Date> {
+	let daysUntilSaturday = (6 - dayOfWeek(from) + 7) % 7;
+	if (daysUntilSaturday < MIN_LEAD_DAYS) daysUntilSaturday += 7;
+	let candidate = shiftDays(from, daysUntilSaturday);
+
 	const skips = await db.select({ date: deliverySkipDates.date }).from(deliverySkipDates);
 	const skipped = new Set(skips.map((s) => toCalendarString(s.date)));
-
 	while (skipped.has(candidate)) candidate = shiftDays(candidate, 7);
 
 	return toLocalMidnight(candidate);

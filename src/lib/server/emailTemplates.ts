@@ -188,6 +188,53 @@ export const customerUpcomingDelivery = (data: {
 	})
 });
 
+/**
+ * Sent when the Saturday a customer would normally have got was already at capacity, so
+ * their first delivery is the one after. Names both dates explicitly — the useful fact is
+ * *when it will arrive*, not that something was full.
+ */
+export const customerDeliveryRolled = (data: {
+	name: string;
+	originalLabel: string;
+	deliveryLabel: string;
+}) => ({
+	subject: `Your first delivery is ${data.deliveryLabel}`,
+	html: layout({
+		heading: 'Your delivery date',
+		preheader: `We'll deliver on ${data.deliveryLabel}.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.name},</p>
+			<p style="margin:0 0 6px;">Thanks for your order! Our ${data.originalLabel} run is fully booked, so we've scheduled you for the next one:</p>
+			${detailTable(detailRow('Delivery date', data.deliveryLabel))}
+			<p style="margin:14px 0 6px;">Nothing for you to do — we'll email you again a couple of days before it arrives.</p>
+		`
+	})
+});
+
+/** Low-stock warning to the shop owner (SMTP_USER), not to a customer. */
+export const adminStockLow = (data: {
+	itemLabel: string;
+	deliveryLabel: string;
+	remaining: number;
+	capacity: number;
+}) => ({
+	subject: `Low stock: ${data.itemLabel} for ${data.deliveryLabel}`,
+	html: layout({
+		heading: 'Stock running low',
+		preheader: `${data.remaining} left of ${data.capacity} for ${data.deliveryLabel}.`,
+		body: `
+			<p style="margin:0 0 6px;">Stock is running low for an upcoming delivery date:</p>
+			${detailTable(
+				detailRow('Item', data.itemLabel) +
+					detailRow('Delivery date', data.deliveryLabel) +
+					detailRow('Remaining', `${data.remaining} of ${data.capacity}`)
+			)}
+			<p style="margin:14px 0 6px;">Once it hits zero, new orders roll to the following Saturday automatically.</p>
+			${button('Manage stock', `${SITE}/dashboard/stock`)}
+		`
+	})
+});
+
 export const customerAddonsAdded = (data: {
 	name: string;
 	deliveryLabel: string;

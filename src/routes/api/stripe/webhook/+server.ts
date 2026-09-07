@@ -29,10 +29,13 @@ import {
     sendGiftReceived,
     notifyAdminGiftOrder,
     sendOrderConfirmed, notifyAdminOrder,
-    sendAddonsAdded
+    sendAddonsAdded,
+    sendDeliveryRolled
 } from '$lib/server/email';
 import { auth } from '$lib/server/auth';
-import { nextDeliveryDate } from '$lib/server/deliverySchedule';
+import { nextDeliveryDate, nextDeliveryDateIgnoringCapacity } from '$lib/server/deliverySchedule';
+import { consumeStock, notify } from '$lib/server/stock';
+import { toCalendarString } from '$lib/format';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
 
@@ -210,13 +213,52 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
     
     if (!targetAddressId) return;
 
+    // The date the customer would have got if nothing were full, so we can tell whether
+    // capacity actually moved them and only notify when it did.
+    const soonest = await nextDeliveryDateIgnoringCapacity();
+    const scheduledDate = await nextDeliveryDate();
+
     await db.insert(deliveries).values({
         subscriberId,
         subscriptionId,
         addressId: targetAddressId,
-        scheduledDate: await nextDeliveryDate(),
+        scheduledDate,
         status: 'scheduled'
     });
+
+    // Reserve capacity for the date actually booked. `nextDeliveryDate` already skipped
+    // full Saturdays, so this normally succeeds; if a concurrent order took the last unit
+    // between those two calls the delivery still stands and the shortfall shows up as an
+    // over-capacity row on the stock dashboard rather than a lost order.
+    const reserved = await consumeStock(scheduledDate, 1);
+    if (!reserved.ok) {
+        console.error('stock: booked a delivery on a date that filled up concurrently', scheduledDate);
+    }
+
+    if (toCalendarString(scheduledDate) !== toCalendarString(soonest)) {
+        const [subscriber] = await db.select().from(subscribers).where(eq(subscribers.id, subscriberId));
+        if (subscriber) {
+            const originalLabel = deliveryFmt.format(soonest);
+            const deliveryLabel = deliveryFmt.format(scheduledDate);
+
+            await notify(
+                subscriberId,
+                'delivery-rolled',
+                `Your first delivery is ${deliveryLabel}`,
+                `Our ${originalLabel} run was fully booked, so we've scheduled you for the next one.`
+            );
+
+            try {
+                await sendDeliveryRolled(subscriber.email, {
+                    name: subscriber.fullName ?? 'there',
+                    originalLabel,
+                    deliveryLabel
+                });
+            } catch (e) {
+                console.error('delivery-rolled email failed', e);
+            }
+        }
+    }
 }
 
 

@@ -39,6 +39,7 @@
 		{ title: 'Bulk Email', url: '/dashboard/bulk-email', icon: Mail },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
 		{ title: 'Add-ons', url: '/dashboard/addons', icon: CookingPot },
+		{ title: 'Stock', url: '/dashboard/stock', icon: Container },
 		{
 			title: 'Orders',
 			url: '/dashboard/orders',

@@ -5,6 +5,7 @@
 	import DarkMode from '$lib/components/DarkMode.svelte';
 	import Search from '$lib/components/Search.svelte';
 	import AvatarSettings from '$lib/components/AvatarSettings.svelte';
+	import StockIndicator from '$lib/components/dashboard/StockIndicator.svelte';
 	import BottomMenu from '$lib/components/bottomMenu.svelte';
 
 	let { children, data } = $props();
@@ -25,6 +26,7 @@
 			>
 				<Sidebar.Trigger class="rounded-lg border border-border bg-card p-4" />
 				<div class="flex flex-row items-center gap-4">
+					<StockIndicator stock={data?.stock} />
 					<Search />
 					<DarkMode />
 					<AvatarSettings data={data?.name} />

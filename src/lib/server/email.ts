@@ -57,6 +57,25 @@ export const sendAddonsAdded = (
 	return sendEmail(to, subject, html);
 };
 
+export const sendDeliveryRolled = (
+	to: string,
+	data: { name: string; originalLabel: string; deliveryLabel: string }
+) => {
+	const { subject, html } = t.customerDeliveryRolled(data);
+	return sendEmail(to, subject, html);
+};
+
+/** Goes to SMTP_USER (the shop), not a customer. */
+export const notifyAdminStockLow = (data: {
+	itemLabel: string;
+	deliveryLabel: string;
+	remaining: number;
+	capacity: number;
+}) => {
+	const { subject, html } = t.adminStockLow(data);
+	return sendEmail(SMTP_USER, subject, html);
+};
+
 export const sendPaymentFailed = (to: string, data: { name: string }) => {
 	const { subject, html } = t.customerPaymentFailed(data);
 	return sendEmail(to, subject, html);

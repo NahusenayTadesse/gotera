@@ -150,6 +150,89 @@ export const deliveries = mysqlTable(
 	]
 );
 
+// ── Stock (capacity per delivery date) ──
+// One row per (Saturday, item). `addonId` NULL means the main product; otherwise the row
+// tracks that add-on's capacity for the same date. `used` is incremented when a delivery
+// is booked, so "full" is `used >= capacity` and the booking logic rolls to the next
+// Saturday rather than overselling.
+//
+// `scopeKey` exists only to make the uniqueness constraint work: MySQL treats NULLs as
+// distinct in a unique index, so unique(delivery_date, addon_id) would happily allow two
+// main-product rows for the same date. `scopeKey` is 'main' or the addon's id, and is
+// what actually carries the constraint — `addonId` is kept for the foreign key and joins.
+export const stock = mysqlTable(
+	'stock',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		deliveryDate: date('delivery_date').notNull(),
+		addonId: varchar('addon_id', { length: 36 }).references(() => addons.id, {
+			onDelete: 'cascade'
+		}),
+		scopeKey: varchar('scope_key', { length: 36 }).notNull(),
+		capacity: int('capacity').notNull(),
+		used: int('used').default(0).notNull(),
+		// Remaining <= this turns the dashboard header indicator red.
+		lowThreshold: int('low_threshold').default(10).notNull(),
+		// Remaining <= this also emails SMTP_USER, once per crossing.
+		criticalThreshold: int('critical_threshold').default(3).notNull(),
+		// Set when the critical alert has been sent, so a second booking at the same low
+		// level doesn't re-send. Cleared whenever capacity is raised back above it.
+		criticalAlertSentAt: timestamp('critical_alert_sent_at'),
+		...secureFields
+	},
+	(table) => [
+		unique('stock_date_scope_uniq').on(table.deliveryDate, table.scopeKey),
+		index('idx_stock_delivery_date').on(table.deliveryDate)
+	]
+);
+
+// ── Stock Changes (audit trail) ──
+// Every movement, whether an admin editing capacity or a booking consuming a unit.
+// `valueAfter` is stored alongside `delta` so the history reads correctly even if rows
+// are ever inserted out of order, and `createdBy` (from secureFields) records which admin
+// made a manual change — it stays NULL for automatic consumption.
+export const stockChanges = mysqlTable(
+	'stock_changes',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		stockId: varchar('stock_id', { length: 36 })
+			.notNull()
+			.references(() => stock.id, { onDelete: 'cascade' }),
+		field: mysqlEnum('field', ['capacity', 'used']).notNull(),
+		delta: int('delta').notNull(),
+		valueAfter: int('value_after').notNull(),
+		reason: varchar('reason', { length: 255 }),
+		...secureFields
+	},
+	(table) => [index('idx_stock_changes_stock_id').on(table.stockId)]
+);
+
+// ── Notifications (in-app, per subscriber) ──
+// Recorded events shown as banners on /account — currently "your delivery moved to a
+// later Saturday because the next one was full", but deliberately generic so payment
+// failures and skips can reuse it.
+export const notifications = mysqlTable(
+	'notifications',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		subscriberId: varchar('subscriber_id', { length: 36 })
+			.notNull()
+			.references(() => subscribers.id, { onDelete: 'cascade' }),
+		kind: varchar('kind', { length: 64 }).notNull(),
+		title: varchar('title', { length: 255 }).notNull(),
+		body: text('body'),
+		readAt: timestamp('read_at'),
+		...secureFields
+	},
+	(table) => [index('idx_notifications_subscriber_id').on(table.subscriberId)]
+);
+
 // ── Delivery Skip Dates ──
 // A Saturday the company isn't delivering (bank holiday, etc). The rest of the app
 // computes "next delivery date" as the next Saturday not in this table, so admins

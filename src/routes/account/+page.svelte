@@ -127,6 +127,23 @@
 	<title>{m.account_page_title()}</title>
 </svelte:head>
 
+{#if data.notices?.length}
+	<div class="notices">
+		{#each data.notices as notice (notice.id)}
+			<div class="notice" role="status">
+				<div>
+					<div class="notice-title">{notice.title}</div>
+					{#if notice.body}<div class="notice-body">{notice.body}</div>{/if}
+				</div>
+				<form method="POST" action="?/dismissNotice" use:enhance={withToast(`notice:${notice.id}`)}>
+					<input type="hidden" name="id" value={notice.id} />
+					<button type="submit" class="notice-close" aria-label="Dismiss">×</button>
+				</form>
+			</div>
+		{/each}
+	</div>
+{/if}
+
 {#if data.subscriptions.length === 0}
 	<!-- No active subscriptions -->
 	<div class="block">
@@ -741,6 +758,49 @@
 	}
 
 	/* ADDONS TILES */
+	.notices {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.notice {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+		border: 1px solid var(--border, #e5e5e5);
+		border-left: 3px solid var(--copper, #b87333);
+		border-radius: 0.5rem;
+		padding: 0.85rem 1rem;
+		background: var(--card, #fff);
+	}
+
+	.notice-title {
+		font-weight: 600;
+		font-size: 0.92rem;
+	}
+
+	.notice-body {
+		font-size: 0.85rem;
+		opacity: 0.8;
+		margin-top: 0.15rem;
+	}
+
+	.notice-close {
+		border: 0;
+		background: none;
+		cursor: pointer;
+		font-size: 1.25rem;
+		line-height: 1;
+		opacity: 0.6;
+	}
+
+	.notice-close:hover {
+		opacity: 1;
+	}
+
 	.basket-bar {
 		display: flex;
 		align-items: center;

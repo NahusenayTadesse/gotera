@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { alias } from 'drizzle-orm/mysql-core';
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 // Adjust to your project's paths.
@@ -13,6 +13,7 @@ import {
 	deliveries,
 	addresses,
 	subscriberAddons,
+	notifications,
 	addons as addonsTable
 } from '$lib/server/db/schema';
 import { auth } from '$lib/server/auth';
@@ -74,7 +75,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
 
 	const sub = await getSubscriber(locals.user.id);
-	if (!sub) return { subscriptions: [], addons: [] };
+	if (!sub) return { subscriptions: [], addons: [], notices: [] };
 
 	const pendingPlan = alias(plans, 'pending_plan');
 
@@ -195,7 +196,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.where(eq(addonsTable.isActive, true))
 		.orderBy(addonsTable.sortOrder);
 
+	// In-app notices (e.g. "your delivery moved because that Saturday was full"). Only
+	// unread ones are loaded; dismissing stamps `readAt` rather than deleting, so the
+	// event stays on record.
+	const notices = await db
+		.select({
+			id: notifications.id,
+			kind: notifications.kind,
+			title: notifications.title,
+			body: notifications.body
+		})
+		.from(notifications)
+		.where(and(eq(notifications.subscriberId, sub.id), isNull(notifications.readAt)))
+		.orderBy(desc(notifications.createdAt));
+
 	return {
+		notices,
 		subscriptions: subscriptionCards,
 		addons: catalogue.map((a) => ({
 			id: a.id,
@@ -357,6 +373,24 @@ export const actions: Actions = {
 		}
 
 		redirect(303, session.url!);
+	},
+
+	// Dismiss an in-app notice. Marks it read rather than deleting so the record survives.
+	dismissNotice: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { message: 'Not signed in.' });
+		const sub = await getSubscriber(locals.user.id);
+		if (!sub) return fail(400, { message: 'No subscription found.' });
+
+		const id = (await request.formData()).get('id');
+		if (typeof id !== 'string' || !id) return fail(400, { message: 'Invalid request.' });
+
+		// Scoped to this subscriber so one customer can't dismiss another's notice.
+		await db
+			.update(notifications)
+			.set({ readAt: new Date() })
+			.where(and(eq(notifications.id, id), eq(notifications.subscriberId, sub.id)));
+
+		return { message: 'Dismissed.' };
 	},
 
 	logout: async (event) => {

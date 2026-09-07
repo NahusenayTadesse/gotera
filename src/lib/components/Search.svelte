@@ -34,7 +34,8 @@
 		{ label: 'Add User', path: '/dashboard/admin-panel/users/add-users' },
 		{ label: 'Roles', path: '/dashboard/admin-panel/roles' },
 		{ label: 'Add Role', path: '/dashboard/admin-panel/roles/add-roles' },
-		{ label: 'Add-ons', path: '/dashboard/addons' }
+		{ label: 'Add-ons', path: '/dashboard/addons' },
+		{ label: 'Stock', path: '/dashboard/stock' }
 	];
 </script>
 
