@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 // Adjust to your project's paths.
@@ -13,6 +13,8 @@ import {
     plans,
     subscriberAddons,
     deliveries,
+    deliveryAddons,
+    deliveryAddonPurchases,
     addresses,
     giftOrders,
     addons,
@@ -26,9 +28,11 @@ import {
     notifyAdminPaymentFailed,
     sendGiftReceived,
     notifyAdminGiftOrder,
-    sendOrderConfirmed, notifyAdminOrder
+    sendOrderConfirmed, notifyAdminOrder,
+    sendAddonsAdded
 } from '$lib/server/email';
 import { auth } from '$lib/server/auth';
+import { nextDeliveryDate } from '$lib/server/deliverySchedule';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
 
@@ -38,16 +42,115 @@ function mapStatus(s: Stripe.Subscription.Status): 'pending' | 'active' | 'pause
     return 'active';
 }
 
-function nextSaturday(from = new Date()): Date {
-    const d = new Date(from);
-    const diff = (6 - d.getDay() + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    d.setHours(0, 0, 0, 0);
-    return d;
-}
-
 const deliveryFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 const money = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+
+/**
+ * A one-off order's add-ons only ever exist in Stripe metadata (checkout.session
+ * metadata's `addonIds`) — there's no `deliveries` row for a gift/guest order to hang a
+ * `delivery_addons` join off. Snapshotting name + price here, once, at the moment the
+ * order is paid, is what lets the dashboard and packing slips show what was bought
+ * without re-deriving it from metadata (which could drift if the catalogue changes later).
+ */
+async function resolveAddonSnapshot(metadataAddonIds: string | undefined) {
+    const addonIds = (metadataAddonIds ?? '').split(',').filter(Boolean);
+    if (addonIds.length === 0) return [];
+
+    // Deliberately NOT filtered by `isActive`: this runs after the customer has paid, and
+    // an add-on deactivated between checkout and this webhook was still legitimately bought.
+    // Filtering here would take the money and silently drop the item. The `isActive` gate
+    // belongs on the sell side (/subscribe, /account, /addons/[token]), which it is on.
+    const rows = (await db.select().from(addons)).filter((a) => addonIds.includes(a.id));
+    return rows.map((a) => ({ id: a.id, name: a.name, pricePence: a.pricePence, quantity: 1 }));
+}
+
+/**
+ * A paid one-off add-on bought from the pre-delivery reminder email's "Add extras"
+ * link (see /addons/[token]). Deduped by `stripePaymentIntentId` in
+ * `delivery_addon_purchases` so a retried `checkout.session.completed` can't double-add
+ * quantity to `delivery_addons` — Stripe does not guarantee exactly-once delivery.
+ */
+async function handleDeliveryAddonPurchase(session: Stripe.Checkout.Session) {
+    const deliveryId = session.metadata?.deliveryId;
+    const rawItems = session.metadata?.items;
+    const paymentIntentId = session.payment_intent as string | null;
+    if (!deliveryId || !rawItems || !paymentIntentId) {
+        console.error('delivery-addon webhook: missing metadata', session.id);
+        return;
+    }
+
+    let requested: { id: string; quantity: number }[];
+    try {
+        requested = JSON.parse(rawItems);
+    } catch {
+        console.error('delivery-addon webhook: unparseable items metadata', rawItems);
+        return;
+    }
+
+    const [alreadyProcessed] = await db
+        .select({ id: deliveryAddonPurchases.id })
+        .from(deliveryAddonPurchases)
+        .where(eq(deliveryAddonPurchases.stripePaymentIntentId, paymentIntentId));
+    if (alreadyProcessed) return;
+
+    // Unfiltered on purpose — see `resolveAddonSnapshot`: the payment already succeeded,
+    // so the customer gets what they paid for even if it was deactivated in the meantime.
+    const catalogue = await db.select().from(addons);
+    const items = requested
+        .map((r) => {
+            const addon = catalogue.find((a) => a.id === r.id);
+            return addon
+                ? { id: addon.id, name: addon.name, pricePence: addon.pricePence, quantity: r.quantity }
+                : null;
+        })
+        .filter((i): i is { id: string; name: string; pricePence: number; quantity: number } => i !== null);
+    if (items.length === 0) return;
+
+    try {
+        await db.insert(deliveryAddonPurchases).values({
+            deliveryId,
+            stripePaymentIntentId: paymentIntentId,
+            amountPence: session.amount_total ?? items.reduce((sum, i) => sum + i.pricePence * i.quantity, 0),
+            items
+        });
+    } catch {
+        // Unique constraint on stripePaymentIntentId — a concurrent/retried delivery of
+        // this same event beat us to it, so the add-ons are already applied.
+        return;
+    }
+
+    for (const item of items) {
+        const [existing] = await db
+            .select()
+            .from(deliveryAddons)
+            .where(and(eq(deliveryAddons.deliveryId, deliveryId), eq(deliveryAddons.addonId, item.id)));
+        if (existing) {
+            await db
+                .update(deliveryAddons)
+                .set({ quantity: existing.quantity + item.quantity })
+                .where(eq(deliveryAddons.id, existing.id));
+        } else {
+            await db.insert(deliveryAddons).values({ deliveryId, addonId: item.id, quantity: item.quantity });
+        }
+    }
+
+    try {
+        const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+        const [subscriber] = delivery
+            ? await db.select().from(subscribers).where(eq(subscribers.id, delivery.subscriberId))
+            : [];
+        if (delivery && subscriber) {
+            await sendAddonsAdded(subscriber.email, {
+                name: subscriber.fullName ?? 'there',
+                deliveryLabel: deliveryFmt.format(delivery.scheduledDate),
+                amountLabel: money(session.amount_total ?? 0),
+                addonLines: items.map((i) => `${i.name}${i.quantity > 1 ? ` x${i.quantity}` : ''}`)
+            });
+        }
+    } catch (e) {
+        console.error('delivery-addon confirmation email failed', e);
+    }
+}
 
 /** The DB mirrors Stripe: read plan/status/period straight off the subscription. */
 async function syncSubscription(sub: Stripe.Subscription) {
@@ -111,7 +214,7 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
         subscriberId,
         subscriptionId,
         addressId: targetAddressId,
-        scheduledDate: nextSaturday(),
+        scheduledDate: await nextDeliveryDate(),
         status: 'scheduled'
     });
 }
@@ -119,8 +222,6 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
 
  async function sendMagicLink(email: string, name: string, request: Request) {
 const randomPassword = Math.random().toString(36).slice(2, 10);
-
-console.log(randomPassword);    
 
     const [existingUser] = await db.select({ id: user.id}).from(user).where(eq(user.email, email)).limit(1);
 
@@ -148,11 +249,6 @@ console.log(randomPassword);
 export const POST: RequestHandler = async ({ request }) => {
     const sig = request.headers.get('stripe-signature');
     const body = await request.text(); // RAW body — required for signature verification
-    // console.log("SIG ", sig)
-    // console.log("BODY ", body)
-
-  
-  // 2. Safely extract the email and name using optional chaining
 
 
     let event: Stripe.Event;
@@ -169,77 +265,43 @@ export const POST: RequestHandler = async ({ request }) => {
                 const session = event.data.object as Stripe.Checkout.Session;
 
                 /* ── One-time orders (one-off + gift): mode 'payment' ── */
-                // if (session.mode === 'payment') {
-                //     const giftOrderId = session.metadata?.giftOrderId;
-                //     const kind = session.metadata?.kind;
-                //     if (!giftOrderId) break;
-
-                //     await db
-                //         .update(giftOrders)
-                //         .set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
-                //         .where(eq(giftOrders.id, giftOrderId));
-
-                //     try {
-                //         const [order] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
-                //         if (order) {
-                //             const amountLabel = money(session.amount_total ?? 0);
-                //             if (kind === 'gift') {
-                //                 await sendGiftReceived(order.buyerEmail, {
-                //                     buyerName: order.buyerName ?? 'there',
-                //                     recipientName: order.recipientName,
-                //                     amountLabel
-                //                 });
-                //                 await notifyAdminGiftOrder({
-                //                     buyerName: order.buyerName ?? 'Guest',
-                //                     buyerEmail: order.buyerEmail,
-                //                     recipientName: order.recipientName,
-                //                     amountLabel
-                //                 });
-                //             }
-                //             // one-off (kind 'order'): add a self-order confirmation email here
-                //         }
-                //     } catch (e) {
-                //         console.error('one-time order emails failed', e);
-                //     }
-                //     break;
-                // }
-            
 if (session.mode === 'payment') {
+	if (session.metadata?.kind === 'delivery-addon') {
+		await handleDeliveryAddonPurchase(session);
+		break;
+	}
+
 	const giftOrderId = session.metadata?.giftOrderId;
     const guestOrderId = session.metadata?.guestOrderId;
 	const kind = session.metadata?.kind;
     const email = session.customer_details?.email;
     const addressId = session.metadata?.addressId;
   const name  = session.customer_details?.name;
-  console.log(name, email)
-    
 
 	if (!giftOrderId && !guestOrderId) break;
  
 	if(giftOrderId) {
 	const [before] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
 	const alreadyPaid = before?.status === 'paid' || before?.status === 'fulfilled';
- 
+	const addonSnapshot = await resolveAddonSnapshot(session.metadata?.addonIds);
+
 	await db
 		.update(giftOrders)
-		.set({ status: 'paid', stripePaymentIntentId: session.payment_intent as string })
+		.set({
+			status: 'paid',
+			stripePaymentIntentId: session.payment_intent as string,
+			addons: addonSnapshot.length ? addonSnapshot : null
+		})
 		.where(eq(giftOrders.id, giftOrderId));
- 
+
 	if (alreadyPaid) break;
- 
+
 	try {
 		const [order] = await db.select().from(giftOrders).where(eq(giftOrders.id, giftOrderId));
 		if (order) {
 			const amountLabel = money(session.amount_total ?? 0);
- 
-			// Resolve add-on names for the email (metadata carries the ids).
-			const addonIds = (session.metadata?.addonIds ?? '').split(',').filter(Boolean);
-			const addonNames = addonIds.length
-				? (await db.select().from(addons))
-						.filter((a) => addonIds.includes(a.id))
-						.map((a) => a.name)
-				: [];
- 
+			const addonNames = addonSnapshot.map((a) => a.name);
+
 			const addr = order.recipientAddress as {
 				line1: string;
 				line2: string | null;
@@ -253,7 +315,7 @@ if (session.mode === 'payment') {
 				addr.city,
 				addr.postcode
 			];
-			const deliveryLabel = deliveryFmt.format(nextSaturday());
+			const deliveryLabel = deliveryFmt.format(await nextDeliveryDate());
  
 			if (kind === 'gift') {
 				await sendGiftReceived(order.buyerEmail, {
@@ -295,7 +357,8 @@ if (session.mode === 'payment') {
 	if(guestOrderId) {
 	const [before] = await db.select().from(guestOrders).where(eq(guestOrders.id, guestOrderId));
 	const alreadyPaid = before?.status === 'paid' || before?.status === 'fulfilled';
- 
+	const addonSnapshot = await resolveAddonSnapshot(session.metadata?.addonIds);
+
 	// The guest never gave us an email or a name before Stripe — Checkout collected
 	// both, so this is the only place they can be recorded. Keep the recipient name
 	// the form captured; only fall back to the billing name when there wasn't one.
@@ -307,27 +370,19 @@ if (session.mode === 'payment') {
 			buyerEmail: email ?? before?.buyerEmail ?? null,
 			buyerName: name ?? before?.buyerName ?? null,
 			recipientName: before?.recipientName ?? name ?? null,
-			stripePaymentIntentId: session.payment_intent as string
+			stripePaymentIntentId: session.payment_intent as string,
+			addons: addonSnapshot.length ? addonSnapshot : null
 		})
 		.where(eq(guestOrders.id, guestOrderId));
 
-    
- 
 	if (alreadyPaid) break;
- 
+
 	try {
 		const [order] = await db.select().from(guestOrders).where(eq(guestOrders.id, guestOrderId));
 		if (order) {
 			const amountLabel = money(session.amount_total ?? 0);
- 
-			// Resolve add-on names for the email (metadata carries the ids).
-			const addonIds = (session.metadata?.addonIds ?? '').split(',').filter(Boolean);
-			const addonNames = addonIds.length
-				? (await db.select().from(addons))
-						.filter((a) => addonIds.includes(a.id))
-						.map((a) => a.name)
-				: [];
- 
+			const addonNames = addonSnapshot.map((a) => a.name);
+
 			const addr = order.recipientAddress as {
 				line1: string;
 				line2: string | null;
@@ -343,7 +398,7 @@ if (session.mode === 'payment') {
 				addr.city,
 				addr.postcode
 			];
-			const deliveryLabel = deliveryFmt.format(nextSaturday());
+			const deliveryLabel = deliveryFmt.format(await nextDeliveryDate());
 
              
                
@@ -443,7 +498,7 @@ if (session.mode === 'payment') {
                             const [planRow] = await db.select().from(plans).where(eq(plans.id, subRow.planId));
                             const amountLabel = money(session.amount_total ?? planRow?.pricePence ?? 0);
                             const planName = planRow?.name ?? 'Subscription';
-                            const nextDeliveryLabel = deliveryFmt.format(nextSaturday());
+                            const nextDeliveryLabel = deliveryFmt.format(await nextDeliveryDate());
 
                             await sendSubscriptionConfirmed(subUser.email, {
                                 name: subUser.fullName ?? 'there',

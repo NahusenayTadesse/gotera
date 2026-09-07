@@ -11,16 +11,32 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import SelectComp from '$lib/formComponents/SelectComp.svelte';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import BulkEmailDialog from '$lib/components/dashboard/BulkEmailDialog.svelte';
-	import { Plus, X } from '@lucide/svelte';
+	import { Plus, X, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { enhance as formEnhance } from '$app/forms';
 
 	let { data }: { data: PageData } = $props();
 
 	let filteredRows = $state(data.rows);
 	let selectedRows = $state<typeof data.rows>([]);
+
+	const managingAddonsId = $derived(page.url.searchParams.get('manageAddons'));
+	const managingSubscription = $derived(data.rows.find((r) => r.id === managingAddonsId));
+
+	let newAddonId = $state('');
+	let newAddonQty = $state(1);
+	$effect(() => {
+		if (managingAddonsId) {
+			newAddonId = data.addonCatalogue[0]?.id ?? '';
+			newAddonQty = 1;
+		}
+	});
 
 	const statuses = [
 		{ value: 'pending', name: 'Pending' },
@@ -85,6 +101,63 @@
 		<Button href="?add=1"><Plus class="h-4 w-4" /> Add Subscription</Button>
 	</div>
 </div>
+
+{#if managingAddonsId && managingSubscription}
+	<Card.Root class="mb-8 w-full lg:w-lg">
+		<Card.Header class="flex flex-row items-center justify-between">
+			<Card.Title>
+				Recurring add-ons — {managingSubscription.subscriberName || managingSubscription.subscriberEmail}
+			</Card.Title>
+			<Button href={page.url.pathname} variant="ghost" size="icon"><X class="h-4 w-4" /></Button>
+		</Card.Header>
+		<Card.Content class="flex flex-col gap-5">
+			<p class="text-sm text-muted-foreground">
+				These ride along on every future delivery for this subscription — the same list the
+				customer edits from their own account.
+			</p>
+			{#if managingSubscription.addons.length > 0}
+				<ul class="flex flex-col gap-2">
+					{#each managingSubscription.addons as addon (addon.name)}
+						<li class="flex items-center justify-between gap-3 text-sm">
+							<span>{addon.name}{addon.quantity > 1 ? ` x${addon.quantity}` : ''}</span>
+							<form method="POST" action="?/removeSubscriptionAddon" use:formEnhance>
+								<input type="hidden" name="subscriptionId" value={managingAddonsId} />
+								<input type="hidden" name="name" value={addon.name} />
+								<Button type="submit" variant="ghost" size="icon" aria-label="Remove add-on">
+									<Trash2 class="h-4 w-4" />
+								</Button>
+							</form>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="text-sm text-muted-foreground">No recurring add-ons on this subscription.</p>
+			{/if}
+
+			<form
+				method="POST"
+				action="?/addSubscriptionAddon"
+				use:formEnhance
+				class="flex flex-wrap items-end gap-3 border-t pt-4"
+			>
+				<input type="hidden" name="subscriptionId" value={managingAddonsId} />
+				<div class="flex flex-col gap-2">
+					<Label for="addSubscriptionAddon-addonId">Add-on</Label>
+					<SelectComp
+						name="addonId"
+						bind:value={newAddonId}
+						items={data.addonCatalogue.map((a) => ({ value: a.id, name: a.name }))}
+					/>
+				</div>
+				<div class="flex flex-col gap-2">
+					<Label for="addSubscriptionAddon-quantity">Qty</Label>
+					<Input type="number" name="quantity" min="1" class="w-20" bind:value={newAddonQty} />
+				</div>
+				<Button type="submit" disabled={!newAddonId}>Add</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+{/if}
 
 {#if showForm}
 	<Card.Root class="mb-8 w-full lg:w-lg">

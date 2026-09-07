@@ -16,16 +16,22 @@
 	let {
 		bulkEmailForm,
 		rows,
-		action = '?/sendBulkEmail'
+		action = '?/sendBulkEmail',
+		open = $bindable(false),
+		hideTrigger = false,
+		prefill = null
 	}: {
 		bulkEmailForm: SuperValidated<any>;
 		/** The current table selection — rows without an email are silently dropped. */
 		rows: Row[];
 		/** Form action to post to; every page wires this to `sendBulkEmailAction`. */
 		action?: string;
+		open?: boolean;
+		/** Hide the "Email N selected" trigger — for dialogs opened programmatically. */
+		hideTrigger?: boolean;
+		/** Subject/message to seed the form with the moment this opens (e.g. a delivery-date change notice). */
+		prefill?: { subject: string; message: string } | null;
 	} = $props();
-
-	let open = $state(false);
 
 	const { form, errors, enhance, delayed, allErrors, message } = superForm(bulkEmailForm, {
 		id: 'bulk-email',
@@ -63,6 +69,15 @@
 	$effect(() => {
 		if (open) $form.recipients = recipients;
 	});
+
+	// Seed subject/message once when a caller opens this programmatically with a prefill
+	// (e.g. after a delivery date changes) — a plain click-to-open dialog has no prefill.
+	$effect(() => {
+		if (open && prefill) {
+			$form.subject = prefill.subject;
+			$form.message = prefill.message;
+		}
+	});
 </script>
 
 {#if rows.length > 0}
@@ -73,6 +88,7 @@
 		class=""
 		contentClass="max-w-2xl max-h-[90vh] overflow-y-auto"
 		bind:open
+		{hideTrigger}
 	>
 		<h3 class="mb-1 text-lg font-semibold">
 			Email {recipients.length}

@@ -1,7 +1,7 @@
 import { sequence } from '@sveltejs/kit/hooks';
 import { getTextDirection, cookieName, cookieMaxAge } from '$lib/paraglide/runtime';
 import { paraglideMiddleware } from '$lib/paraglide/server';
-import type { Handle } from '@sveltejs/kit';
+import { error, redirect, type Handle } from '@sveltejs/kit';
 import { building } from '$app/environment';
 import { auth } from '$lib/server/auth';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
@@ -25,6 +25,23 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	}
 
 	return svelteKitHandler({ event, resolve, auth, building });
+};
+
+// `+layout.server.ts` load functions only run before rendering a page — SvelteKit does
+// NOT run them before a form `action`, so gating admin access there alone leaves every
+// POST to a `?/action` on any /dashboard route reachable by anyone with a session (or
+// no session at all). Enforce the check here instead, where it covers actions too.
+const handleDashboardGuard: Handle = async ({ event, resolve }) => {
+	if (event.url.pathname.startsWith('/dashboard')) {
+		if (!event.locals.user) {
+			return redirect(302, '/login');
+		}
+		if (event.locals.role !== 'Admin') {
+			return error(403, 'Not Allowed');
+		}
+	}
+
+	return resolve(event);
 };
 
 const handleParaglide: Handle = ({ event, resolve }) => {
@@ -73,4 +90,4 @@ const handleParaglide: Handle = ({ event, resolve }) => {
 	});
 };
 
-export const handle: Handle = sequence(handleBetterAuth, handleParaglide);
+export const handle: Handle = sequence(handleBetterAuth, handleDashboardGuard, handleParaglide);

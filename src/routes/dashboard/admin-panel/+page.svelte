@@ -5,8 +5,6 @@
 		{ name: 'Users', href: '/dashboard/admin-panel/users' },
 		{ name: 'Roles', href: '/dashboard/admin-panel/roles' }
 	];
-
-	let catalogue = [{ name: 'Add-ons', href: '/dashboard/admin-panel/addons' }];
 </script>
 
 <svele:head>
@@ -29,19 +27,12 @@
 		</div>
 
 		<!-- Navigation Cards Grid -->
-		<div class="grid gap-8 md:grid-cols-3">
+		<div class="grid gap-8 md:grid-cols-2">
 			<AdminNavCard
 				title="User Management"
 				description="Control users and their assigned roles"
 				icon="Users"
 				items={userManagement}
-				accentColor="from-primary/15 to-primary/5"
-			/>
-			<AdminNavCard
-				title="Catalogue"
-				description="Manage add-ons and their prices"
-				icon="Building2"
-				items={catalogue}
 				accentColor="from-primary/15 to-primary/5"
 			/>
 		</div>

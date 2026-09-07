@@ -1,6 +1,7 @@
 import { renderComponent } from '$lib/components/ui/data-table/index.js';
 import Statuses from '$lib/components/Table/statuses.svelte';
 import RowActions from '$lib/components/dashboard/RowActions.svelte';
+import SubscriptionAddonsCell from '$lib/components/dashboard/SubscriptionAddonsCell.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
 import SelectHeader from '$lib/components/Table/select-header.svelte';
 import SelectCell from '$lib/components/Table/select-cell.svelte';
@@ -36,6 +37,13 @@ export const columns = [
 			renderComponent(DataTableSort, { name: 'Plan', onclick: column.getToggleSortingHandler() }),
 		sortable: true,
 		cell: (info) => info.getValue() || '—'
+	},
+	{
+		accessorKey: 'addons',
+		header: 'Add-ons',
+		enableSorting: false,
+		cell: ({ row }) =>
+			renderComponent(SubscriptionAddonsCell, { id: row.original.id, addons: row.original.addons })
 	},
 	{
 		accessorKey: 'quantity',

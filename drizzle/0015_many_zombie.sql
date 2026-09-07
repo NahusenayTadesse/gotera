@@ -1,0 +1,1 @@
+ALTER TABLE `addons` DROP COLUMN `stripe_price_id`;

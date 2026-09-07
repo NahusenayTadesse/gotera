@@ -8,8 +8,27 @@
 
 	let { data }: { data: PageData } = $props();
 
+	// Returning from Stripe after buying an extra. Fulfilment happens in the webhook, which
+	// may not have landed by the time the customer gets back here, so the success copy
+	// promises the extras "shortly" rather than claiming they're already on the delivery.
+	$effect(() => {
+		const outcome = page.url.searchParams.get('addons');
+		if (!outcome) return;
+		if (outcome === 'success') {
+			toast.success("Payment received — your extras will be added to the delivery shortly.");
+		} else if (outcome === 'canceled') {
+			toast.info('Payment cancelled — nothing was charged.');
+		}
+		// Drop the flag so a refresh or a later navigation doesn't re-toast.
+		const next = new URL(page.url);
+		next.searchParams.delete('addons');
+		history.replaceState(history.state, '', next);
+	});
+
 	// Per-add-on quantity steppers (client state; posted on Add). Reading through
 	// `qtyOf` keeps this correct when the catalogue changes underneath us.
+	/** Mirrors MAX_QTY in +page.server.ts — the server re-checks, this just avoids a bounce. */
+	const MAX_QTY = 20;
 	let quantities = $state<Record<string, number>>({});
 	const qtyOf = (id: string) => quantities[id] ?? 0;
 
@@ -48,8 +67,16 @@
 	// "Add" would otherwise add the item twice.
 	let pending = $state<string | null>(null);
 
+	// Basket summary for the single checkout button.
+	const basketCount = $derived(
+		data.addons.reduce((sum, a) => sum + qtyOf(a.id), 0)
+	);
+	const basketPence = $derived(
+		data.addons.reduce((sum, a) => sum + a.pricePence * qtyOf(a.id), 0)
+	);
+
 	function updateQty(id: string, change: number) {
-		quantities[id] = Math.max(0, qtyOf(id) + change);
+		quantities[id] = Math.max(0, Math.min(MAX_QTY, qtyOf(id) + change));
 	}
 
 	const gbp = (pence: number) => money(pence);
@@ -79,14 +106,13 @@
 
 	// Shared enhance handler: toast the action's message and refresh data.
 	// `formKey` marks this form as in-flight so its submit button can be disabled.
-	function withToast(formKey: string, resetAddonId?: string) {
+	function withToast(formKey: string) {
 		return () => {
 			pending = formKey;
 			return async ({ result, update }: any) => {
 				const msg = result?.data?.message;
 				if (result.type === 'success') {
 					if (msg) toast.success(msg);
-					if (resetAddonId) quantities[resetAddonId] = 0;
 				} else if (result.type === 'failure') {
 					toast.error(msg ?? m.account_toast_error_generic());
 				}
@@ -302,57 +328,61 @@
 				</select>
 			{/if}
 
-			<div class="addons-row">
-				{#each data.addons as item (item.id)}
-					<div class="addon">
-						<div class="addon-img-placeholder">
-							<span>{item.name}</span>
-						</div>
-						<div class="addon-body">
-							<div class="addon-head">
-								<div class="addon-name">{item.name}</div>
-								<div class="addon-price">{gbp(item.pricePence)}</div>
+			<!-- One basket, one payment: the steppers only set local quantities, and every
+			     selected add-on is posted together as `qty_<id>` fields. -->
+			<form method="POST" action="?/addAddon" use:enhance={withToast('addons')}>
+				<input type="hidden" name="deliveryId" value={selectedDelivery?.id ?? ''} />
+
+				<div class="addons-row">
+					{#each data.addons as item (item.id)}
+						<div class="addon">
+							<div class="addon-img-placeholder">
+								<span>{item.name}</span>
 							</div>
-							<div class="addon-desc">{item.desc}</div>
-							<div class="addon-foot">
-								<div class="qty">
-									<button
-										type="button"
-										class="qty-btn"
-										aria-label={m.account_qty_decrease({ name: item.name })}
-										onclick={() => updateQty(item.id, -1)}>−</button
-									>
-									<div class="qty-n" aria-live="polite">{qtyOf(item.id)}</div>
-									<button
-										type="button"
-										class="qty-btn"
-										aria-label={m.account_qty_increase({ name: item.name })}
-										onclick={() => updateQty(item.id, 1)}>+</button
-									>
+							<div class="addon-body">
+								<div class="addon-head">
+									<div class="addon-name">{item.name}</div>
+									<div class="addon-price">{gbp(item.pricePence)}</div>
 								</div>
-								<form
-									method="POST"
-									action="?/addAddon"
-									use:enhance={withToast(`addon:${item.id}`, item.id)}
-								>
-									<input type="hidden" name="addonId" value={item.id} />
-									<input type="hidden" name="deliveryId" value={selectedDelivery?.id ?? ''} />
-									<input type="hidden" name="quantity" value={qtyOf(item.id)} />
-									<button
-										type="submit"
-										class="btn-outline"
-										disabled={!selectedDelivery ||
-											qtyOf(item.id) < 1 ||
-											pending === `addon:${item.id}`}
-									>
-										{m.account_add_button()}
-									</button>
-								</form>
+								<div class="addon-desc">{item.desc}</div>
+								<div class="addon-foot">
+									<div class="qty">
+										<button
+											type="button"
+											class="qty-btn"
+											aria-label={m.account_qty_decrease({ name: item.name })}
+											onclick={() => updateQty(item.id, -1)}>−</button
+										>
+										<div class="qty-n" aria-live="polite">{qtyOf(item.id)}</div>
+										<button
+											type="button"
+											class="qty-btn"
+											aria-label={m.account_qty_increase({ name: item.name })}
+											onclick={() => updateQty(item.id, 1)}>+</button
+										>
+									</div>
+									<input type="hidden" name="qty_{item.id}" value={qtyOf(item.id)} />
+								</div>
 							</div>
 						</div>
+					{/each}
+				</div>
+
+				<div class="basket-bar">
+					<div class="basket-total" aria-live="polite">
+						{#if basketCount > 0}
+							{basketCount} × {gbp(basketPence)}
+						{/if}
 					</div>
-				{/each}
-			</div>
+					<button
+						type="submit"
+						class="btn-outline"
+						disabled={!selectedDelivery || basketCount === 0 || pending === 'addons'}
+					>
+						{m.account_add_button()}{#if basketCount > 0} · {gbp(basketPence)}{/if}
+					</button>
+				</div>
+			</form>
 		{/if}
 		<a href="/addons" class="see-all">{m.account_see_all_addons()}</a>
 	</div>
@@ -711,6 +741,19 @@
 	}
 
 	/* ADDONS TILES */
+	.basket-bar {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+
+	.basket-total {
+		font-size: 0.85rem;
+		color: var(--muted-foreground, #666);
+	}
+
 	.addons-row {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);

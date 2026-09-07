@@ -13,10 +13,10 @@ import {
 	deliveries,
 	addresses,
 	subscriberAddons,
-	deliveryAddons,
 	addons as addonsTable
 } from '$lib/server/db/schema';
 import { auth } from '$lib/server/auth';
+import { stripe } from '$lib/server/stripe';
 import { fullDate, instantDate } from '$lib/format';
 import { cutoffDateFor, isPastCutoff } from '$lib/delivery';
 
@@ -27,11 +27,8 @@ const intervalLabel = (i: string) =>
 // `NaN < 1` is false), so every mutating action validates through a schema.
 const deliveryIdSchema = z.object({ deliveryId: z.string().min(1) });
 const subscriptionIdSchema = z.object({ subscriptionId: z.string().min(1) });
-const addAddonSchema = z.object({
-	addonId: z.string().min(1),
-	deliveryId: z.string().min(1),
-	quantity: z.coerce.number().int().min(1).max(20)
-});
+/** Matches MAX_QTY on /addons/[token] and the dashboard's own add-on quantity cap. */
+const MAX_QTY = 20;
 
 function parseForm<T extends z.ZodType>(schema: T, data: FormData): z.infer<T> | null {
 	const result = schema.safeParse(Object.fromEntries(data));
@@ -192,7 +189,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	});
 
-	const catalogue = await db.select().from(addonsTable).orderBy(addonsTable.sortOrder);
+	const catalogue = await db
+		.select()
+		.from(addonsTable)
+		.where(eq(addonsTable.isActive, true))
+		.orderBy(addonsTable.sortOrder);
 
 	return {
 		subscriptions: subscriptionCards,
@@ -275,43 +276,87 @@ export const actions: Actions = {
 		return { message: 'Plan resumed.' };
 	},
 
-	// Add a one-off add-on to a specific upcoming delivery.
-	addAddon: async ({ request, locals }) => {
+	/**
+	 * Buy a one-off add-on for a specific upcoming delivery.
+	 *
+	 * This does NOT write `deliveryAddons` — it only starts a Stripe payment. Fulfilment
+	 * happens in the webhook's `handleDeliveryAddonPurchase`, the same handler the
+	 * /addons/[token] email page uses, so both routes share one dedupe key
+	 * (`delivery_addon_purchases.stripe_payment_intent_id`) and one confirmation email.
+	 * Writing the add-on here as well would hand it over before the customer had paid.
+	 */
+	addAddon: async ({ request, locals, url }) => {
 		if (!locals.user) return fail(401, { message: 'Not signed in.' });
 		const sub = await getSubscriber(locals.user.id);
 		if (!sub) return fail(400, { message: 'No subscription found.' });
 
-		const input = parseForm(addAddonSchema, await request.formData());
+		const formData = await request.formData();
+		const input = parseForm(deliveryIdSchema, formData);
 		if (!input) return fail(400, { message: 'Nothing to add.' });
 
 		const { delivery, error } = await getChangeableDelivery(sub.id, input.deliveryId);
 		if (!delivery) return fail(400, { message: error });
 
-		const [addon] = await db.select().from(addonsTable).where(eq(addonsTable.id, input.addonId));
-		if (!addon) return fail(400, { message: 'Unknown add-on.' });
-
-		const [existing] = await db
+		// The basket is read from the live catalogue rather than from posted ids, so a
+		// deactivated add-on simply isn't in the loop — a tab opened before it was pulled
+		// can't buy it, and prices always come from the DB, never the form.
+		const catalogue = await db
 			.select()
-			.from(deliveryAddons)
-			.where(
-				and(eq(deliveryAddons.deliveryId, delivery.id), eq(deliveryAddons.addonId, input.addonId))
-			);
+			.from(addonsTable)
+			.where(eq(addonsTable.isActive, true));
 
-		if (existing) {
-			await db
-				.update(deliveryAddons)
-				.set({ quantity: existing.quantity + input.quantity })
-				.where(eq(deliveryAddons.id, existing.id));
-		} else {
-			await db.insert(deliveryAddons).values({
-				id: crypto.randomUUID(),
-				deliveryId: delivery.id,
-				addonId: input.addonId,
-				quantity: input.quantity
-			});
+		const items: { id: string; name: string; pricePence: number; quantity: number }[] = [];
+		for (const addon of catalogue) {
+			const raw = formData.get(`qty_${addon.id}`);
+			if (raw === null) continue;
+			const qty = Number(raw);
+			if (!Number.isInteger(qty) || qty < 0 || qty > MAX_QTY) {
+				return fail(400, { message: 'Invalid quantity.' });
+			}
+			if (qty > 0) {
+				items.push({ id: addon.id, name: addon.name, pricePence: addon.pricePence, quantity: qty });
+			}
 		}
 
-		return { message: `${addon.name} added to your next delivery.` };
+		if (items.length === 0) return fail(400, { message: 'Pick at least one extra.' });
+
+		// Stripe caps a metadata value at 500 chars and the webhook keys fulfilment off this
+		// one, so refuse a basket that wouldn't survive the round trip instead of letting
+		// Stripe reject the session with an opaque error.
+		const itemsJson = JSON.stringify(items.map((i) => ({ id: i.id, quantity: i.quantity })));
+		if (itemsJson.length > 500) {
+			return fail(400, { message: 'Too many different extras in one go — please split it across two payments.' });
+		}
+
+		let session;
+		try {
+			session = await stripe.checkout.sessions.create({
+				mode: 'payment',
+				customer_email: sub.email,
+				// Priced from `pricePence` server-side; a posted price is never trusted.
+				line_items: items.map((item) => ({
+					price_data: {
+						currency: 'gbp',
+						product_data: { name: item.name },
+						unit_amount: item.pricePence
+					},
+					quantity: item.quantity
+				})),
+				success_url: `${url.origin}/account?addons=success`,
+				cancel_url: `${url.origin}/account?addons=canceled`,
+				payment_intent_data: { metadata: { kind: 'delivery-addon', deliveryId: delivery.id } },
+				metadata: {
+					kind: 'delivery-addon',
+					deliveryId: delivery.id,
+					items: itemsJson
+				}
+			});
+		} catch (e) {
+			console.error('account addAddon checkout failed', e);
+			return fail(500, { message: 'Could not start payment. Please try again.' });
+		}
+
+		redirect(303, session.url!);
 	},
 
 	logout: async (event) => {

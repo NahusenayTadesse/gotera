@@ -12,8 +12,6 @@
 		{ name: 'Users', href: '/dashboard/admin-panel/users' },
 		{ name: 'Roles', href: '/dashboard/admin-panel/roles' }
 	];
-
-	let catalogue = [{ name: 'Add-ons', href: '/dashboard/admin-panel/addons' }];
 </script>
 
 {#snippet menu(trigger = '', array = [{ name: '', href: '' }])}
@@ -36,7 +34,6 @@
 
 <Menubar.Root class="sticky mb-8 bg-transparent">
 	{@render menu('User Management', userManagement)}
-	{@render menu('Catalogue', catalogue)}
 </Menubar.Root>
 
 {@render children?.()}

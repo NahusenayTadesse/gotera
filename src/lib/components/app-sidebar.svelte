@@ -38,6 +38,7 @@
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
 		{ title: 'Bulk Email', url: '/dashboard/bulk-email', icon: Mail },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
+		{ title: 'Add-ons', url: '/dashboard/addons', icon: CookingPot },
 		{
 			title: 'Orders',
 			url: '/dashboard/orders',
@@ -72,8 +73,7 @@
 			icon: UserRoundCog,
 			items: [
 				{ title: 'Users', url: '/dashboard/admin-panel/users', icon: Users },
-				{ title: 'Roles', url: '/dashboard/admin-panel/roles', icon: Users },
-				{ title: 'Add-ons', url: '/dashboard/admin-panel/addons', icon: Sheet }
+				{ title: 'Roles', url: '/dashboard/admin-panel/roles', icon: Users }
 			]
 		}
 	];

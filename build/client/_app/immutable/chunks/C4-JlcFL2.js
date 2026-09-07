@@ -1,0 +1,1 @@
+import{n as e}from"./Bi76Sbi7.js";var t={en:`en-GB`,am:`am-ET`},n=n=>t[n??e()]??`en-GB`,r=(e,t)=>new Intl.NumberFormat(n(t),{style:`currency`,currency:`GBP`}).format(e/100);function i(e,t){return t===`bi_monthly`?e/2:t===`one_time`?0:e}export{i as n,r as t};

@@ -19,7 +19,7 @@ const C = {
 	body: '#433E39'
 };
 
-const SITE = 'https://gotera.co.uk';
+export const SITE = 'https://gotera.co.uk';
 const LOGO_URL = 'https://gotera.co.uk/logo192.jpg';
 const SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 const SERIF = "Georgia, 'Times New Roman', serif";
@@ -162,6 +162,7 @@ export const customerUpcomingDelivery = (data: {
 	deliveryLabel: string;
 	cutoffLabel: string;
 	address: string;
+	addonsUrl?: string;
 }) => ({
 	subject: `Your injera arrives ${data.deliveryLabel}`,
 	html: layout({
@@ -175,8 +176,32 @@ export const customerUpcomingDelivery = (data: {
 					detailRow('Address', data.address) +
 					detailRow('Changes by', data.cutoffLabel)
 			)}
-			<p style="margin:0 0 6px;">Need to add extras, skip, or update your address? Do it before the cut-off and it'll apply to this delivery.</p>
+			<p style="margin:0 0 6px;">Need to skip or update your address? Do it before the cut-off and it'll apply to this delivery.</p>
 			${button('Manage delivery', `${SITE}/account`)}
+			${
+				data.addonsUrl
+					? `<p style="margin:20px 0 6px;">Want to add something extra to this delivery?</p>
+			${button('Add extras', data.addonsUrl)}`
+					: ''
+			}
+		`
+	})
+});
+
+export const customerAddonsAdded = (data: {
+	name: string;
+	deliveryLabel: string;
+	amountLabel: string;
+	addonLines: string[];
+}) => ({
+	subject: `Added to your ${data.deliveryLabel} delivery`,
+	html: layout({
+		heading: 'Extras added',
+		preheader: `${data.addonLines.join(', ')} — added to your next delivery.`,
+		body: `
+			<p style="margin:0 0 14px;">Hi ${data.name},</p>
+			<p style="margin:0 0 6px;">Thanks — we've added the following to your delivery on ${data.deliveryLabel}:</p>
+			${detailTable(data.addonLines.map((line) => detailRow('', line)).join('') + detailRow('Charged', data.amountLabel))}
 		`
 	})
 });

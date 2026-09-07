@@ -84,7 +84,10 @@ export const addons = mysqlTable('addons', {
 	pricePence: int('price_pence').notNull(),
 	imageUrl: text('image_url'),
 	sortOrder: int('sort_order').default(0),
-	stripePriceId: varchar('stripe_price_id', { length: 255 }),
+	// No `stripePriceId` here on purpose: add-on line items are priced inline from
+	// `pricePence` at checkout (see `addonLineItems` in /subscribe). A stored Stripe Price
+	// is either recurring or one-time, but add-ons sell through both modes — and it would
+	// drift from the price the customer is shown. `plans` still stores one; add-ons don't.
 	...secureFields
 });
 
@@ -133,6 +136,12 @@ export const deliveries = mysqlTable(
 		status: mysqlEnum('status', ['scheduled', 'dispatched', 'delivered', 'skipped', 'failed'])
 			.default('scheduled')
 			.notNull(),
+		// Unguessable capability token for the "add extras" link in the pre-delivery
+		// reminder email — lets a customer reach /addons/[token] with no login. Minted
+		// lazily (on first reminder send) rather than at delivery-creation time, and
+		// distinct from `id` so an admin-facing URL leaking this delivery's id (e.g. the
+		// dashboard's `?manageAddons=`) can't be used to reach the customer page.
+		addonAccessToken: varchar('addon_access_token', { length: 64 }).unique(),
 		...secureFields
 	},
 	(table) => [
@@ -140,6 +149,19 @@ export const deliveries = mysqlTable(
 		index('idx_deliveries_scheduled_date').on(table.scheduledDate)
 	]
 );
+
+// ── Delivery Skip Dates ──
+// A Saturday the company isn't delivering (bank holiday, etc). The rest of the app
+// computes "next delivery date" as the next Saturday not in this table, so admins
+// only ever manage exceptions — not a calendar of every future Saturday.
+export const deliverySkipDates = mysqlTable('delivery_skip_dates', {
+	id: varchar('id', { length: 36 })
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	date: date('date').notNull().unique(),
+	reason: varchar('reason', { length: 255 }),
+	...secureFields
+});
 
 // ── Delivery Addons (One-off) ──
 export const deliveryAddons = mysqlTable('delivery_addons', {
@@ -153,6 +175,25 @@ export const deliveryAddons = mysqlTable('delivery_addons', {
 		.notNull()
 		.references(() => addons.id),
 	quantity: int('quantity').default(1).notNull(),
+	...secureFields
+});
+
+// ── Delivery Addon Purchases (paid one-off add-ons bought from the reminder email) ──
+// A payment record distinct from `deliveryAddons` (which is just "what's currently
+// included in this delivery" and covers admin-added freebies too). This table exists
+// so the Stripe webhook can dedupe retried `checkout.session.completed` events by
+// `stripePaymentIntentId` before it bumps `deliveryAddons` quantities — without it, a
+// webhook retry would double-add what the customer paid for once.
+export const deliveryAddonPurchases = mysqlTable('delivery_addon_purchases', {
+	id: varchar('id', { length: 36 })
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	deliveryId: varchar('delivery_id', { length: 36 })
+		.notNull()
+		.references(() => deliveries.id, { onDelete: 'cascade' }),
+	stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }).unique(),
+	amountPence: int('amount_pence').notNull(),
+	items: json('items').$type<{ id: string; name: string; pricePence: number; quantity: number }[]>().notNull(),
 	...secureFields
 });
 
@@ -185,6 +226,11 @@ export const giftOrders = mysqlTable('gift_orders', {
 	stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }).unique(),
 	status: mysqlEnum('status', ['pending', 'paid', 'fulfilled']).default('pending').notNull(),
 	quantity: int('quantity').default(1).notNull(),
+	// Snapshot of the add-ons bought with this order — [{ id, name, pricePence, quantity }].
+	// One-off orders never get a `delivery_addons` row (there's no `deliveries` row at all
+	// for gift/guest orders), so this is the only record of what was purchased, and the
+	// only thing the dashboard and packing slips can read.
+	addons: json('addons').$type<{ id: string; name: string; pricePence: number; quantity: number }[]>(),
 	...secureFields
 });
 
@@ -201,6 +247,7 @@ export const guestOrders = mysqlTable('guest_orders', {
 	status: mysqlEnum('status', ['pending', 'paid', 'fulfilled']).default('pending').notNull(),
 		addressId: varchar('address_id', { length: 36 }).references(() => addresses.id),
 		quantity: int('quantity').default(1).notNull(),
+		addons: json('addons').$type<{ id: string; name: string; pricePence: number; quantity: number }[]>(),
 
 	...secureFields
 });

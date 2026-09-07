@@ -31,18 +31,43 @@ type AddonRow = typeof addonsTable.$inferSelect;
 
 async function resolveAddons(ids: string[]) {
 	if (ids.length === 0) return { rows: [] as AddonRow[], pence: 0, unknown: false };
-	const catalogue = await db.select().from(addonsTable);
+	// Only active add-ons are sellable, so a deactivated id is treated exactly like an
+	// unknown one: it fails the `unknown` check below and the customer gets a validation
+	// error, rather than paying for something that's been pulled from the catalogue.
+	const catalogue = await db.select().from(addonsTable).where(eq(addonsTable.isActive, true));
 	const rows = catalogue.filter((a) => ids.includes(a.id));
 	return { rows, pence: rows.reduce((sum, a) => sum + a.pricePence, 0), unknown: rows.length !== ids.length };
 }
 
-/** Add-on line items — only those with a Stripe price. For mode:'payment' these
- *  must be ONE-TIME prices in Stripe. */
-function addonLineItems(rows: AddonRow[]) {
-	return rows
-		.map((a) => (a as { stripePriceId?: string | null }).stripePriceId)
-		.filter((price): price is string => !!price)
-		.map((price) => ({ price, quantity: 1 }));
+/** Plan cadence -> the Stripe `recurring` shape an add-on line item has to match. */
+const recurringFor = (interval: PlanRow['interval']) =>
+	interval === 'bi_monthly'
+		? ({ interval: 'month', interval_count: 2 } as const)
+		: ({ interval: 'month', interval_count: 1 } as const);
+
+/**
+ * Add-on line items, priced inline from `pricePence`.
+ *
+ * Add-ons deliberately have no Stripe Price of their own. They're cheap, edited often in
+ * the dashboard, and sold through BOTH `mode:'payment'` (gift/guest/one-off) and
+ * `mode:'subscription'` checkouts — and a stored Price is either recurring or one-time,
+ * never both, so it would break whichever flow it wasn't minted for. A stored Price also
+ * drifts silently from the `pricePence` the customer is shown on this page. Generating the
+ * price here keeps `addons.price_pence` the one source of truth for displayed and charged.
+ *
+ * Pass `recurring` for subscription checkouts — Stripe requires every line item in a
+ * subscription to share one billing cadence — and omit it for one-off payments.
+ */
+function addonLineItems(rows: AddonRow[], recurring?: ReturnType<typeof recurringFor>) {
+	return rows.map((a) => ({
+		price_data: {
+			currency: 'gbp',
+			product_data: { name: a.name },
+			unit_amount: a.pricePence,
+			...(recurring ? { recurring } : {})
+		},
+		quantity: 1
+	}));
 }
 
 /** Ensure a subscriber (the person) row exists; return its id + stripe customer. */
@@ -90,6 +115,7 @@ async function oneTimeCheckout(opts: {
 		recipientAddress: opts.recipientAddress,
 		giftMessage: opts.giftMessage,
 		durationMonths: opts.durationMonths,
+		quantity: opts.quantity,
 		status: 'pending'
 	});
 	const session = await stripe.checkout.sessions.create({
@@ -155,7 +181,11 @@ const toPlan = (p: PlanRow) => ({
 });
 
 export const load: PageServerLoad = async ({ url }) => {
-	const catalogue = await db.select().from(addonsTable).orderBy(asc(addonsTable.sortOrder));
+	const catalogue = await db
+		.select()
+		.from(addonsTable)
+		.where(eq(addonsTable.isActive, true))
+		.orderBy(asc(addonsTable.sortOrder));
 	const loginForm = await superValidate(zod4(loginSchema));
 	const signupForm = await superValidate(zod4(addUser));
 
@@ -195,7 +225,6 @@ export const actions: Actions = {
 	/* SUBSCRIBE — "For me": subscription plans OR one-off (kind 'order'). */
 	subscribe: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
-		console.log("subscribe")
 		if (!form.valid) return fail(400, { form });
 
 		if (form.data.recipient !== 'me') {
@@ -227,7 +256,6 @@ export const actions: Actions = {
 			city: form.data.city || 'London',
 			postcode: form.data.postcode
 		};
-		console.log(plan.kind)
 
 		// One-off → one-time payment
 		if (plan.kind === 'order') {
@@ -302,14 +330,16 @@ export const actions: Actions = {
 				mode: 'subscription',
 				customer: stripeCustomerId ?? undefined,
 				customer_email: stripeCustomerId ? undefined : user.email,
-				line_items: [{ price: plan.stripePriceId, quantity: form.data.quantity ?? 1 }, ...addonLineItems(chosenAddons)],
+				line_items: [
+					{ price: plan.stripePriceId, quantity: form.data.quantity ?? 1 },
+					...addonLineItems(chosenAddons, recurringFor(plan.interval))
+				],
 				success_url: `${url.origin}/account?welcome=1`,
 				cancel_url: `${url.origin}/subscribe`,
 				// The webhook keys everything off subscriptionId now.
 				metadata: {     subscriberId,subscriptionId, addressId, addonIds: chosenAddons.map((a) => a.id).join(','),  quantity: String(form.data.quantity ?? 1) },
 				subscription_data: { metadata: { subscriptionId } }
 			});
-			console.log("Metadata:", session.metadata);
 		} catch (e) {
 			console.error('stripe checkout create failed', e);
 			return message(form, { type: 'error', text: m.subscribe_error_checkout_failed() } satisfies FormMessage, { status: 500 });
@@ -321,7 +351,6 @@ export const actions: Actions = {
 	/* GIFT — one-time payment; redirects to Stripe. */
 	gift: async ({ request, locals, url }) => {
 		const form = await superValidate(request, zod4(checkoutSchema));
-				console.log('gift')
 
 		if (!form.valid) return fail(400, { form });
 
@@ -435,9 +464,7 @@ export const actions: Actions = {
 		return message(form, { type: 'success', text: m.subscribe_success_cancelled() } satisfies FormMessage);
 	},
 	guestOrder: async ({ request, url }) => {
-		console.log('guest')
 	const form = await superValidate(request, zod4(checkoutSchema));
-	console.log(form.data)
 	if (!form.valid) return fail(400, { form });
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
 		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
@@ -462,8 +489,8 @@ export const actions: Actions = {
 			.select()
 			.from(plans)
 			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
-		if(plan.kind !== 'order') {
-			   return message(form, { type:"error", text: m.subscribe_error_guest_order_not_allowed()})
+		if (!plan || plan.kind !== 'order') {
+			   return message(form, { type:"error", text: m.subscribe_error_guest_order_not_allowed()}, { status: 400 })
 		}
 		
 

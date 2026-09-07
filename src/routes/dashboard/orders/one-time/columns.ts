@@ -45,6 +45,17 @@ export const columns = [
 		}
 	},
 	{
+		accessorKey: 'addons',
+		header: 'Add-ons',
+		enableSorting: false,
+		cell: ({ row }) => {
+			const addons = row.original.addons;
+			return addons?.length
+				? addons.map((a) => `${a.name}${a.quantity > 1 ? ` x${a.quantity}` : ''}`).join(', ')
+				: '—';
+		}
+	},
+	{
 		accessorKey: 'quantity',
 		header: ({ column }) =>
 			renderComponent(DataTableSort, { name: 'Qty', onclick: column.getToggleSortingHandler() }),

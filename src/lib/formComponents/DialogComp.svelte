@@ -15,7 +15,8 @@
 		class: className,
 		contentClass = '',
 		IconComp,
-		open = $bindable(false)
+		open = $bindable(false),
+		hideTrigger = false
 	}: {
 		/** Heading inside the dialog. */
 		title: string;
@@ -29,6 +30,8 @@
 		variant?: 'default' | 'destructive' | 'outline' | 'ghost';
 		IconComp?: Component<IconProps>;
 		open?: boolean;
+		/** Skip rendering the trigger button — for dialogs opened programmatically instead of by click. */
+		hideTrigger?: boolean;
 	} = $props();
 
 	// const triggerClass = $derived(
@@ -45,16 +48,18 @@
 	<!-- We render every element via the `child` snippet, so Svelte's scoped
 	     styles still apply and the design is unchanged — bits-ui just wires
 	     up layering, focus, escape, scroll-lock and outside-click. -->
-	<Dialog.Trigger>
-		{#snippet child({ props })}
-			<Button {...props} type="button" {variant} class={className}>
-				{#if IconComp}
-					<IconComp  />
-				{/if}
-				{label ?? title}
-			</Button>
-		{/snippet}
-	</Dialog.Trigger>
+	{#if !hideTrigger}
+		<Dialog.Trigger>
+			{#snippet child({ props })}
+				<Button {...props} type="button" {variant} class={className}>
+					{#if IconComp}
+						<IconComp  />
+					{/if}
+					{label ?? title}
+				</Button>
+			{/snippet}
+		</Dialog.Trigger>
+	{/if}
 
 
 

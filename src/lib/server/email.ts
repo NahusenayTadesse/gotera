@@ -43,9 +43,17 @@ export const sendSubscriptionConfirmed = (
 
 export const sendUpcomingDelivery = (
 	to: string,
-	data: { name: string; deliveryLabel: string; cutoffLabel: string; address: string }
+	data: { name: string; deliveryLabel: string; cutoffLabel: string; address: string; addonsUrl?: string }
 ) => {
 	const { subject, html } = t.customerUpcomingDelivery(data);
+	return sendEmail(to, subject, html);
+};
+
+export const sendAddonsAdded = (
+	to: string,
+	data: { name: string; deliveryLabel: string; amountLabel: string; addonLines: string[] }
+) => {
+	const { subject, html } = t.customerAddonsAdded(data);
 	return sendEmail(to, subject, html);
 };
 

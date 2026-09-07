@@ -1,6 +1,7 @@
 import { renderComponent } from '$lib/components/ui/data-table/index.js';
 import Statuses from '$lib/components/Table/statuses.svelte';
 import TypeBadge from '$lib/components/dashboard/TypeBadge.svelte';
+import DeliveryAddonsCell from '$lib/components/dashboard/DeliveryAddonsCell.svelte';
 import RowActions from '$lib/components/dashboard/RowActions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
 import SelectHeader from '$lib/components/Table/select-header.svelte';
@@ -58,6 +59,19 @@ export const columns = [
 			renderComponent(DataTableSort, { name: 'Plan', onclick: column.getToggleSortingHandler() }),
 		sortable: true,
 		cell: (info) => info.getValue() || '—'
+	},
+	{
+		accessorKey: 'addons',
+		header: 'Add-ons',
+		enableSorting: false,
+		// Only subscription deliveries can take a manually-added one-off add-on —
+		// guest/gift orders are already paid for exactly what's in their Stripe line items.
+		cell: ({ row }) =>
+			renderComponent(DeliveryAddonsCell, {
+				id: row.original.id,
+				type: row.original.type,
+				addons: row.original.addons
+			})
 	},
 	{
 		accessorKey: 'addressLine1',
