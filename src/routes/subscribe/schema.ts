@@ -16,7 +16,11 @@ import { m } from '$lib/paraglide/messages.js';
  */
 
 export const RECIPIENTS = ['me', 'gift'] as const;
-export const SUB_PLANS = ['one-off', 'starter', 'regular'] as const;
+// NOTE: this list must stay in step with the `plans` table — the subscribe page renders
+// whatever is active in the DB, but `checkoutSchema.plan` validates against this enum, so
+// an active plan missing here is shown to customers and then rejected on submit.
+// `checkout.test.ts` guards the two staying in sync.
+export const SUB_PLANS = ['one-off', 'starter', 'regular', 'Family'] as const;
 export const GIFT_PLANS = ['single-gift', 'double-gift'] as const;
 export const DELIVERY_DAYS = ['Saturday'] as const;
 export const FREQUENCIES = ['Monthly'] as const;
@@ -35,6 +39,13 @@ export const checkoutSchema = z
 		// Addon *catalogue* ids (real UUIDs from the addons table). Validated
 		// against the live catalogue server-side; here we just check shape.
 		addonIds: z.array(z.string().min(1)).default([]),
+
+		// Per-add-on quantity, keyed by catalogue id. Capped at 20 each, matching the cap
+		// on /account, /addons/[token] and the dashboard. Absent entries mean 1, so an
+		// older client that only sends `addonIds` still works.
+		addonQuantities: z
+			.record(z.string(), z.coerce.number().int().min(1).max(20))
+			.default({}),
 
 		marketingOptIn: z.boolean().default(true),
 

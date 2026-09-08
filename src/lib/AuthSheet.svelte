@@ -49,7 +49,7 @@
 				IconComp={UserRoundPlus}
 				bind:open={signupOpen}
 			>
-				<Signup {data} callBack="/subscribe" onSuccess={() => (signupOpen = false)} />
+				<Signup {data} onSuccess={() => (signupOpen = false)} />
 			</DialogComp>
 		</div>
 

@@ -72,14 +72,36 @@ onMount(() => {
 		}
 	});
 
+	/** Matches the cap enforced in subscribe/schema.ts and re-clamped server-side. */
+	const MAX_ADDON_QTY = 20;
+
 	function toggleAddon(id: string) {
-		$form.addonIds = $form.addonIds.includes(id)
-			? $form.addonIds.filter((x) => x !== id)
-			: [...$form.addonIds, id];
+		if ($form.addonIds.includes(id)) {
+			$form.addonIds = $form.addonIds.filter((x) => x !== id);
+			// Drop the quantity too, so a re-added extra starts at 1 rather than silently
+			// keeping a count the customer can no longer see.
+			const { [id]: _removed, ...rest } = $form.addonQuantities;
+			$form.addonQuantities = rest;
+		} else {
+			$form.addonIds = [...$form.addonIds, id];
+			$form.addonQuantities = { ...$form.addonQuantities, [id]: 1 };
+		}
+	}
+
+	const addonQty = (id: string) => $form.addonQuantities[id] ?? 1;
+
+	function setAddonQty(id: string, value: number) {
+		const n = Number.isFinite(value) ? Math.trunc(value) : 1;
+		$form.addonQuantities = {
+			...$form.addonQuantities,
+			[id]: Math.min(MAX_ADDON_QTY, Math.max(1, n))
+		};
 	}
 
 	const activeAddons = $derived(data?.addons.filter((a) => $form.addonIds.includes(a.id)) ?? []);
-	const addonsTotal = $derived(activeAddons.reduce((sum, a) => sum + a.pricePence / 100, 0));
+	const addonsTotal = $derived(
+		activeAddons.reduce((sum, a) => sum + (a.pricePence / 100) * addonQty(a.id), 0)
+	);
 	// const currentPlanDetails = $derived(
 	// 	$form.recipient === 'me'
 	// 		? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
@@ -427,15 +449,34 @@ function submitAfterAuth() {
 				{#if step === 'extras'}
 					<div class="extras-row">
 						{#each data?.addons as addon (addon.id)}
-							<button type="button" class="extra-card" class:added={$form.addonIds.includes(addon.id)} onclick={() => toggleAddon(addon.id)}>
-								<div class="extra-card__img">{addon.name}</div>
-								<div class="extra-card__body">
-									<span class="extra-card__name">{addon.name}</span>
-									{#if addon.description}<span class="extra-card__desc">{addon.description}</span>{/if}
-									<span class="extra-card__price">+£{(addon.pricePence / 100).toFixed(2)}</span>
-									<span class="extra-card__btn">{$form.addonIds.includes(addon.id) ? m.subscribe_addon_added() : m.subscribe_addon_add()}</span>
-								</div>
-							</button>
+							{@const selected = $form.addonIds.includes(addon.id)}
+							<div class="extra-wrap">
+								<button type="button" class="extra-card" class:added={selected} onclick={() => toggleAddon(addon.id)}>
+									<div class="extra-card__img">{addon.name}</div>
+									<div class="extra-card__body">
+										<span class="extra-card__name">{addon.name}</span>
+										{#if addon.description}<span class="extra-card__desc">{addon.description}</span>{/if}
+										<span class="extra-card__price">+£{(addon.pricePence / 100).toFixed(2)}</span>
+										<span class="extra-card__btn">{selected ? m.subscribe_addon_added() : m.subscribe_addon_add()}</span>
+									</div>
+								</button>
+								{#if selected}
+									<label class="extra-qty">
+										<span>Qty</span>
+										<input
+											type="number"
+											min="1"
+											max={MAX_ADDON_QTY}
+											step="1"
+											value={addonQty(addon.id)}
+											oninput={(e) => setAddonQty(addon.id, e.currentTarget.valueAsNumber)}
+										/>
+										<span class="extra-qty__line">
+											£{((addon.pricePence / 100) * addonQty(addon.id)).toFixed(2)}
+										</span>
+									</label>
+								{/if}
+							</div>
 						{/each}
 					</div>
 					<button type="button" class="skip-link" onclick={next}>{m.subscribe_skip_extras()}</button>
@@ -542,8 +583,12 @@ function submitAfterAuth() {
 </div>
 						{#each activeAddons as a (a.id)}
 							<div class="pay-row">
-								<span class="pay-row__label">{a.name}</span>
-								<span class="pay-row__val">+£{(a.pricePence / 100).toFixed(2)}</span>
+								<span class="pay-row__label"
+									>{a.name}{#if addonQty(a.id) > 1} × {addonQty(a.id)}{/if}</span
+								>
+								<span class="pay-row__val"
+									>+£{((a.pricePence / 100) * addonQty(a.id)).toFixed(2)}</span
+								>
 							</div>
 						{/each}
 						<div class="pay-row">
@@ -692,17 +737,38 @@ function submitAfterAuth() {
 						<div class="step-body">
 							<div class="addons-grid">
 								{#each data?.addons as item (item.id)}
-									<button type="button" class="{$form.addonIds.includes(item.id) ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
-										<div class="addon-img">
-											<span class="ph-label">{item.name} · {m.subscribe_addon_photo_suffix()}</span>
-											<span class="ph-sub">{m.subscribe_addon_photo_style()}</span>
-										</div>
-										<div class="addon-top">
-											<div><h3>{item.name}</h3><div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div></div>
-											<div class="check">✓</div>
-										</div>
-										{#if item.description}<p>{item.description}</p>{/if}
-									</button>
+									{@const chosen = $form.addonIds.includes(item.id)}
+									<div class="addon-wrap">
+										<button type="button" class="{chosen ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
+											<div class="addon-img">
+												<span class="ph-label">{item.name} · {m.subscribe_addon_photo_suffix()}</span>
+												<span class="ph-sub">{m.subscribe_addon_photo_style()}</span>
+											</div>
+											<div class="addon-top">
+												<div><h3>{item.name}</h3><div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div></div>
+												<div class="check">✓</div>
+											</div>
+											{#if item.description}<p>{item.description}</p>{/if}
+										</button>
+										{#if chosen}
+											<!-- Outside the button: an input nested in a <button> is invalid HTML and
+											     the button would swallow its clicks. -->
+											<label class="extra-qty">
+												<span>Qty</span>
+												<input
+													type="number"
+													min="1"
+													max={MAX_ADDON_QTY}
+													step="1"
+													value={addonQty(item.id)}
+													oninput={(e) => setAddonQty(item.id, e.currentTarget.valueAsNumber)}
+												/>
+												<span class="extra-qty__line">
+													£{((item.pricePence / 100) * addonQty(item.id)).toFixed(2)}
+												</span>
+											</label>
+										{/if}
+									</div>
 								{/each}
 							</div>
 							{#if $errors.addonIds?._errors}<span class="form-error">{$errors.addonIds._errors}</span>{/if}
@@ -818,7 +884,11 @@ function submitAfterAuth() {
 					{#if activeAddons.length > 0}
 						<div class="sum-row">
 							<span class="sum-label">{m.subscribe_label_addons()}</span>
-							<div class="sum-val">{activeAddons.map((a) => a.name).join(', ')}</div>
+							<div class="sum-val">
+								{activeAddons
+									.map((a) => (addonQty(a.id) > 1 ? `${a.name} × ${addonQty(a.id)}` : a.name))
+									.join(', ')}
+							</div>
 						</div>
 					{/if}
 					<div class="sum-row">
@@ -827,7 +897,10 @@ function submitAfterAuth() {
 	<span>{currentPlanDetails?.name} {m.subscribe_label_product_suffix()}{#if qty > 1} × {qty}{/if}</span>
 	<span>£{planLineTotal.toFixed(2)}</span>
 </div>						{#each activeAddons as item (item.id)}
-							<div class="price-line"><span>{item.name}</span><span>£{(item.pricePence / 100).toFixed(2)}</span></div>
+							<div class="price-line">
+								<span>{item.name}{#if addonQty(item.id) > 1} × {addonQty(item.id)}{/if}</span>
+								<span>£{((item.pricePence / 100) * addonQty(item.id)).toFixed(2)}</span>
+							</div>
 						{/each}
 						<div class="price-line total"><span>{m.subscribe_label_first_payment()}</span><strong>£{finalTotalPrice.toFixed(2)}</strong></div>
 					</div>
@@ -914,6 +987,40 @@ function submitAfterAuth() {
 	.who-card__price span { font-size: .65rem; color: #7a746e; font-family: 'Jost', sans-serif; }
 	.extras-row { display: flex; gap: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scroll-snap-type: x mandatory; }
 	.extras-row::-webkit-scrollbar { display: none; }
+	.addon-wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.extra-wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.extra-qty {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.78rem;
+	}
+
+	.extra-qty input {
+		width: 4.25rem;
+		padding: 0.3rem 0.45rem;
+		border: 1px solid var(--line, #e0d9cf);
+		border-radius: 0.35rem;
+		background: #fff;
+		font: inherit;
+		text-align: center;
+	}
+
+	.extra-qty__line {
+		margin-left: auto;
+		opacity: 0.7;
+	}
+
 	.extra-card { flex-shrink: 0; width: 130px; border: 1px solid #e8e4e0; background: #fff; scroll-snap-align: start; cursor: pointer; transition: border-color .12s; padding: 0; text-align: left; font-family: inherit; }
 	.extra-card.added { border-color: #1a1a1a; }
 	.extra-card__img { height: 100px; background: #f5f2ed; display: flex; align-items: center; justify-content: center; font-size: .65rem; color: #7a746e; text-align: center; padding: 8px; }

@@ -8,16 +8,18 @@ import { APIError } from 'better-auth/api';
 import { auth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { subscribers } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
 import { signupSchema, type SignupMessage } from './schema';
 import { m } from '$lib/paraglide/messages.js';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals }) => {
+	// Send an already-signed-in visitor somewhere useful. This previously redirected to
+	// `/signup?redirectTo=<current url>` — whose target is /signup itself, so `load` ran
+	// again, redirected again, and nested the query string until the browser gave up with
+	// "too many redirects".
 	if (locals.user) {
-		redirect(
-			303,
-			`/signup?redirectTo=${encodeURIComponent(url.pathname + url.search)}`
-		);
+		redirect(303, '/account');
 	}
 	return { form: await superValidate(zod4(signupSchema)) };
 };
@@ -57,21 +59,23 @@ export const actions: Actions = {
 			);
 		}
 
-		// 2) Link a subscriber row to the new user (as a pending lead).
-		//    Requires: subscribers.plan nullable + 'pending' in the status enum.
+		// 2) Record the marketing choice on the subscriber row.
+		//
+		//    The row itself is created by the `databaseHooks.user.create.after` hook in
+		//    auth.ts, which runs for every signup route (email, Google, magic link). This
+		//    action used to insert it a second time, which always failed on
+		//    `subscribers_user_id_unique` and logged a misleading "subscriber link failed".
+		//    The hook can't see the form, so it defaults marketingOptIn to true — this is
+		//    the only place the user's actual choice is known, so apply it here.
 		try {
-			await db.insert(subscribers).values({
-				userId,
-				email,
-				fullName: name,
-				plan: null,
-				status: 'pending',
-				marketingOptIn
-			});
+			await db
+				.update(subscribers)
+				.set({ marketingOptIn })
+				.where(eq(subscribers.userId, userId));
 		} catch (e) {
-			// The account exists regardless; if this link fails, the /subscribe
-			// upsert will create the subscriber later. Log and continue.
-			console.error('subscriber link failed', e);
+			// The account exists regardless; a failure here only means the preference
+			// stayed at its default. Log and continue.
+			console.error('subscriber marketing preference update failed', e);
 		}
 
 		return message(

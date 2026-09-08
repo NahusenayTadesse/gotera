@@ -1,8 +1,9 @@
+import { defineConfig } from 'vitest/config';
+import { playwright } from '@vitest/browser-playwright';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [
@@ -38,5 +39,40 @@ export default defineConfig({
 			// switching locale from an /am/... page still updates the cookie.
 			routeStrategies: [{ match: '/am/:path(.*)?', strategy: ['url', 'cookie'] }]
 		})
-	]
+	],
+	test: {
+		expect: { requireAssertions: true },
+		projects: [
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'client',
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium', headless: true }]
+					},
+					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+					exclude: ['src/lib/server/**']
+				}
+			},
+
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'server',
+					environment: 'node',
+					include: ['src/**/*.{test,spec}.{js,ts}'],
+					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+					// These are integration tests against one shared database — several files
+					// operate on the same seeded rows (the first `deliveries` row in
+					// particular). Running files in parallel makes them race and fail
+					// intermittently, so the server project runs them one file at a time.
+					fileParallelism: false,
+					// Live Stripe calls make some files slower than the 5s default.
+					testTimeout: 20000
+				}
+			}
+		]
+	}
 });

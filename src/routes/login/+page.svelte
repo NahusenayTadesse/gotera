@@ -13,6 +13,6 @@
 </svelte:head>
 
 <div class="flex h-screen w-full items-center justify-center px-4">
-	<Login data={data?.form} action="?/login" callBack="/account" />
+	<Login data={data?.form} action="?/login" />
 </div>
 

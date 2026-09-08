@@ -23,18 +23,19 @@
 	// `onSuccess` lets the parent (the dialog) close itself after in-place login.
 	let {
 		data,
-		action="?/login",
-		callBack = '/account',
+		action = '?/login',
 		onSuccess
 	}: {
 		data: SuperValidated<Infer<LoginSchema>>;
-		callBack?: string;
 		action?: string;
 		onSuccess?: () => void;
 	} = $props();
 
-	// No server action now — we validate client-side and sign in via authClient,
-	// so the page never navigates and the subscribe form keeps its state.
+	// Email/password posts to the `action` above (`?/login` by default); Google sign-in
+	// goes through authClient in a popup instead. After a successful post, superforms'
+	// `invalidateAll` re-runs the page's `load`, which is what redirects a now-signed-in
+	// visitor onward — there is no explicit navigation here by design, so the subscribe
+	// page's dialog can log someone in without losing the form they were filling.
 	const { form, errors,  enhance  } = superForm(data, {
 	
 	});

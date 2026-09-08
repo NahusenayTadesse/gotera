@@ -58,7 +58,11 @@ const recurringFor = (interval: PlanRow['interval']) =>
  * Pass `recurring` for subscription checkouts — Stripe requires every line item in a
  * subscription to share one billing cadence — and omit it for one-off payments.
  */
-function addonLineItems(rows: AddonRow[], recurring?: ReturnType<typeof recurringFor>) {
+function addonLineItems(
+	rows: AddonRow[],
+	recurring?: ReturnType<typeof recurringFor>,
+	quantities: Record<string, number> = {}
+) {
 	return rows.map((a) => ({
 		price_data: {
 			currency: 'gbp',
@@ -66,8 +70,32 @@ function addonLineItems(rows: AddonRow[], recurring?: ReturnType<typeof recurrin
 			unit_amount: a.pricePence,
 			...(recurring ? { recurring } : {})
 		},
-		quantity: 1
+		quantity: qtyOf(quantities, a.id)
 	}));
+}
+
+/**
+ * Quantity for one add-on, clamped server-side.
+ *
+ * The zod schema already bounds these, but this is what actually reaches Stripe and the
+ * webhook, so it re-clamps rather than trusting the parsed form.
+ */
+const MAX_ADDON_QTY = 20;
+function qtyOf(quantities: Record<string, number>, id: string) {
+	const raw = Number(quantities?.[id] ?? 1);
+	if (!Number.isFinite(raw)) return 1;
+	return Math.min(MAX_ADDON_QTY, Math.max(1, Math.trunc(raw)));
+}
+
+/**
+ * `addonIds` metadata format: `id:qty` pairs, comma separated.
+ *
+ * The webhook reads this to build both the gift/guest snapshot and the recurring
+ * `subscriber_addons` rows. A bare id (no colon) is still accepted and means 1, so
+ * checkout sessions created before quantities existed keep fulfilling correctly.
+ */
+function addonMetadata(rows: AddonRow[], quantities: Record<string, number> = {}) {
+	return rows.map((a) => `${a.id}:${qtyOf(quantities, a.id)}`).join(',');
 }
 
 /** Ensure a subscriber (the person) row exists; return its id + stripe customer. */
@@ -96,6 +124,7 @@ async function ensureSubscriber(
 async function oneTimeCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
+	addonQuantities?: Record<string, number>;
 	quantity: number;
 	buyerEmail: string;
 	buyerName: string | null;
@@ -121,11 +150,14 @@ async function oneTimeCheckout(opts: {
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',
 		customer_email: opts.buyerEmail,
-		line_items: [{ price: opts.plan.stripePriceId!, quantity: opts.quantity }, ...addonLineItems(opts.addons)],
+		line_items: [
+			{ price: opts.plan.stripePriceId!, quantity: opts.quantity },
+			...addonLineItems(opts.addons, undefined, opts.addonQuantities)
+		],
 		success_url: opts.successUrl,
 		cancel_url: opts.cancelUrl,
 		payment_intent_data: { metadata: { giftOrderId, kind: opts.plan.kind } },
-		metadata: { giftOrderId, kind: opts.plan.kind, addonIds: opts.addons.map((a) => a.id).join(','), quantity: String(opts.quantity),}
+		metadata: { giftOrderId, kind: opts.plan.kind, addonIds: addonMetadata(opts.addons, opts.addonQuantities), quantity: String(opts.quantity),}
 	});
 	return session.url!;
 }
@@ -134,6 +166,7 @@ async function oneTimeCheckout(opts: {
 async function guestCheckout(opts: {
 	plan: PlanRow;
 	addons: AddonRow[];
+	addonQuantities?: Record<string, number>;
 	quantity: number;
 	addressId: string;
 	buyerEmail?: string | null;
@@ -160,11 +193,14 @@ async function guestCheckout(opts: {
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',
 		billing_address_collection: 'required',
-		line_items: [{ price: opts.plan.stripePriceId!, quantity: opts.quantity }, ...addonLineItems(opts.addons)],
+		line_items: [
+			{ price: opts.plan.stripePriceId!, quantity: opts.quantity },
+			...addonLineItems(opts.addons, undefined, opts.addonQuantities)
+		],
 		success_url: opts.successUrl,
 		cancel_url: opts.cancelUrl,
 		payment_intent_data: { metadata: { guestOrderId, kind: opts.plan.kind } },
-		metadata: { guestOrderId, kind: opts.plan.kind, addressId: opts.addressId, addonIds: opts.addons.map((a) => a.id).join(','), quantity: String(opts.quantity), }
+		metadata: { guestOrderId, kind: opts.plan.kind, addressId: opts.addressId, addonIds: addonMetadata(opts.addons, opts.addonQuantities), quantity: String(opts.quantity), }
 	});
 	return session.url!;
 }
@@ -264,6 +300,7 @@ export const actions: Actions = {
 				checkoutUrl = await oneTimeCheckout({
 					plan,
 					addons: chosenAddons,
+					addonQuantities: form.data.addonQuantities,
 					quantity: form.data.quantity ?? 1,
 					buyerEmail: user.email,
 					buyerName: user.name ?? null,
@@ -332,12 +369,12 @@ export const actions: Actions = {
 				customer_email: stripeCustomerId ? undefined : user.email,
 				line_items: [
 					{ price: plan.stripePriceId, quantity: form.data.quantity ?? 1 },
-					...addonLineItems(chosenAddons, recurringFor(plan.interval))
+					...addonLineItems(chosenAddons, recurringFor(plan.interval), form.data.addonQuantities)
 				],
 				success_url: `${url.origin}/account?welcome=1`,
 				cancel_url: `${url.origin}/subscribe`,
 				// The webhook keys everything off subscriptionId now.
-				metadata: {     subscriberId,subscriptionId, addressId, addonIds: chosenAddons.map((a) => a.id).join(','),  quantity: String(form.data.quantity ?? 1) },
+				metadata: {     subscriberId,subscriptionId, addressId, addonIds: addonMetadata(chosenAddons, form.data.addonQuantities),  quantity: String(form.data.quantity ?? 1) },
 				subscription_data: { metadata: { subscriptionId } }
 			});
 		} catch (e) {
@@ -377,6 +414,7 @@ export const actions: Actions = {
 			checkoutUrl = await oneTimeCheckout({
 				plan,
 				addons: chosenAddons,
+				addonQuantities: form.data.addonQuantities,
 				buyerEmail,
 				buyerName: form.data.buyerName || locals.user?.name || null,
 				recipientName: form.data.recipientName,
@@ -502,6 +540,7 @@ export const actions: Actions = {
 				plan,
 				quantity: form.data.quantity, 
 				addons: chosenAddons,
+				addonQuantities: form.data.addonQuantities,
 				recipientName: recipientName,
 				buyerEmail: form.data.buyerEmail ?? null,
 				buyerName: form.data.buyerName ?? null,

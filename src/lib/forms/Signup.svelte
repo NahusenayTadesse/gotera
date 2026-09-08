@@ -12,11 +12,9 @@
 	// see the note below — in that case we DON'T call onSuccess.
 	let {
 		data,
-		callBack = '/account',
 		onSuccess
 	}: {
 		data: SuperValidated<Infer<SignupSchema>>;
-		callBack?: string;
 		onSuccess?: () => void;
 	} = $props();
 
@@ -71,7 +69,7 @@
 	// 	googleLoading = true;
 	// 	const { error } = await authClient.signIn.social({
 	// 		provider: 'google',
-	// 		callbackURL: callBack
+	// 		callbackURL: '/account'
 	// 	});
 	// 	if (error) {
 	// 		toast.error(error.message ?? 'Could not continue with Google.');

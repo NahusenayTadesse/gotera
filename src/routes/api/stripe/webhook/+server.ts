@@ -39,9 +39,18 @@ import { toCalendarString } from '$lib/format';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
 
-function mapStatus(s: Stripe.Subscription.Status): 'pending' | 'active' | 'paused' | 'cancelled' {
-    if (s === 'canceled' || s === 'unpaid') return 'cancelled';
-    if (s === 'paused') return 'paused';
+/**
+ * Stripe's view of a subscription -> our status enum.
+ *
+ * Takes the whole subscription, not just `status`, because a subscription paused with
+ * `pause_collection` keeps reporting `status: 'active'` — Stripe only reports 'paused'
+ * for trial-based pauses. Reading `status` alone therefore flipped every customer-paused
+ * plan straight back to active on the next `customer.subscription.updated` event, and
+ * billing resumed behind their back.
+ */
+function mapStatus(sub: Stripe.Subscription): 'pending' | 'active' | 'paused' | 'cancelled' {
+    if (sub.status === 'canceled' || sub.status === 'unpaid') return 'cancelled';
+    if (sub.status === 'paused' || sub.pause_collection) return 'paused';
     return 'active';
 }
 
@@ -55,16 +64,44 @@ const money = (pence: number) => `£${(pence / 100).toFixed(2)}`;
  * order is paid, is what lets the dashboard and packing slips show what was bought
  * without re-deriving it from metadata (which could drift if the catalogue changes later).
  */
+/**
+ * Parses the `addonIds` metadata: `id:qty` pairs, comma separated.
+ *
+ * A bare id with no colon means quantity 1, so sessions created before quantities
+ * existed (and any still in flight during a deploy) keep fulfilling correctly.
+ */
+function parseAddonMetadata(raw: string | undefined): { id: string; quantity: number }[] {
+    return (raw ?? '')
+        .split(',')
+        .filter(Boolean)
+        .map((entry) => {
+            const [id, qty] = entry.split(':');
+            const n = Number(qty);
+            return {
+                id,
+                quantity: Number.isFinite(n) ? Math.min(20, Math.max(1, Math.trunc(n))) : 1
+            };
+        })
+        .filter((e) => e.id);
+}
+
 async function resolveAddonSnapshot(metadataAddonIds: string | undefined) {
-    const addonIds = (metadataAddonIds ?? '').split(',').filter(Boolean);
-    if (addonIds.length === 0) return [];
+    const requested = parseAddonMetadata(metadataAddonIds);
+    if (requested.length === 0) return [];
 
     // Deliberately NOT filtered by `isActive`: this runs after the customer has paid, and
     // an add-on deactivated between checkout and this webhook was still legitimately bought.
     // Filtering here would take the money and silently drop the item. The `isActive` gate
     // belongs on the sell side (/subscribe, /account, /addons/[token]), which it is on.
-    const rows = (await db.select().from(addons)).filter((a) => addonIds.includes(a.id));
-    return rows.map((a) => ({ id: a.id, name: a.name, pricePence: a.pricePence, quantity: 1 }));
+    const catalogue = await db.select().from(addons);
+    return requested
+        .map((r) => {
+            const a = catalogue.find((c) => c.id === r.id);
+            return a
+                ? { id: a.id, name: a.name, pricePence: a.pricePence, quantity: r.quantity }
+                : null;
+        })
+        .filter((x): x is { id: string; name: string; pricePence: number; quantity: number } => x !== null);
 }
 
 /**
@@ -186,7 +223,7 @@ async function syncSubscription(sub: Stripe.Subscription) {
     await db
         .update(subscriptions)
         .set({
-            status: mapStatus(sub.status),
+            status: mapStatus(sub),
             planId: switchStillPending ? subRow.planId : (plan?.id ?? subRow.planId),
             quantity,
             currentPeriodEnd: nextPeriodEnd,
@@ -488,7 +525,7 @@ if (session.mode === 'payment') {
                 const subscriberId = session.metadata?.subscriberId;
                 const dbSubscriptionId = session.metadata?.subscriptionId; // Assuming passed from checkout initialization
                 const addressId = session.metadata?.addressId || undefined;
-                const addonIds = (session.metadata?.addonIds ?? '').split(',').filter(Boolean);
+                const addonItems = parseAddonMetadata(session.metadata?.addonIds);
 
                 if (subscriberId) {
                     // Update the customer record with the customer ID
@@ -508,16 +545,17 @@ if (session.mode === 'payment') {
                             })
                             .where(eq(subscriptions.id, dbSubscriptionId));
 
-                        // Insert recurring add-ons linked to both subscriber AND subscription
-                        if (addonIds.length) {
+                        // Insert recurring add-ons linked to both subscriber AND subscription,
+                        // at the quantity the customer actually picked and paid for.
+                        if (addonItems.length) {
                             await db.delete(subscriberAddons).where(eq(subscriberAddons.subscriptionId, dbSubscriptionId));
                             await db.insert(subscriberAddons).values(
-                                addonIds.map((addonId) => ({ 
+                                addonItems.map((item) => ({
                                     id: crypto.randomUUID(),
-                                    subscriberId, 
+                                    subscriberId,
                                     subscriptionId: dbSubscriptionId,
-                                    addonId, 
-                                    quantity: 1 
+                                    addonId: item.id,
+                                    quantity: item.quantity
                                 }))
                             );
                         }

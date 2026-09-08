@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { alias } from 'drizzle-orm/mysql-core';
-import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 // Adjust to your project's paths.
@@ -101,7 +101,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.innerJoin(plans, eq(plans.id, subscriptions.planId))
 		.leftJoin(addresses, eq(addresses.id, subscriptions.addressId))
 		.leftJoin(pendingPlan, eq(pendingPlan.id, subscriptions.pendingPlanId))
-		.where(and(eq(subscriptions.subscriberId, sub.id), ne(subscriptions.status, 'cancelled')))
+		// A subscription row is written as `pending` *before* the customer is sent to
+		// Stripe, so an abandoned checkout leaves one behind forever. Showing those made
+		// /account display plans nobody had paid for. `stripeSubscriptionId` is only set by
+		// the webhook once payment succeeds, so it's the honest signal that a pending row
+		// is real; the gap between paying and the webhook landing is seconds.
+		.where(
+			and(
+				eq(subscriptions.subscriberId, sub.id),
+				ne(subscriptions.status, 'cancelled'),
+				or(
+					ne(subscriptions.status, 'pending'),
+					isNotNull(subscriptions.stripeSubscriptionId)
+				)
+			)
+		)
 		.orderBy(asc(plans.sortOrder));
 
 	const subscriptionIds = rows.map((r) => r.id);
@@ -266,10 +280,25 @@ export const actions: Actions = {
 			return fail(400, { message: 'Only active plans can be paused.' });
 		}
 
-		// ── Stripe hook point: pause_collection on this subscription ──
+		// Stop the money first. If Stripe fails we must NOT mark the row paused — the
+		// customer would see "paused" while their card kept being charged, which is the
+		// worst possible failure here.
+		if (owned.stripeSubscriptionId) {
+			try {
+				await stripe.subscriptions.update(owned.stripeSubscriptionId, {
+					// 'void' means invoices raised while paused are voided rather than left
+					// for the customer to settle when they come back.
+					pause_collection: { behavior: 'void' }
+				});
+			} catch (e) {
+				console.error('stripe pause failed', e);
+				return fail(502, { message: 'Could not pause billing. Please try again.' });
+			}
+		}
+
 		await db.update(subscriptions).set({ status: 'paused' }).where(eq(subscriptions.id, owned.id));
 
-		return { message: 'Plan paused.' };
+		return { message: 'Plan paused. You will not be charged until you resume.' };
 	},
 
 	resume: async ({ request, locals }) => {
@@ -286,7 +315,16 @@ export const actions: Actions = {
 			return fail(400, { message: 'Only paused plans can be resumed.' });
 		}
 
-		// ── Stripe hook point: remove pause_collection on this subscription ──
+		// Clearing pause_collection restarts billing on the next cycle.
+		if (owned.stripeSubscriptionId) {
+			try {
+				await stripe.subscriptions.update(owned.stripeSubscriptionId, { pause_collection: null });
+			} catch (e) {
+				console.error('stripe resume failed', e);
+				return fail(502, { message: 'Could not resume billing. Please try again.' });
+			}
+		}
+
 		await db.update(subscriptions).set({ status: 'active' }).where(eq(subscriptions.id, owned.id));
 
 		return { message: 'Plan resumed.' };
