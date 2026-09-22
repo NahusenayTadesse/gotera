@@ -936,5 +936,12 @@
 	"app_notify_blocked": "በአሳሽዎ ቅንብሮች ውስጥ ታግዷል።",
 	"app_notify_failed": "ማሳወቂያዎችን ማብራት አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
 	"app_later": "አሁን አይደለም",
-	"app_notify_label": "የማድረሻ ማሳወቂያዎች"
+	"app_notify_label": "የማድረሻ ማሳወቂያዎች",
+	"app_install_row": "መተግበሪያውን ይጫኑ",
+	"account_tab_overview": "አጠቃላይ",
+	"account_tab_delivery": "ማድረሻ",
+	"account_tab_history": "ታሪክ",
+	"account_tab_details": "መረጃ",
+	"account_tab_plan": "ዕቅድ",
+	"account_tabs_aria": "የመለያ ክፍሎች"
 }

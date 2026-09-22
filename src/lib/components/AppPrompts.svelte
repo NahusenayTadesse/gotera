@@ -3,15 +3,9 @@
 	import { toast } from 'svelte-sonner';
 	import { m } from '$lib/paraglide/messages.js';
 	import { currentPushSubscription, pushSupported, subscribeToPush } from '$lib/push';
+	import { install, promptInstall, type BeforeInstallPromptEvent } from '$lib/install.svelte';
 
 	let { signedIn = false }: { signedIn?: boolean } = $props();
-
-	// Chrome/Edge/Android fire this instead of showing their own install banner once
-	// we call preventDefault(); it isn't in the TS DOM lib yet.
-	type BeforeInstallPromptEvent = Event & {
-		prompt: () => Promise<void>;
-		userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-	};
 
 	const INSTALL_KEY = 'gotera:install-dismissed';
 	// A dismissed prompt stays quiet for two weeks rather than nagging on every visit.
@@ -54,17 +48,18 @@
 			});
 		}
 
+		// Chrome/Edge/Android fire this instead of showing their own install banner once
+		// we call preventDefault(). It's kept for the account settings row even when the
+		// toast itself is snoozed.
 		function onBeforeInstallPrompt(e: Event) {
 			e.preventDefault();
+			install.prompt = e as BeforeInstallPromptEvent;
 			if (snoozed(INSTALL_KEY)) return;
-			const installEvent = e as BeforeInstallPromptEvent;
 			timers.push(
 				setTimeout(
 					() =>
 						showInstallToast(async () => {
-							await installEvent.prompt();
-							const { outcome } = await installEvent.userChoice;
-							if (outcome === 'dismissed') snooze(INSTALL_KEY);
+							if (!(await promptInstall())) snooze(INSTALL_KEY);
 						}),
 					1500
 				)
@@ -72,6 +67,8 @@
 		}
 
 		function onAppInstalled() {
+			install.installed = true;
+			install.prompt = null;
 			if (installToastId !== undefined) toast.dismiss(installToastId);
 		}
 
@@ -81,6 +78,8 @@
 		// iOS Safari never fires beforeinstallprompt, so there all we can do is explain
 		// the manual Add to Home Screen step.
 		const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+		install.ios = isIos;
+		install.installed = standalone;
 		if (isIos && !standalone && !snoozed(INSTALL_KEY)) {
 			timers.push(setTimeout(() => showInstallToast(), 1500));
 		}

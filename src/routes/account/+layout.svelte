@@ -1,35 +1,35 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import Logout from '$lib/forms/Logout.svelte';
-	import NotificationToggle from '$lib/components/NotificationToggle.svelte';
+	import AccountSettings from '$lib/components/AccountSettings.svelte';
+	import AccountTabBar from '$lib/components/AccountTabBar.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children: any; data: LayoutData } = $props();
 
-	// Mobile nav open/closed state.
-	let menuOpen = $state(false);
-	const closeMenu = () => (menuOpen = false);
-
-	// Sidebar nav (static, already DRY).
+	// Sidebar nav (static, already DRY). `short` is the label on the mobile tab bar.
 	const managementLinks = $derived([
 		{
 			href: '/account',
+			short: m.account_tab_overview(),
 			label: m.account_sidebar_overview(),
 			iconPath: '<rect x="1" y="1" width="14" height="14" rx="1"/><path d="M1 6h14M6 6v9"/>'
 		},
 		{
 			href: '/account/delivery',
+			short: m.account_tab_delivery(),
 			label: m.account_sidebar_next_delivery(),
 			iconPath: '<path d="M8 2v5l3 2"/><circle cx="8" cy="8" r="6.5"/>'
 		},
 		{
 			href: '/account/history',
+			short: m.account_tab_history(),
 			label: m.account_sidebar_order_history(),
 			iconPath: '<path d="M2 4h12M2 8h8M2 12h5"/>'
 		},
 		{
 			href: '/account/details',
+			short: m.account_tab_details(),
 			label: m.account_sidebar_your_details(),
 			iconPath: '<circle cx="8" cy="5" r="3"/><path d="M1.5 14c0-3 3-5.5 6.5-5.5s6.5 2.5 6.5 5.5"/>'
 		}
@@ -37,6 +37,7 @@
 	const subscriptionLinks = $derived([
 		{
 			href: '/account/change-plan',
+			short: m.account_tab_plan(),
 			label: m.account_sidebar_change_plan(),
 			iconPath:
 				'<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 3V1.5M11 3V1.5M2 7h12"/>'
@@ -45,17 +46,12 @@
 
 	let currentPath = $derived(page.url.pathname);
 
-	// Close the mobile menu whenever the route changes.
-	$effect(() => {
-		currentPath;
-		menuOpen = false;
-	});
-
-	// Label for the active page, shown on the mobile toggle button.
-	const activeLabel = $derived(
-		[...managementLinks, ...subscriptionLinks].find((l) => l.href === currentPath)?.label ??
-			m.account_sidebar_menu()
-	);
+	// Sub-pages (e.g. /account/change-plan/…) keep their section highlighted. /account
+	// prefixes everything, so it only matches exactly.
+	function isActive(href: string) {
+		if (href === '/account') return currentPath === href;
+		return currentPath === href || currentPath.startsWith(`${href}/`);
+	}
 
 	// "£24.00 · 12 April" once the date exists, otherwise just the amount.
 	const paymentLabel = $derived(
@@ -104,54 +100,13 @@
 </div>
 
 <div class="container">
-	<!-- Mobile-only toggle button: appears in place of the old top slider. -->
-	<button
-		type="button"
-		class="menu-toggle"
-		class:open={menuOpen}
-		aria-expanded={menuOpen}
-		aria-controls="account-nav"
-		onclick={() => (menuOpen = !menuOpen)}
-	>
-		<svg
-			class="menu-toggle-icon"
-			viewBox="0 0 16 16"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.5"
-			aria-hidden="true"
-		>
-			{#if menuOpen}
-				<path d="M4 4l8 8M12 4l-8 8" />
-			{:else}
-				<path d="M2 4.5h12M2 8h12M2 11.5h12" />
-			{/if}
-		</svg>
-		<span class="menu-toggle-label">{menuOpen ? m.account_close_menu() : activeLabel}</span>
-		<svg
-			class="menu-toggle-chevron"
-			viewBox="0 0 16 16"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.5"
-			aria-hidden="true"
-		>
-			<path d="M4 6l4 4 4-4" />
-		</svg>
-	</button>
-
 	<div class="layout">
-		<aside id="account-nav" class="sidebar" class:open={menuOpen}>
+		<aside class="sidebar">
 			<div class="sidebar-section">
 				<span class="sidebar-label">{m.account_sidebar_manage_label()}</span>
 				<nav class="sidebar-nav">
 					{#each managementLinks as link (link.href)}
-						<a
-							href={link.href}
-							class="sidebar-link"
-							class:active={currentPath === link.href}
-							onclick={closeMenu}
-						>
+						<a href={link.href} class="sidebar-link" class:active={isActive(link.href)}>
 							<!-- Decorative: the link text carries the meaning. iconPath is a
 							     static literal from the arrays above, never user input. -->
 							<svg
@@ -174,12 +129,7 @@
 				<span class="sidebar-label">{m.account_sidebar_subscription_label()}</span>
 				<nav class="sidebar-nav">
 					{#each subscriptionLinks as link (link.href)}
-						<a
-							href={link.href}
-							class="sidebar-link"
-							class:active={currentPath === link.href}
-							onclick={closeMenu}
-						>
+						<a href={link.href} class="sidebar-link" class:active={isActive(link.href)}>
 							<!-- Decorative: the link text carries the meaning. iconPath is a
 							     static literal from the arrays above, never user input. -->
 							<svg
@@ -198,20 +148,25 @@
 				</nav>
 			</div>
 			<div class="sidebar-divider"></div>
-			<div class="sidebar-section">
-				<NotificationToggle />
-			</div>
 			<div class="sidebar-danger">
-				<!-- Explicit action: the component defaults to /dashboard?/logout, which is
-				     admin-only and 403s for customers. -->
-				<Logout action="/account?/logout" />
+				<AccountSettings />
 			</div>
 		</aside>
 		<main class="content">
 			{@render children?.()}
+
+			<!-- On mobile the sidebar is replaced by the tab bar, so its settings and sign out
+			     move to the bottom of Your Details. -->
+			{#if isActive('/account/details')}
+				<div class="mobile-settings">
+					<AccountSettings />
+				</div>
+			{/if}
 		</main>
 	</div>
 </div>
+
+<AccountTabBar links={[...managementLinks, ...subscriptionLinks]} {isActive} />
 
 <style>
 	h1 {
@@ -316,66 +271,6 @@
 		margin-right: 4px;
 	}
 
-	/* MOBILE MENU TOGGLE (hidden on desktop) */
-	.menu-toggle {
-		display: none;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		margin-top: 16px;
-		padding: 13px 16px;
-		background: #fff;
-		border: 1px solid var(--border);
-		border-radius: 2px;
-		color: var(--ink);
-		font-size: 0.78rem;
-		font-weight: 500;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		cursor: pointer;
-		transition:
-			background 0.15s,
-			border-color 0.15s;
-	}
-
-	.menu-toggle:hover {
-		background: var(--panel);
-	}
-
-	.menu-toggle.open {
-		border-color: var(--copper);
-		color: var(--copper);
-	}
-
-	.menu-toggle-icon {
-		width: 16px;
-		height: 16px;
-		opacity: 0.55;
-		flex-shrink: 0;
-	}
-
-	.menu-toggle.open .menu-toggle-icon {
-		opacity: 1;
-	}
-
-	.menu-toggle-label {
-		flex: 1;
-		text-align: left;
-	}
-
-	.menu-toggle-chevron {
-		width: 14px;
-		height: 14px;
-		opacity: 0.45;
-		flex-shrink: 0;
-		transition: transform 0.18s ease;
-	}
-
-	.menu-toggle.open .menu-toggle-chevron {
-		transform: rotate(180deg);
-		opacity: 1;
-	}
-
 	/* LAYOUT STRUCTURE */
 	.layout {
 		display: grid;
@@ -474,47 +369,40 @@
 		}
 	}
 
-	@media (max-width: 800px) {
-		/* Show the toggle button, stack the layout. */
-		.menu-toggle {
-			display: flex;
-		}
+	.mobile-settings {
+		display: none;
+	}
 
+	@media (max-width: 800px) {
+		/* The bottom tab bar takes over navigation; stack the layout. */
 		.layout {
 			grid-template-columns: 1fr;
 		}
 
-		/* Dashboard menu: a collapsible panel instead of the horizontal slider. */
 		.sidebar {
-			position: static;
-			height: auto;
-			overflow: visible;
-			border-right: none;
-			border: 1px solid var(--border);
-			border-radius: 2px;
-			margin-top: 10px;
-			padding: 20px 0 8px;
 			display: none;
 		}
 
-		.sidebar.open {
+		.mobile-settings {
 			display: block;
-			animation: sidebar-drop 0.18s ease;
+			margin-top: 32px;
+			padding-top: 20px;
+			border-top: 1px solid var(--border);
+		}
+
+		/* Compact header: plan and payment details are already on the Overview page, so
+		   dropping them here gets the content on screen sooner. */
+		.page-header {
+			padding: 24px 0 20px;
 		}
 
 		.page-header-inner {
-			grid-template-columns: 1fr;
+			grid-template-columns: 1fr auto;
+			gap: 12px;
 		}
-	}
 
-	@keyframes sidebar-drop {
-		from {
-			opacity: 0;
-			transform: translateY(-6px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
+		.header-meta {
+			display: none;
 		}
 	}
 

@@ -936,5 +936,12 @@
 	"app_notify_blocked": "Blocked in your browser settings.",
 	"app_notify_failed": "Couldn't turn on notifications. Please try again.",
 	"app_later": "Not now",
-	"app_notify_label": "Delivery notifications"
+	"app_notify_label": "Delivery notifications",
+	"app_install_row": "Install the app",
+	"account_tab_overview": "Overview",
+	"account_tab_delivery": "Delivery",
+	"account_tab_history": "History",
+	"account_tab_details": "Details",
+	"account_tab_plan": "Plan",
+	"account_tabs_aria": "Account sections"
 }
