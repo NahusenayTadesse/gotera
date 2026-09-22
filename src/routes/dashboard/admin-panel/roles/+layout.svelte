@@ -7,7 +7,7 @@
 	let { children } = $props();
 </script>
 
-<div class="mb-8 flex flex-row items-center justify-start gap-2">
+<div class="mb-6 flex w-full min-w-0 flex-row flex-wrap items-center justify-start gap-2 sm:mb-8">
 	<Button
 		href="/dashboard/admin-panel/roles"
 		variant={page.url.pathname === '/dashboard/admin-panel/roles' ? 'default' : 'outline'}

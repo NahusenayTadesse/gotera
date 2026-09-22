@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Logout from '$lib/forms/Logout.svelte';
+	import NotificationToggle from '$lib/components/NotificationToggle.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { LayoutData } from './$types';
 
@@ -197,6 +198,9 @@
 				</nav>
 			</div>
 			<div class="sidebar-divider"></div>
+			<div class="sidebar-section">
+				<NotificationToggle />
+			</div>
 			<div class="sidebar-danger">
 				<!-- Explicit action: the component defaults to /dashboard?/logout, which is
 				     admin-only and 403s for customers. -->

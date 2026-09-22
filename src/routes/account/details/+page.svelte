@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
+	import { PostcodeLookup } from '$lib/postcode.svelte';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
 	import { m } from '$lib/paraglide/messages.js';
@@ -53,6 +54,14 @@
 		invalidateAll: true,
 		onUpdated: onUpdated('address')
 	});
+
+	/**
+	 * Postcode suggestions for the address editor. Suggestions only — this form posts
+	 * plain FormData, so the coordinates themselves are resolved server-side in
+	 * `?/updateAddress`. Purely additive: ignoring the dropdown and typing the postcode
+	 * by hand works exactly as it did before.
+	 */
+	const postcode = new PostcodeLookup();
 
 	const addressLine = $derived(
 		data.address
@@ -143,7 +152,13 @@
 					<div class="addr-grid">
 						<div class="af full">
 							<label class="af-label" for="line1">{m.acctdetails_line1_label()}</label>
-							<input id="line1" class="edit-input" name="line1" bind:value={$addressForm.line1} />
+							<input
+								id="line1"
+								class="edit-input"
+								name="line1"
+								bind:value={$addressForm.line1}
+								autocomplete="address-line1"
+							/>
 							{#if $addressErrors.line1}<span class="form-error">{$addressErrors.line1}</span>{/if}
 						</div>
 						<div class="af full">
@@ -151,11 +166,23 @@
 								>{m.acctdetails_line2_label()}
 								<span class="opt">{m.acctdetails_optional()}</span></label
 							>
-							<input id="line2" class="edit-input" name="line2" bind:value={$addressForm.line2} />
+							<input
+								id="line2"
+								class="edit-input"
+								name="line2"
+								bind:value={$addressForm.line2}
+								autocomplete="address-line2"
+							/>
 						</div>
 						<div class="af">
 							<label class="af-label" for="city">{m.acctdetails_city_label()}</label>
-							<input id="city" class="edit-input" name="city" bind:value={$addressForm.city} />
+							<input
+								id="city"
+								class="edit-input"
+								name="city"
+								bind:value={$addressForm.city}
+								autocomplete="address-level2"
+							/>
 							{#if $addressErrors.city}<span class="form-error">{$addressErrors.city}</span>{/if}
 						</div>
 						<div class="af">
@@ -164,8 +191,14 @@
 								id="postcode"
 								class="edit-input"
 								name="postcode"
+								autocomplete="postal-code"
+								list={postcode.listId}
+								oninput={(e) => postcode.search(e.currentTarget.value)}
 								bind:value={$addressForm.postcode}
 							/>
+							<datalist id={postcode.listId}>
+								{#each postcode.suggestions as s (s)}<option value={s}></option>{/each}
+							</datalist>
 							{#if $addressErrors.postcode}<span class="form-error">{$addressErrors.postcode}</span
 								>{/if}
 						</div>

@@ -8,6 +8,7 @@ import { APIError } from 'better-auth/api';
 // Adjust to your project's paths.
 import { auth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
+import { lookupPostcode } from '$lib/server/geocode';
 import { subscribers, addresses } from '$lib/server/db/schema';
 
 import { emailSchema, phoneSchema, addressSchema, type DetailsMessage } from './schema';
@@ -93,11 +94,24 @@ export const actions: Actions = {
 			);
 		}
 
+		// Coordinates for the delivery route planner. Looked up here rather than in the
+		// browser because this form posts plain FormData (no `dataType: 'json'`), so there
+		// is nowhere for a client-side result to ride along without adding hidden inputs.
+		// `lookupPostcode` returns null on any failure and never throws, so a postcode we
+		// cannot resolve simply saves the address without coordinates.
+		const geo = await lookupPostcode(form.data.postcode);
+
 		const values = {
 			line1: form.data.line1,
 			line2: form.data.line2 || null,
 			city: form.data.city || 'London',
-			postcode: form.data.postcode
+			postcode: form.data.postcode,
+			// Explicitly null on a miss, so editing a good postcode into a bad one clears
+			// the old coordinates instead of leaving the route planner pointing at the
+			// customer's previous address.
+			latitude: geo?.latitude ?? null,
+			longitude: geo?.longitude ?? null,
+			geocodedAt: geo ? new Date() : null
 		};
 
 		const existing = await getPrimaryAddress(sub.id);

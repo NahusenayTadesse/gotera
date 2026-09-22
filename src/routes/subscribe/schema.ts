@@ -58,6 +58,13 @@ export const checkoutSchema = z
 		line2: z.string().max(255).optional(),
 		city: z.string().max(255).default('London'),
 		postcode: z.string().max(32).default(''),
+
+		// Postcode centroid, filled in by the address field's background lookup.
+		// Optional with no `.refine()` on purpose: geocoding is best-effort and must never
+		// stand between a customer and a completed order. When these are absent the server
+		// retries the lookup itself, and failing that stores the address without them.
+		latitude: z.coerce.number().optional(),
+		longitude: z.coerce.number().optional(),
 		guestCheckout: z.boolean().default(false),
 		quantity: z.number().default(1),
 

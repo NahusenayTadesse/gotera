@@ -28,6 +28,7 @@
 	import type { ComponentProps } from 'svelte';
 	import { bgGradient } from '$lib/global.svelte';
 	import { useSidebar } from '$lib/components/ui/sidebar/index.js';
+	import { page } from '$app/state';
 
 	import NavMain from './NavMain.svelte';
 
@@ -55,8 +56,6 @@
 			url: '/dashboard/deliveries',
 			icon: Truck
 		},
-
-
 
 		{
 			title: 'Reports',
@@ -102,6 +101,12 @@
 			sidebar.setOpenMobile(false);
 		}
 	}
+
+	// Close the off-canvas sidebar whenever the route changes on mobile
+	$effect(() => {
+		page.url.pathname;
+		closeSidebar();
+	});
 </script>
 
 <Sidebar.Root collapsible="offcanvas" {...restProps}>
@@ -119,8 +124,8 @@
 		<Sidebar.Group>
 			<Sidebar.GroupLabel>
 				<div class="logo-row">
-		    <a href="/" class="logo">G O T E R A</a>
-		</div></Sidebar.GroupLabel
+					<a href="/" class="logo">G O T E R A</a>
+				</div></Sidebar.GroupLabel
 			>
 			<Sidebar.GroupContent class="my-4">
 				<NavMain items={navigation} />
@@ -154,18 +159,17 @@
 </Sidebar.Root>
 
 <style>
-.logo-row {
+	.logo-row {
 		display: flex;
 		justify-content: center;
 		margin: 20px;
 	}
 
 	.logo {
-
-		   font-family: 'Cormorant Garamond', serif;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: #9A4F22;
-    font-weight: 600;
+		font-family: 'Cormorant Garamond', serif;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: #9a4f22;
+		font-weight: 600;
 	}
 </style>

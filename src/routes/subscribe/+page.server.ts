@@ -8,6 +8,7 @@ import { stripe } from '$lib/server/stripe';
 import { loginSchema, addUser } from '$lib/ZodSchema';
 // Adjust these to your project's paths.
 import { db } from '$lib/server/db';
+import { lookupPostcode } from '$lib/server/geocode';
 import {
 	subscribers,
 	subscriptions,
@@ -205,6 +206,27 @@ async function guestCheckout(opts: {
 	return session.url!;
 }
 
+/**
+ * Coordinates for an address, for the delivery route planner.
+ *
+ * The address field looks these up in the browser while the customer types, so normally
+ * they arrive on the form and this is a no-op. The server retry covers the cases where
+ * they don't: a customer who pasted a postcode and submitted before the debounce fired,
+ * an extension blocking the request, or a client that never ran the lookup at all.
+ *
+ * Returns `{}` — not an error — when the postcode cannot be resolved. The address is
+ * stored without coordinates and the route planner lists it for manual fixing. Nothing
+ * here is allowed to interrupt a checkout.
+ */
+async function coordsFor(data: { latitude?: number; longitude?: number; postcode: string }) {
+	if (Number.isFinite(data.latitude) && Number.isFinite(data.longitude)) {
+		return { latitude: data.latitude, longitude: data.longitude, geocodedAt: new Date() };
+	}
+	// `lookupPostcode` swallows its own failures and returns null, so no try/catch here.
+	const hit = await lookupPostcode(data.postcode);
+	return hit ? { latitude: hit.latitude, longitude: hit.longitude, geocodedAt: new Date() } : {};
+}
+
 const toPlan = (p: PlanRow) => ({
 	id: p.slug,
 	name: p.name,
@@ -213,6 +235,7 @@ const toPlan = (p: PlanRow) => ({
 	freq: p.freqLabel ?? '',
 	bullet: p.bullets,
 	kind: p.kind,
+	interval: p.interval,
 	featured: p.featured
 });
 
@@ -292,6 +315,10 @@ export const actions: Actions = {
 			city: form.data.city || 'London',
 			postcode: form.data.postcode
 		};
+		// Only the `addresses` row carries coordinates. Gift and guest orders keep their
+		// address as JSON on the order instead, and the route planner geocodes those from
+		// their postcode when it builds the run (cached, so it costs one lookup each).
+		const coords = await coordsFor(form.data);
 
 		// One-off → one-time payment
 		if (plan.kind === 'order') {
@@ -338,6 +365,7 @@ export const actions: Actions = {
 					subscriberId,
 					label: form.data.addressLabel || null,
 					...recipientAddress,
+					...coords,
 					isPrimary: false
 				});
 
@@ -513,6 +541,10 @@ export const actions: Actions = {
 			city: form.data.city || 'London',
 			postcode: form.data.postcode
 		};
+		// Only the `addresses` row carries coordinates. Gift and guest orders keep their
+		// address as JSON on the order instead, and the route planner geocodes those from
+		// their postcode when it builds the run (cached, so it costs one lookup each).
+		const coords = await coordsFor(form.data);
       
      let addressId = '';
 	addressId = crypto.randomUUID();
@@ -520,6 +552,7 @@ export const actions: Actions = {
 					id: addressId,
 					label: form.data.addressLabel || null,
 					...recipientAddress,
+					...coords,
 					isPrimary: false
 				});
 

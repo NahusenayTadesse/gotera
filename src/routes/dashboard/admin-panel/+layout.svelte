@@ -32,7 +32,7 @@
 	</Menubar.Menu>
 {/snippet}
 
-<Menubar.Root class="sticky mb-8 bg-transparent">
+<Menubar.Root class="mb-6 flex w-full min-w-0 flex-wrap bg-transparent sm:mb-8">
 	{@render menu('User Management', userManagement)}
 </Menubar.Root>
 

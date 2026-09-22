@@ -1,9 +1,10 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from './db';
-import { stock, stockChanges, notifications } from './db/schema';
+import { stock, stockChanges, notifications, subscribers } from './db/schema';
 import { toCalendarString, fullDate, type CalendarDate } from '$lib/format';
 import { addons } from './db/schema';
 import { notifyAdminStockLow } from './email';
+import { sendPushToUser } from './push';
 
 /** Capacity a delivery date gets the first time anything looks at it. */
 export const DEFAULT_CAPACITY = 100;
@@ -194,7 +195,10 @@ export async function readMainStock(date: Date | CalendarDate): Promise<StockRow
 	return row ?? null;
 }
 
-/** Record an in-app notification for a subscriber. */
+/**
+ * Record an in-app notification for a subscriber, and push it to any device they've
+ * enabled notifications on (guest subscribers without an account just get the banner).
+ */
 export async function notify(
 	subscriberId: string,
 	kind: string,
@@ -202,6 +206,14 @@ export async function notify(
 	body?: string
 ) {
 	await db.insert(notifications).values({ subscriberId, kind, title, body: body ?? null });
+
+	const [sub] = await db
+		.select({ userId: subscribers.userId })
+		.from(subscribers)
+		.where(eq(subscribers.id, subscriberId));
+	if (sub?.userId) {
+		await sendPushToUser(sub.userId, { title, body, tag: kind, url: '/account' });
+	}
 }
 
 /** Unread notifications for the signed-in customer's /account banner. */

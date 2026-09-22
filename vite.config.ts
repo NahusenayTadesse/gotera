@@ -6,6 +6,12 @@ import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
+	// MapLibre ships its tile-decoding logic as a web worker. Vite's dependency
+	// pre-bundler rewrites the import so the worker 404s in dev, and the map then renders
+	// an empty canvas — the style and sprites load fine, but no vector tile is ever
+	// decoded, so there is no error to notice, just a blank box. Excluding it from
+	// optimisation leaves the worker import intact.
+	optimizeDeps: { exclude: ['maplibre-gl'] },
 	plugins: [
 		tailwindcss(),
 		sveltekit({

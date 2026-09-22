@@ -64,7 +64,7 @@
 	<title>User Details</title>
 </svelte:head>
 <SingleView title="User Details">
-	<div class="mt-4 flex w-full flex-row items-start justify-start gap-2 pl-4">
+	<div class="mt-4 flex w-full min-w-0 flex-row flex-wrap items-start justify-start gap-2 px-4">
 		<Button onclick={() => (edit = !edit)}>
 			{#if !edit}
 				<Pencil class="h-4 w-4" />
@@ -81,7 +81,7 @@
 		<div class="w-full p-4"><SingleTable {singleTable} /></div>
 	{/if}
 	{#if edit}
-		<div class="w-full p-4">
+		<div class="w-full min-w-0 p-4">
 			<form action="?/editUser" use:enhance class="flex flex-col gap-4" id="edit" method="post">
 				<h3 class="text-center text-red-500">
 					Any changes made here will signout the user from every device they are logged in on.
@@ -108,11 +108,13 @@
 
 <br />
 
-<DataTable
-	data={data?.permissionList}
-	{columns}
-	fileName="{data?.singleUser?.name}Permission List"
-/>
+<div class="w-full max-w-full min-w-0">
+	<DataTable
+		data={data?.permissionList}
+		{columns}
+		fileName="{data?.singleUser?.name}Permission List"
+	/>
+</div>
 
 {#snippet fe(
 	label = '',

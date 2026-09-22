@@ -4,6 +4,7 @@ import {
 	text,
 	boolean,
 	int,
+	decimal,
 	mysqlEnum,
 	json,
 	date,
@@ -11,7 +12,7 @@ import {
 	index,
 	timestamp
 } from 'drizzle-orm/mysql-core';
-import { secureFields } from './auth.schema';
+import { secureFields, user } from './auth.schema';
 
 export * from './auth.schema';
 
@@ -68,6 +69,17 @@ export const addresses = mysqlTable(
 		city: varchar('city', { length: 255 }).default('London').notNull(),
 		postcode: varchar('postcode', { length: 32 }).notNull(),
 		isPrimary: boolean('is_primary').default(false).notNull(),
+
+		// Postcode centroid from postcodes.io, used by the delivery route planner to
+		// order the Saturday run. Nullable on purpose: geocoding is best-effort and must
+		// never block checkout, so an address whose postcode we couldn't resolve is a
+		// perfectly normal address that the planner lists separately for manual fixing.
+		// `mode: 'number'` so these read back as numbers rather than decimal strings.
+		latitude: decimal('latitude', { precision: 9, scale: 6, mode: 'number' }),
+		longitude: decimal('longitude', { precision: 9, scale: 6, mode: 'number' }),
+		// When the lookup last succeeded — lets the backfill script skip rows it has
+		// already done, and distinguishes "never tried" from "tried, no match".
+		geocodedAt: timestamp('geocoded_at'),
 		...secureFields
 	},
 	(table) => [index('idx_addresses_subscriber_id').on(table.subscriberId)]
@@ -231,6 +243,27 @@ export const notifications = mysqlTable(
 		...secureFields
 	},
 	(table) => [index('idx_notifications_subscriber_id').on(table.subscriberId)]
+);
+
+// ── Push Subscriptions ──
+// One row per browser/device a signed-in user has allowed notifications on. The
+// endpoint is the push service URL and is unique per device, so re-subscribing the
+// same browser updates the row instead of duplicating it.
+export const pushSubscriptions = mysqlTable(
+	'push_subscriptions',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: varchar('user_id', { length: 36 })
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		endpoint: varchar('endpoint', { length: 512 }).notNull().unique(),
+		p256dh: varchar('p256dh', { length: 255 }).notNull(),
+		auth: varchar('auth', { length: 255 }).notNull(),
+		...secureFields
+	},
+	(table) => [index('idx_push_subscriptions_user_id').on(table.userId)]
 );
 
 // ── Delivery Skip Dates ──

@@ -120,6 +120,13 @@
       "when": 1788813574068,
       "tag": "0016_perpetual_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1788857826849,
+      "tag": "0017_shocking_rawhide_kid",
+      "breakpoints": true
     }
   ]
 }

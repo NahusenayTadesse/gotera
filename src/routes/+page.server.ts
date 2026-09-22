@@ -27,7 +27,8 @@ const toCard = (p: (typeof planRows)[number]) => {
     freq: p.freqLabel ?? '',
     bullets,
     featured: p.featured,
-    kind: p.kind
+    kind: p.kind,
+    interval: p.interval
   };
 };
 
@@ -86,6 +87,11 @@ export const load: PageServerLoad = async () => {
 		const lowest = (arr: { price: number }[]) =>
 			arr.length ? Math.min(...arr.map((p) => p.price)) : null;
 
+		// The hero quotes this "from" price with a "/ month" note, so it must only
+		// consider genuinely recurring plans — a cheaper one-off would make the
+		// headline price read as a monthly rate it never is.
+		const recurringPlans = subscriptionPlans.filter((p) => p.interval !== 'one_time');
+
 
 
 
@@ -94,7 +100,7 @@ export const load: PageServerLoad = async () => {
 			giftPlans,
 			plans: plansBySlug,
 			fromPrice: lowest([...subscriptionPlans, ...giftPlans]), // overall lowest
-			subscriptionFromPrice: lowest(subscriptionPlans),
+			subscriptionFromPrice: lowest(recurringPlans),
 			giftFromPrice: lowest(giftPlans),
 			stats: {
 				subscribers: Number(subsRes[0]?.n ?? 0),

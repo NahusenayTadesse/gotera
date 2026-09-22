@@ -56,11 +56,14 @@ import type { PageData } from './$types';
 	const cards = $derived(
 		(data?.subscriptionPlans ?? []).map((p) => {
 			const copy = CARD_COPY[p.slug] ?? { cta: m.home_plan_default_cta() };
+			// A one-off plan is charged once, so it never carries a per-month label —
+			// whatever the admin typed into the plan's freq field.
+			const oneOff = p.interval === 'one_time';
 			return {
 				slug: p.slug,
 				title: copy.title ?? p.name,
 				desc: copy.desc ?? p.subtitle,
-				freq: copy.freq ?? p.freq,
+				freq: oneOff ? m.home_plan_freq_one_time() : (copy.freq ?? p.freq),
 				bullets: copy.bullets ?? p.bullets ?? [],
 				cta: copy.cta,
 				price: p.price,

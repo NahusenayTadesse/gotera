@@ -19,10 +19,15 @@
 	<Sidebar.Provider>
 		<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
 		<main class="min-w-0 flex-1 px-4">
+			<!--
+				Sticky on every size. It used to be `absolute` below `lg`, which meant the
+				sidebar toggle, search, theme and avatar scrolled out of reach — on an
+				8,900px-tall table page that is a long way back to the top.
+			-->
 			<div
-				class="absolute top-3 left-3 z-10 flex w-[95%] flex-row
-				justify-between rounded-lg border border-border bg-background/90 p-3 pr-5 align-middle
-			 backdrop-blur-md lg:sticky lg:w-full lg:pr-4"
+				class="sticky top-3 z-10 flex w-full flex-row justify-between rounded-lg border
+				border-border bg-background p-3 pr-5 align-middle lg:bg-background/90
+				lg:pr-4 lg:backdrop-blur-md"
 			>
 				<Sidebar.Trigger class="rounded-lg border border-border bg-card p-4" />
 				<div class="flex flex-row items-center gap-4">
@@ -32,10 +37,11 @@
 					<AvatarSettings data={data?.name} />
 				</div>
 			</div>
-			<div class="p-4 pt-28 pb-24 lg:pt-8 lg:pb-8">
+			<div class="p-4 pt-6 pb-24 lg:pt-8 lg:pb-8">
 				{@render children?.()}
-				<!-- <BottomMenu /> -->
 			</div>
 		</main>
+		<!-- Pass `ordersNumber` once the layout load returns a count, to badge Orders. -->
+		<BottomMenu />
 	</Sidebar.Provider>
 </div>

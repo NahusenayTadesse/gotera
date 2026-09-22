@@ -125,10 +125,18 @@
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
 	<h1 class="dash-heading text-2xl font-semibold">Deliveries &amp; Orders</h1>
-	<BulkEmailDialog
+	<div class="flex items-center gap-3">
+		<a
+			href="/dashboard/deliveries/route"
+			class="rounded-md border px-3 py-1.5 text-sm hover:border-[#a45926] hover:text-[#a45926]"
+		>
+			Plan delivery route
+		</a>
+		<BulkEmailDialog
 		bulkEmailForm={data.bulkEmailForm}
-		rows={selectedRows.map((r) => ({ id: r.id, email: r.subscriberEmail, name: r.subscriberName }))}
-	/>
+			rows={selectedRows.map((r) => ({ id: r.id, email: r.subscriberEmail, name: r.subscriberName }))}
+		/>
+	</div>
 </div>
 
 <!-- Opened programmatically from the skip-date action below, prefilled with a delivery-change notice. -->

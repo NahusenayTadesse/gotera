@@ -1,0 +1,30 @@
+{
+	"name": "GOTERA — Premium Ethiopian Food",
+	"short_name": "GOTERA",
+	"description": "Authentic Ethiopian injera made with 100% teff, delivered monthly to your door in London. Vegan, gluten-free, and packed with iron.",
+	"id": "/",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "portrait",
+	"lang": "en",
+	"dir": "ltr",
+	"theme_color": "#a45926",
+	"background_color": "#faf8f4",
+	"categories": ["food", "shopping", "lifestyle"],
+	"icons": [
+		{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+		{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+		{
+			"src": "/icon-maskable-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		}
+	],
+	"shortcuts": [
+		{ "name": "Subscribe", "url": "/subscribe" },
+		{ "name": "My account", "url": "/account" }
+	]
+}

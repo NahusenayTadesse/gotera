@@ -35,7 +35,11 @@
 	});
 
 	const level = (row: { remaining: number; lowThreshold: number; criticalThreshold: number }) =>
-		row.remaining <= row.criticalThreshold ? 'critical' : row.remaining <= row.lowThreshold ? 'low' : 'ok';
+		row.remaining <= row.criticalThreshold
+			? 'critical'
+			: row.remaining <= row.lowThreshold
+				? 'low'
+				: 'ok';
 </script>
 
 <svelte:head>
@@ -64,11 +68,19 @@
 		>
 			<label class="flex flex-col gap-1 text-sm">
 				Saturday
-				<input type="date" name="date" required class="rounded-md border border-border bg-background p-2" />
+				<input
+					type="date"
+					name="date"
+					required
+					class="rounded-md border border-border bg-background p-2 text-base md:text-sm"
+				/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				Item
-				<select name="addonId" class="rounded-md border border-border bg-background p-2">
+				<select
+					name="addonId"
+					class="rounded-md border border-border bg-background p-2 text-base md:text-sm"
+				>
 					<option value="main">Main product</option>
 					{#each data.catalogue as a (a.id)}
 						<option value={a.id}>{a.name}</option>
@@ -91,7 +103,9 @@
 			<Card.Header><Card.Title>{dateLabel}</Card.Title></Card.Header>
 			<Card.Content class="flex flex-col gap-4">
 				{#each rows as row (row.id)}
-					<div class="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4 last:border-0 last:pb-0">
+					<div
+						class="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4 last:border-0 last:pb-0"
+					>
 						<div class="min-w-40">
 							<div class="font-medium">{row.itemLabel}</div>
 							<div class="text-sm" class:text-red-600={level(row) !== 'ok'}>
@@ -114,7 +128,7 @@
 									name="capacity"
 									min="0"
 									value={row.capacity}
-									class="w-24 rounded-md border border-border bg-background p-2"
+									class="w-24 rounded-md border border-border bg-background p-2 text-base md:text-sm"
 								/>
 							</label>
 							<label class="flex flex-col gap-1 text-xs">
@@ -123,7 +137,7 @@
 									type="text"
 									name="reason"
 									placeholder="Restocked"
-									class="w-40 rounded-md border border-border bg-background p-2"
+									class="w-40 rounded-md border border-border bg-background p-2 text-base md:text-sm"
 								/>
 							</label>
 							<Button type="submit" variant="outline" disabled={pending === `cap:${row.id}`}>
@@ -145,7 +159,7 @@
 									name="lowThreshold"
 									min="0"
 									value={row.lowThreshold}
-									class="w-20 rounded-md border border-border bg-background p-2"
+									class="w-20 rounded-md border border-border bg-background p-2 text-base md:text-sm"
 								/>
 							</label>
 							<label class="flex flex-col gap-1 text-xs">
@@ -155,7 +169,7 @@
 									name="criticalThreshold"
 									min="0"
 									value={row.criticalThreshold}
-									class="w-20 rounded-md border border-border bg-background p-2"
+									class="w-20 rounded-md border border-border bg-background p-2 text-base md:text-sm"
 								/>
 							</label>
 							<Button type="submit" variant="ghost" disabled={pending === `th:${row.id}`}>

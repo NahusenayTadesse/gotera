@@ -68,7 +68,7 @@
 	<title>Role Details</title>
 </svelte:head>
 <SingleView title="Role Details">
-	<div class="mt-4 flex w-full flex-row items-start justify-start gap-2 pl-4">
+	<div class="mt-4 flex w-full min-w-0 flex-row flex-wrap items-start justify-start gap-2 px-4">
 		<Button onclick={() => (edit = !edit)}>
 			{#if !edit}
 				<Pencil class="h-4 w-4" />
@@ -139,10 +139,12 @@
 <br />
 
 {#if data?.userList?.length}
-	<h3>Users on this Role</h3>
-	<DataTable
-		data={data?.userList}
-		columns={userColumns}
-		fileName="{data?.singleUser.name} Users List"
-	/>
+	<div class="w-full max-w-full min-w-0">
+		<h3 class="mb-2 text-lg font-semibold sm:text-xl">Users on this Role</h3>
+		<DataTable
+			data={data?.userList}
+			columns={userColumns}
+			fileName="{data?.singleUser.name} Users List"
+		/>
+	</div>
 {/if}

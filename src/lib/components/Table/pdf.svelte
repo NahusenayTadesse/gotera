@@ -47,8 +47,11 @@
 			});
 		});
 
-		// 2. Map Row Data matrices
-		const rowModel = table.getRowModel();
+		// 2. Map Row Data matrices.
+		// Filtered, NOT paginated: an export should cover every row matching the current
+		// search, not just the page on screen. `getRowModel()` is post-pagination and
+		// would silently truncate the file to one page.
+		const rowModel = table.getFilteredRowModel();
 		const rows = rowModel.rows.map((row: any) => {
 			return validColumnIds.map((columnId) => {
 				const cell = row.getAllCells().find((c: any) => c.column.id === columnId);
@@ -295,7 +298,7 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
 		{#snippet child({ props })}
-			<Button {...props} variant="outline" class="ml-auto">
+			<Button {...props} variant="outline" class="ml-auto" aria-label="Export table">
 				<Download class="size-5" />
 			</Button>
 		{/snippet}

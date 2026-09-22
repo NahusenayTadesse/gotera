@@ -1,70 +1,72 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Container, LayoutDashboard, SquareChartGantt, UsersRound } from '@lucide/svelte';
+	import { Container, LayoutDashboard, PackageSearch, Truck, Users } from '@lucide/svelte';
+
+	/**
+	 * Mobile-only bottom navigation for the dashboard.
+	 *
+	 * Carries the day-to-day fulfilment loop; everything else stays in the off-canvas
+	 * sidebar. Icons deliberately match the sidebar's so the two read as one nav.
+	 */
+	let { ordersNumber = undefined }: { ordersNumber?: number } = $props();
 
 	const mobNav = [
-		{ title: 'Dashboard', url: '/dashboard/', icon: LayoutDashboard },
-		{ title: 'Customers', url: '/dashboard/appointments', icon: UsersRound },
-		{ title: 'Service', url: '/dashboard/services', icon: SquareChartGantt },
-		{ title: 'Supplies', url: '/dashboard/supplies', icon: Container }
+		{ title: 'Home', url: '/dashboard', icon: LayoutDashboard },
+		{ title: 'Orders', url: '/dashboard/orders', icon: PackageSearch, counter: () => ordersNumber },
+		{ title: 'Delivery', url: '/dashboard/deliveries', icon: Truck },
+		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
+		{ title: 'Stock', url: '/dashboard/stock', icon: Container }
 	];
 
-	const on = 'text-primary shadow-lg shadow-primary/20 bg-primary/10';
-	const off = 'text-muted-foreground hover:text-foreground hover:bg-muted/50';
-	function blacken(url: string) {
-		const currentPath = page.url.pathname;
-
-		// Special case for root dashboard
-		if (url === '/dashboard/') {
-			return currentPath === '/dashboard' ? on : off;
-		}
-
-		// For other items, check if current path starts with their URL but is not just /dashboard
-		return currentPath.startsWith(url) && currentPath !== '/dashboard' ? on : off;
+	function isActive(url: string) {
+		const path = page.url.pathname;
+		// `/dashboard` prefixes every other entry, so it only matches exactly.
+		if (url === '/dashboard') return path === '/dashboard';
+		return path === url || path.startsWith(`${url}/`);
 	}
+
+	const formatCount = (count: number) => (count > 99 ? '99+' : String(count));
 </script>
 
 <nav
-	class="fixed right-0 bottom-0 left-0 z-40 flex w-screen border-t border-border bg-background/95 backdrop-blur-xl lg:hidden"
+	aria-label="Dashboard sections"
+	class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background lg:hidden"
+	style="padding-bottom: env(safe-area-inset-bottom);"
 >
-	<div class="grid grid-cols-5 items-center justify-around px-2 py-3">
+	<ul class="grid grid-cols-5">
 		{#each mobNav as item (item.url)}
-			<a
-				href={item.url}
-				class="group relative flex flex-col items-center gap-1 rounded-xl px-3 py-2 transition-all duration-300 ease-out hover:scale-110 active:scale-95 {blacken(
-					item.url
-				)}"
-				title={item.title}
-			>
-				<div
-					class="relative flex h-6 w-6 items-center justify-center transition-all duration-300 {on
-						? 'drop-shadow-lg'
-						: ''}"
+			{@const active = isActive(item.url)}
+			{@const count = item.counter?.()}
+			<li class="min-w-0">
+				<a
+					href={item.url}
+					aria-current={active ? 'page' : undefined}
+					class="relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2
+					transition-colors duration-200 active:bg-muted/60
+					{active ? 'text-primary' : 'text-muted-foreground'}"
 				>
-					<item.icon class="!h-4 !w-4" />
-					<!-- {#if on}
-						<div
-							class="absolute -bottom-1 left-1/2 size-1 -translate-x-1/2 animate-pulse rounded-full bg-primary"
-							transition:scale={{ duration: 200 }}
-						></div>
-					{/if} -->
-				</div>
+					<span class="relative flex size-6 items-center justify-center">
+						<item.icon class="size-5" />
+						{#if count}
+							<span
+								class="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center
+								rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+							>
+								{formatCount(count)}
+							</span>
+						{/if}
+					</span>
 
-				<!-- Label -->
-				<span
-					class="text-xs leading-none font-medium whitespace-nowrap transition-all duration-300"
-				>
-					{item.title}
-				</span>
+					<span class="w-full truncate text-center text-[11px] leading-none font-medium">
+						{item.title}
+					</span>
 
-				<!-- Hover glow effect -->
-				{#if off}
-					<div
-						class="absolute inset-0 -z-10
-					rounded-xl bg-gradient-to-t from-primary/0 to-primary/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-					></div>
-				{/if}
-			</a>
+					<!-- Active marker sits on the top border so it reads as a tab, not a button. -->
+					{#if active}
+						<span class="absolute inset-x-3 top-0 h-0.5 rounded-full bg-primary"></span>
+					{/if}
+				</a>
+			</li>
 		{/each}
-	</div>
+	</ul>
 </nav>

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { superForm } from 'sveltekit-superforms';
+	import { superForm } from 'sveltekit-superforms';
 	import { toast } from 'svelte-sonner';
 	import type { PageData, Snapshot } from './$types';
 	import { Button } from '$lib/components/ui/button';
@@ -7,32 +7,33 @@
 
 	import { onMount } from 'svelte';
 
-const WIZARD_KEY = 'goteraStep';
+	const WIZARD_KEY = 'goteraStep';
 
-onMount(() => {
-    // Baseline entry for step 0, replacing whatever's already there
-    if (!history.state?.[WIZARD_KEY] && history.state?.[WIZARD_KEY] !== 0) {
-        history.replaceState({ ...history.state, [WIZARD_KEY]: stepIdx }, '');
-    }
+	onMount(() => {
+		// Baseline entry for step 0, replacing whatever's already there
+		if (!history.state?.[WIZARD_KEY] && history.state?.[WIZARD_KEY] !== 0) {
+			history.replaceState({ ...history.state, [WIZARD_KEY]: stepIdx }, '');
+		}
 
-    function onPopState(e: PopStateEvent) {
-        const targetStep = e.state?.[WIZARD_KEY];
-        if (typeof targetStep === 'number') {
-            stepError = null;
-            stepIdx = Math.min(Math.max(targetStep, 0), STEPS.length - 1);
-        } else {
-            // No wizard state on this entry — let the browser actually leave the page
-        }
-    }
+		function onPopState(e: PopStateEvent) {
+			const targetStep = e.state?.[WIZARD_KEY];
+			if (typeof targetStep === 'number') {
+				stepError = null;
+				stepIdx = Math.min(Math.max(targetStep, 0), STEPS.length - 1);
+			} else {
+				// No wizard state on this entry — let the browser actually leave the page
+			}
+		}
 
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-});
+		window.addEventListener('popstate', onPopState);
+		return () => window.removeEventListener('popstate', onPopState);
+	});
 
 	import AuthSheet from '$lib/AuthSheet.svelte';
 
 	let { data }: { data: PageData } = $props();
 
+	import { PostcodeLookup } from '$lib/postcode.svelte';
 	const { form, errors, enhance, submitting, capture, restore } = superForm(data.form, {
 		dataType: 'json',
 		resetForm: false,
@@ -44,6 +45,20 @@ onMount(() => {
 			else if (m.type === 'error') toast.error(m.text);
 			else toast.warning(m.text);
 		}
+	});
+
+	/**
+	 * Background postcode lookup for the address fields. One instance drives all four
+	 * address blocks (mobile/desktop × me/gift) because only one is ever mounted and
+	 * filled at a time — they are the same address, rendered for different viewports.
+	 *
+	 * It only ever *adds* information: suggestions in a datalist and coordinates on the
+	 * form. It never sets an error or blocks the submit, so a customer whose postcode we
+	 * cannot resolve orders exactly as they do today.
+	 */
+	const postcode = new PostcodeLookup((match) => {
+		$form.latitude = match?.latitude;
+		$form.longitude = match?.longitude;
 	});
 
 	// ── Dynamic data ──
@@ -107,36 +122,83 @@ onMount(() => {
 	// 		? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
 	// 		: giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0]
 	// );
-const currentPlanDetails = $derived(
-	$form.recipient === 'me'
-		? subscriptionPlans.find((p) => p.id === $form.plan) ?? subscriptionPlans[subscriptionPlans.length - 1]
-		: giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0]
-);
-// Is the selected plan a one-time order (vs a recurring subscription)?
-// Only one-time orders carry a quantity; subscriptions are always 1.
-let isOrder = $derived(data?.subscriptionPlans.find((sub) => sub.id === $form.plan)?.kind === 'order');
+	const currentPlanDetails = $derived(
+		$form.recipient === 'me'
+			? (subscriptionPlans.find((p) => p.id === $form.plan) ??
+					subscriptionPlans[subscriptionPlans.length - 1])
+			: (giftPlans.find((p) => p.id === $form.plan) ?? giftPlans[0])
+	);
+	// Is the selected plan a one-time order (vs a recurring subscription)?
+	// Only one-time orders carry a quantity; subscriptions are always 1.
+	let isOrder = $derived(
+		data?.subscriptionPlans.find((sub) => sub.id === $form.plan)?.kind === 'order'
+	);
 
-// Coerce quantity (tel/number inputs can hand us a string or empty) to an int ≥ 1.
-// Applies to subscriptions, one-time orders, and gifts alike.
-const qty = $derived(Math.max(1, Math.floor(Number($form.quantity)) || 1));
+	/**
+	 * Is this plan charged once rather than every month? Gifts always are, and so is
+	 * anything the catalogue marks `one_time` — which is what separates the one-off
+	 * pack from the recurring plans it sits beside in the "for me" list. Price labels
+	 * key off this, never off the recipient, so a one-off never reads "/ month".
+	 */
+	const isOneOffPlan = (p?: { kind?: string; interval?: string } | null) =>
+		!!p && (p.kind !== 'subscription' || p.interval === 'one_time');
+	const currentIsOneOff = $derived(isOneOffPlan(currentPlanDetails));
 
-// ── Quantity stepper (orders only) ──
-// Writes back to $form.quantity, which qty derives from — keeps the stepper
-// and every total in sync.
-function setQty(n: number) { $form.quantity = Math.max(1, Math.floor(n) || 1); }
-function incQty() { setQty(qty + 1); }
-function decQty() { setQty(qty - 1); }
+	// Coerce quantity (tel/number inputs can hand us a string or empty) to an int ≥ 1.
+	// Applies to subscriptions, one-time orders, and gifts alike.
+	const qty = $derived(Math.max(1, Math.floor(Number($form.quantity)) || 1));
 
-// Plan price × quantity, before add-ons.
-const planLineTotal = $derived((currentPlanDetails?.price ?? 0) * qty);
-const finalTotalPrice = $derived(planLineTotal + addonsTotal);
+	// ── Quantity stepper (orders only) ──
+	// Writes back to $form.quantity, which qty derives from — keeps the stepper
+	// and every total in sync.
+	function setQty(n: number) {
+		$form.quantity = Math.max(1, Math.floor(n) || 1);
+	}
+	function incQty() {
+		setQty(qty + 1);
+	}
+	function decQty() {
+		setQty(qty - 1);
+	}
 
+	// Plan price × quantity, before add-ons.
+	const planLineTotal = $derived((currentPlanDetails?.price ?? 0) * qty);
+	const finalTotalPrice = $derived(planLineTotal + addonsTotal);
+
+	// Shown on the "for me" card under a "/ month" label, so the fallback has to stay
+	// on a recurring plan — falling through to a one-off would price it per month.
+	const recurringPlans = $derived(subscriptionPlans.filter((p) => !isOneOffPlan(p)));
+	// The "for me" bucket is everything that isn't a gift, so it can hold the one-off
+	// pack alongside the recurring plans. When it does, the bucket can't be described
+	// as a monthly subscription — that's only half of what's behind the choice.
+	const meBucketMixed = $derived(subscriptionPlans.some(isOneOffPlan));
+
+	/**
+	 * The action this checkout posts to. A gift always goes to `?/gift`; everything
+	 * else goes to `?/subscribe` when there's an account to attach it to, and to
+	 * `?/guestOrder` when there isn't. `?/subscribe` handles both cadences for a
+	 * signed-in buyer — it branches to a one-time Stripe checkout for an `order` plan.
+	 */
+	const checkoutAction = $derived(
+		$form.recipient === 'gift' ? '?/gift' : data?.user ? '?/subscribe' : '?/guestOrder'
+	);
+
+	/**
+	 * Only `?/subscribe` rejects an anonymous request, so only a recurring "for me"
+	 * plan needs an account before checkout. `?/guestOrder` and `?/gift` are both built
+	 * to finish without one — Stripe collects the buyer's email on its own page and the
+	 * webhook backfills it — so the sign-in gate keys off the action we're about to
+	 * post to, never off the recipient alone.
+	 */
+	const requiresAccount = $derived($form.recipient === 'me' && !isOrder && !data?.user);
 	const mePrice = $derived(
-		subscriptionPlans.find((p) => p.id === 'regular')?.price ??
-			subscriptionPlans[subscriptionPlans.length - 1]?.price ??
+		recurringPlans.find((p) => p.id === 'regular')?.price ??
+			recurringPlans[recurringPlans.length - 1]?.price ??
 			0
 	);
-	const giftFromPrice = $derived(giftPlans.length ? Math.min(...giftPlans.map((p) => p.price)) : 8.5);
+	const giftFromPrice = $derived(
+		giftPlans.length ? Math.min(...giftPlans.map((p) => p.price)) : 8.5
+	);
 
 	const preselected = $derived(data?.preselected ?? null);
 	const skipIntro = $derived(!!preselected && (!onlyMode || preselected.recipient === onlyMode));
@@ -198,7 +260,7 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 		setTimeout(() => {
 			stepIdx = Math.min(stepIdx + 1, STEPS.length - 1);
 			animating = false;
-			 history.pushState({ [WIZARD_KEY]: stepIdx }, '');
+			history.pushState({ [WIZARD_KEY]: stepIdx }, '');
 		}, 180);
 	}
 	function back() {
@@ -208,7 +270,7 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 			return;
 		}
 		stepIdx -= 1;
-		 history.back();
+		history.back();
 	}
 	function handleCta() {
 		stepError = null;
@@ -239,7 +301,10 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 			who: m.subscribe_step_who_title(),
 			plan: m.subscribe_step_plan_title(),
 			extras: m.subscribe_step_extras_title(),
-			details: $form.recipient === 'gift' ? m.subscribe_step_details_gift_title() : m.subscribe_step_details_me_title(),
+			details:
+				$form.recipient === 'gift'
+					? m.subscribe_step_details_gift_title()
+					: m.subscribe_step_details_me_title(),
 			review: m.subscribe_step_review_title()
 		}[step]
 	);
@@ -257,15 +322,15 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 			? $submitting
 				? m.subscribe_cta_processing()
 				: $form.recipient === 'me'
-					? (isOrder
+					? isOrder
 						? m.subscribe_cta_order_price({ price: finalTotalPrice.toFixed(2) })
-						: m.subscribe_cta_subscribe_price({ price: finalTotalPrice.toFixed(2) }))
+						: m.subscribe_cta_subscribe_price({ price: finalTotalPrice.toFixed(2) })
 					: m.subscribe_cta_continue_gift({ price: finalTotalPrice.toFixed(2) })
 			: step === 'extras'
 				? $form.addonIds.length > 0
-					? ($form.addonIds.length > 1
+					? $form.addonIds.length > 1
 						? m.subscribe_cta_continue_with_extras({ count: $form.addonIds.length })
-						: m.subscribe_cta_continue_with_extra({ count: $form.addonIds.length }))
+						: m.subscribe_cta_continue_with_extra({ count: $form.addonIds.length })
 					: m.subscribe_cta_continue()
 				: m.subscribe_cta_continue()
 	);
@@ -304,9 +369,7 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 	$effect(() => {
 		const who = $form.recipient as 'me' | 'gift' | undefined;
 		if (!who || loadedFor !== who) return; // don't clobber storage before hydration
-		const snapshot = Object.fromEntries(
-			ADDR_FIELDS[who].map((k) => [k, ($form as any)[k] ?? ''])
-		);
+		const snapshot = Object.fromEntries(ADDR_FIELDS[who].map((k) => [k, ($form as any)[k] ?? '']));
 		if (!Object.values(snapshot).some(Boolean)) return; // never save an all-empty record
 		try {
 			localStorage.setItem(ADDR_KEY(who), JSON.stringify(snapshot));
@@ -321,34 +384,25 @@ const finalTotalPrice = $derived(planLineTotal + addonsTotal);
 		}
 	});
 
-
 	let checkoutForm = $state<HTMLFormElement | null>(null);
 
-function submitAfterAuth() {
-	if ($submitting) return;
-	const formEl = checkoutForm ?? (document.getElementById('start') as HTMLFormElement | null);
-	if (!formEl) return;
+	function submitAfterAuth() {
+		if ($submitting) return;
+		const formEl = checkoutForm ?? (document.getElementById('start') as HTMLFormElement | null);
+		if (!formEl) return;
 
-	// same action logic your review buttons already use
-	const action =
-		$form.recipient === 'me' && data?.user
-			? '?/subscribe'
-			: isOrder && !data?.user
-				? '?/guestOrder'
-				: '?/gift';
-
-	const submitter = document.createElement('button');
-	submitter.type = 'submit';
-	submitter.formAction = action;
-	submitter.hidden = true;
-	formEl.appendChild(submitter);
-	formEl.requestSubmit(submitter); // triggers use:enhance → redirects to Stripe
-	submitter.remove();
-}
+		const submitter = document.createElement('button');
+		submitter.type = 'submit';
+		submitter.formAction = checkoutAction;
+		submitter.hidden = true;
+		formEl.appendChild(submitter);
+		formEl.requestSubmit(submitter); // triggers use:enhance → redirects to Stripe
+		submitter.remove();
+	}
 </script>
 
 <svelte:head>
-    <title>{m.subscribe_page_title()}</title>
+	<title>{m.subscribe_page_title()}</title>
 	<meta name="description" content={m.subscribe_meta_description()} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
@@ -364,15 +418,28 @@ function submitAfterAuth() {
 		<div class="sub-plan-hero">
 			{#if step === 'who'}
 				<span class="sub-plan-eyebrow">{m.subscribe_eyebrow()}</span>
-				<span class="sub-plan-name">{m.subscribe_hero_heading_1()}<br />{m.subscribe_hero_heading_2()}</span>
+				<span class="sub-plan-name"
+					>{m.subscribe_hero_heading_1()}<br />{m.subscribe_hero_heading_2()}</span
+				>
 				<span class="sub-plan-price">{m.subscribe_hero_no_minimum()}</span>
 			{:else}
-				<span class="sub-plan-eyebrow">{$form.recipient === 'gift' ? m.subscribe_badge_gift() : m.subscribe_plan_name_suffix({ name: currentPlanDetails?.name ?? '' })}</span>
-				<span class="sub-plan-name">{currentPlanDetails?.name}<br /><em>{$form.recipient === 'gift' ? m.subscribe_freq_one_time() : m.subscribe_freq_every_month()}</em></span>
+				<span class="sub-plan-eyebrow"
+					>{$form.recipient === 'gift'
+						? m.subscribe_badge_gift()
+						: m.subscribe_plan_name_suffix({ name: currentPlanDetails?.name ?? '' })}</span
+				>
+				<span class="sub-plan-name"
+					>{currentPlanDetails?.name}<br /><em
+						>{currentIsOneOff
+							? m.subscribe_freq_one_time()
+							: m.subscribe_freq_every_month()}</em
+					></span
+				>
 				<span class="sub-plan-price">
 					<strong>£{(currentPlanDetails?.price ?? 0).toFixed(2)}</strong>
-					{$form.recipient === 'me' ? m.subscribe_unit_per_month() : m.subscribe_unit_one_time()}
-					{#if addonsTotal > 0}· <strong>+£{addonsTotal.toFixed(2)}</strong> {m.subscribe_extras_label()}{/if}
+					{currentIsOneOff ? m.subscribe_unit_one_time() : m.subscribe_unit_per_month()}
+					{#if addonsTotal > 0}· <strong>+£{addonsTotal.toFixed(2)}</strong>
+						{m.subscribe_extras_label()}{/if}
 				</span>
 			{/if}
 		</div>
@@ -382,12 +449,30 @@ function submitAfterAuth() {
 		<div class="sub-progress__fill" style="width:{progress}%"></div>
 	</div>
 
+	<!-- One datalist for every address block: the four blocks are the same address
+	     rendered for different viewports, so they share one lookup and one list. -->
+	<datalist id={postcode.listId}>
+		{#each postcode.suggestions as s (s)}<option value={s}></option>{/each}
+	</datalist>
+
 	<form class="sub-card-wrap" method="POST" id="start" use:enhance bind:this={checkoutForm}>
 		<div class="sub-card" class:animating>
 			<div class="sub-card__head">
 				{#if stepIdx > 0}
-					<button type="button" class="sub-back" onclick={back} aria-label={m.subscribe_back_aria()}>
-						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 18l-6-6 6-6" /></svg>
+					<button
+						type="button"
+						class="sub-back"
+						onclick={back}
+						aria-label={m.subscribe_back_aria()}
+					>
+						<svg
+							viewBox="0 0 24 24"
+							width="14"
+							height="14"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.6"><path d="M15 18l-6-6 6-6" /></svg
+						>
 						{m.subscribe_back_label()}
 					</button>
 				{/if}
@@ -398,46 +483,95 @@ function submitAfterAuth() {
 			<div class="sub-card__body">
 				{#if step === 'who'}
 					<div class="who-cards">
-						<button type="button" class="who-card" class:active={$form.recipient === 'me'} onclick={() => selectRecipient('me')}>
+						<button
+							type="button"
+							class="who-card"
+							class:active={$form.recipient === 'me'}
+							onclick={() => selectRecipient('me')}
+						>
 							<div class="who-card__icon">
-								<svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.5">
-									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									width="20"
+									height="20"
+									stroke="currentColor"
+									stroke-width="1.5"
+								>
+									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle
+										cx="12"
+										cy="7"
+										r="4"
+									/>
 								</svg>
 							</div>
 							<div class="who-card__text">
 								<h3>{m.subscribe_who_me_title()}</h3>
-								<p>{m.subscribe_who_me_desc()}</p>
+								<p>{meBucketMixed ? m.subscribe_who_me_desc_mixed() : m.subscribe_who_me_desc()}</p>
 							</div>
-							<div class="who-card__price">£{mePrice.toFixed(0)}<br /><span>{m.subscribe_unit_per_month()}</span></div>
+							<div class="who-card__price">
+								£{mePrice.toFixed(mePrice % 1 === 0 ? 0 : 2)}<br /><span
+									>{m.subscribe_unit_per_month()}</span
+								>
+							</div>
 						</button>
 
-						<button type="button" class="who-card" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
+						<button
+							type="button"
+							class="who-card"
+							class:active={$form.recipient === 'gift'}
+							onclick={() => selectRecipient('gift')}
+						>
 							<div class="who-card__icon">
-								<svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.5">
-									<path d="M20 12V22H4V12" /><path d="M22 7H2v5h20V7z" /><path d="M12 22V7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									width="20"
+									height="20"
+									stroke="currentColor"
+									stroke-width="1.5"
+								>
+									<path d="M20 12V22H4V12" /><path d="M22 7H2v5h20V7z" /><path d="M12 22V7" /><path
+										d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"
+									/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
 								</svg>
 							</div>
 							<div class="who-card__text">
 								<h3>{m.subscribe_who_gift_title()}</h3>
 								<p>{m.subscribe_who_gift_desc()}</p>
 							</div>
-							<div class="who-card__price">{m.subscribe_from_label()}<br />£{giftFromPrice.toFixed(2)}</div>
+							<div class="who-card__price">
+								{m.subscribe_from_label()}<br />£{giftFromPrice.toFixed(2)}
+							</div>
 						</button>
 					</div>
 				{/if}
 
 				{#if step === 'plan'}
 					<div class="plan-sel">
-						{#each ($form.recipient === 'gift' ? giftPlans : subscriptionPlans) as p (p.id)}
-							<button type="button" class="plan-sel-card" class:active={$form.plan === p.id} onclick={() => ($form.plan = p.id)}>
-								{#if p.featured}<span class="plan-sel-card__badge">{m.subscribe_badge_popular()}</span>{/if}
+						{#each $form.recipient === 'gift' ? giftPlans : subscriptionPlans as p (p.id)}
+							<button
+								type="button"
+								class="plan-sel-card"
+								class:active={$form.plan === p.id}
+								onclick={() => ($form.plan = p.id)}
+							>
+								{#if p.featured}<span class="plan-sel-card__badge"
+										>{m.subscribe_badge_popular()}</span
+									>{/if}
 								<div class="plan-sel-card__name" class:pad={p.featured}>
 									<h3>{p.name}</h3>
 									<p>{p.freq}</p>
 								</div>
 								<div class="plan-sel-card__price" class:pad={p.featured}>
-									<span class="plan-sel-card__price-num">£{p.price.toFixed(p.price % 1 === 0 ? 0 : 2)}</span>
-									<span class="plan-sel-card__price-freq">{$form.recipient === 'me' ? m.subscribe_freq_per_month() : m.subscribe_unit_one_time()}</span>
+									<span class="plan-sel-card__price-num"
+										>£{p.price.toFixed(p.price % 1 === 0 ? 0 : 2)}</span
+									>
+									<span class="plan-sel-card__price-freq"
+										>{isOneOffPlan(p)
+											? m.subscribe_unit_one_time()
+											: m.subscribe_freq_per_month()}</span
+									>
 								</div>
 								<div class="plan-sel-card__dot"></div>
 							</button>
@@ -451,13 +585,21 @@ function submitAfterAuth() {
 						{#each data?.addons as addon (addon.id)}
 							{@const selected = $form.addonIds.includes(addon.id)}
 							<div class="extra-wrap">
-								<button type="button" class="extra-card" class:added={selected} onclick={() => toggleAddon(addon.id)}>
+								<button
+									type="button"
+									class="extra-card"
+									class:added={selected}
+									onclick={() => toggleAddon(addon.id)}
+								>
 									<div class="extra-card__img">{addon.name}</div>
 									<div class="extra-card__body">
 										<span class="extra-card__name">{addon.name}</span>
-										{#if addon.description}<span class="extra-card__desc">{addon.description}</span>{/if}
+										{#if addon.description}<span class="extra-card__desc">{addon.description}</span
+											>{/if}
 										<span class="extra-card__price">+£{(addon.pricePence / 100).toFixed(2)}</span>
-										<span class="extra-card__btn">{selected ? m.subscribe_addon_added() : m.subscribe_addon_add()}</span>
+										<span class="extra-card__btn"
+											>{selected ? m.subscribe_addon_added() : m.subscribe_addon_add()}</span
+										>
 									</div>
 								</button>
 								{#if selected}
@@ -479,78 +621,165 @@ function submitAfterAuth() {
 							</div>
 						{/each}
 					</div>
-					<button type="button" class="skip-link" onclick={next}>{m.subscribe_skip_extras()}</button>
-					{#if $errors.addonIds?._errors}<span class="sub-error">{$errors.addonIds._errors}</span>{/if}
+					<button type="button" class="skip-link" onclick={next}>{m.subscribe_skip_extras()}</button
+					>
+					{#if $errors.addonIds?._errors}<span class="sub-error">{$errors.addonIds._errors}</span
+						>{/if}
 				{/if}
 
 				{#if step === 'details'}
 					{#if $form.recipient === 'gift'}
 						<div class="sub-field">
-                            <label for="phone">{m.subscribe_field_phone_gift_label()}</label>
-                            <input id="phone" type="tel" bind:value={$form.phone} />
-                        </div>
+							<label for="phone">{m.subscribe_field_phone_gift_label()}</label>
+							<input id="phone" type="tel" bind:value={$form.phone} autocomplete="tel" />
+						</div>
 						<div class="sub-field">
 							<label for="m-buyerEmail">{m.subscribe_field_email_label()}</label>
-							<input id="m-buyerEmail" type="email" placeholder={m.subscribe_placeholder_email()} bind:value={$form.buyerEmail} />
+							<input
+								id="m-buyerEmail"
+								type="email"
+								placeholder={m.subscribe_placeholder_email()}
+								bind:value={$form.buyerEmail}
+								autocomplete="email"
+							/>
 							<span class="sub-field-note">{m.subscribe_note_confirmation_receipt()}</span>
 							{#if $errors.buyerEmail}<span class="sub-error">{$errors.buyerEmail}</span>{/if}
 						</div>
 						<div class="sub-field">
 							<label for="m-recipientName">{m.subscribe_field_recipient_name_label()}</label>
-							<input id="m-recipientName" type="text" bind:value={$form.recipientName} />
+							<input
+								id="m-recipientName"
+								type="text"
+								bind:value={$form.recipientName}
+								autocomplete="name"
+							/>
 							{#if $errors.recipientName}<span class="sub-error">{$errors.recipientName}</span>{/if}
 						</div>
 						<div class="sub-divider"></div>
 						<span class="sub-section-label">{m.subscribe_section_delivery_address()}</span>
 						<div class="sub-field">
 							<label for="m-line1">{m.subscribe_field_line1_label()}</label>
-							<input id="m-line1" type="text" placeholder={m.subscribe_placeholder_street()} bind:value={$form.line1} />
+							<input
+								id="m-line1"
+								type="text"
+								placeholder={m.subscribe_placeholder_street()}
+								bind:value={$form.line1}
+								autocomplete="address-line1"
+							/>
 							{#if $errors.line1}<span class="sub-error">{$errors.line1}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-line2">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional_paren()}</span></label>
-							<input id="m-line2" type="text" placeholder={m.subscribe_placeholder_flat()} bind:value={$form.line2} />
+							<label for="m-line2"
+								>{m.subscribe_field_line2_label()}
+								<span class="opt">{m.subscribe_opt_optional_paren()}</span></label
+							>
+							<input
+								id="m-line2"
+								type="text"
+								placeholder={m.subscribe_placeholder_flat()}
+								bind:value={$form.line2}
+								autocomplete="address-line2"
+							/>
 						</div>
 						<div class="sub-field">
 							<div class="sub-field-row">
 								<div>
 									<label for="m-city">{m.subscribe_field_city_label()}</label>
-									<input id="m-city" type="text" disabled placeholder={m.subscribe_placeholder_london()} bind:value={$form.city} />
+									<input
+										id="m-city"
+										type="text"
+										disabled
+										placeholder={m.subscribe_placeholder_london()}
+										bind:value={$form.city}
+										autocomplete="address-level2"
+									/>
 								</div>
 								<div>
 									<label for="m-postcode">{m.subscribe_field_postcode_label()}</label>
-									<input id="m-postcode" type="text" placeholder={m.subscribe_placeholder_postcode()} bind:value={$form.postcode} />
+									<input
+										id="m-postcode"
+										type="text"
+										placeholder={m.subscribe_placeholder_postcode()}
+										bind:value={$form.postcode}
+										autocomplete="postal-code"
+										list={postcode.listId}
+										oninput={(e) => postcode.search(e.currentTarget.value)}
+									/>
 								</div>
 							</div>
 							{#if $errors.postcode}<span class="sub-error">{$errors.postcode}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-giftMessage">{m.subscribe_field_gift_message_label()} <span class="opt">{m.subscribe_opt_optional_paren()}</span></label>
-							<input id="m-giftMessage" type="text" placeholder={m.subscribe_placeholder_gift_note()} bind:value={$form.giftMessage} />
+							<label for="m-giftMessage"
+								>{m.subscribe_field_gift_message_label()}
+								<span class="opt">{m.subscribe_opt_optional_paren()}</span></label
+							>
+							<input
+								id="m-giftMessage"
+								type="text"
+								placeholder={m.subscribe_placeholder_gift_note()}
+								bind:value={$form.giftMessage}
+							/>
 						</div>
 					{:else}
 						<div class="sub-field">
-                            <label for="phone">{m.subscribe_field_phone_label()}</label>
-                            <input id="phone" type="tel" name="address" bind:value={$form.phone} />
-                        </div>
+							<label for="phone">{m.subscribe_field_phone_label()}</label>
+							<input
+								id="phone"
+								type="tel"
+								name="address"
+								bind:value={$form.phone}
+								autocomplete="tel"
+							/>
+						</div>
 						<div class="sub-field">
 							<label for="m-line1b">{m.subscribe_field_line1_label()}</label>
-							<input id="m-line1b" type="text" placeholder={m.subscribe_placeholder_street()} bind:value={$form.line1} />
+							<input
+								id="m-line1b"
+								type="text"
+								placeholder={m.subscribe_placeholder_street()}
+								bind:value={$form.line1}
+								autocomplete="address-line1"
+							/>
 							{#if $errors.line1}<span class="sub-error">{$errors.line1}</span>{/if}
 						</div>
 						<div class="sub-field">
-							<label for="m-line2b">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional_paren()}</span></label>
-							<input id="m-line2b" type="text" placeholder={m.subscribe_placeholder_flat()} bind:value={$form.line2} />
+							<label for="m-line2b"
+								>{m.subscribe_field_line2_label()}
+								<span class="opt">{m.subscribe_opt_optional_paren()}</span></label
+							>
+							<input
+								id="m-line2b"
+								type="text"
+								placeholder={m.subscribe_placeholder_flat()}
+								bind:value={$form.line2}
+								autocomplete="address-line2"
+							/>
 						</div>
 						<div class="sub-field">
 							<div class="sub-field-row">
 								<div>
 									<label for="m-cityb">{m.subscribe_field_city_label()}</label>
-									<input id="m-cityb" type="text" disabled placeholder={m.subscribe_placeholder_london()} bind:value={$form.city} />
+									<input
+										id="m-cityb"
+										type="text"
+										disabled
+										placeholder={m.subscribe_placeholder_london()}
+										bind:value={$form.city}
+										autocomplete="address-level2"
+									/>
 								</div>
 								<div>
 									<label for="m-postcodeb">{m.subscribe_field_postcode_label()}</label>
-									<input id="m-postcodeb" type="text" placeholder={m.subscribe_placeholder_postcode()} bind:value={$form.postcode} />
+									<input
+										id="m-postcodeb"
+										type="text"
+										placeholder={m.subscribe_placeholder_postcode()}
+										bind:value={$form.postcode}
+										autocomplete="postal-code"
+										list={postcode.listId}
+										oninput={(e) => postcode.search(e.currentTarget.value)}
+									/>
 								</div>
 							</div>
 							<span class="sub-field-note">{m.subscribe_note_london_saturday()}</span>
@@ -569,22 +798,39 @@ function submitAfterAuth() {
 						<div class="pay-row">
 							<span class="pay-row__label">{m.subscribe_label_quantity()}</span>
 							<div class="qty-stepper">
-								<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label={m.subscribe_aria_decrease_qty()}>−</button>
+								<button
+									type="button"
+									class="qty-btn qty-btn--minus"
+									onclick={decQty}
+									disabled={qty <= 1}
+									aria-label={m.subscribe_aria_decrease_qty()}>−</button
+								>
 								<span class="qty-value">{qty}</span>
-								<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label={m.subscribe_aria_increase_qty()}>+</button>
+								<button
+									type="button"
+									class="qty-btn qty-btn--plus"
+									onclick={incQty}
+									aria-label={m.subscribe_aria_increase_qty()}>+</button
+								>
 							</div>
 						</div>
-					<div class="pay-row">
-	<span class="pay-row__label">
-		{currentPlanDetails?.name} {$form.recipient === 'me' ? m.subscribe_kind_subscription() : m.subscribe_kind_gift()}
-		{#if qty > 1}· £{(currentPlanDetails?.price ?? 0).toFixed(2)} × {qty}{/if}
-	</span>
-	<span class="pay-row__val">£{planLineTotal.toFixed(2)}</span>
-</div>
+						<div class="pay-row">
+							<span class="pay-row__label">
+								{currentPlanDetails?.name}
+								{$form.recipient === 'gift'
+									? m.subscribe_kind_gift()
+									: currentIsOneOff
+										? m.subscribe_kind_order()
+										: m.subscribe_kind_subscription()}
+								{#if qty > 1}· £{(currentPlanDetails?.price ?? 0).toFixed(2)} × {qty}{/if}
+							</span>
+							<span class="pay-row__val">£{planLineTotal.toFixed(2)}</span>
+						</div>
 						{#each activeAddons as a (a.id)}
 							<div class="pay-row">
 								<span class="pay-row__label"
-									>{a.name}{#if addonQty(a.id) > 1} × {addonQty(a.id)}{/if}</span
+									>{a.name}{#if addonQty(a.id) > 1}
+										× {addonQty(a.id)}{/if}</span
 								>
 								<span class="pay-row__val"
 									>+£{((a.pricePence / 100) * addonQty(a.id)).toFixed(2)}</span
@@ -602,12 +848,16 @@ function submitAfterAuth() {
 					</div>
 					<div class="secure-note">
 						<svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke-width="1.5">
-							<rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+							<rect x="3" y="11" width="18" height="11" rx="2" /><path
+								d="M7 11V7a5 5 0 0 1 10 0v4"
+							/>
 						</svg>
 						{m.subscribe_secure_note()}
 					</div>
 					<p class="terms-note">
-						{m.subscribe_terms_prefix()} <a href="/subscription-terms">{m.subscribe_terms_link1()}</a> {m.subscribe_terms_and()}
+						{m.subscribe_terms_prefix()}
+						<a href="/subscription-terms">{m.subscribe_terms_link1()}</a>
+						{m.subscribe_terms_and()}
 						<a href="/privacy">{m.subscribe_terms_link2()}</a>{m.subscribe_terms_suffix()}
 					</p>
 				{/if}
@@ -617,15 +867,29 @@ function submitAfterAuth() {
 
 		<div class="sub-cta">
 			{#if step === 'review'}
-				{#if !data?.user && !isOrder}
+				{#if requiresAccount}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
 						<!-- {#if isOrder}
                          <button  form="start" title="Checkout Without an account" class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Order</button>
                          {/if} -->
-						<AuthSheet  onAuthenticated={submitAfterAuth} title={ctaLabel} variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
+						<AuthSheet
+							onAuthenticated={submitAfterAuth}
+							title={ctaLabel}
+							variant="default"
+							data={data?.signupForm}
+							bind:loginOpen
+							bind:signupOpen
+						/>
 					</div>
 				{:else}
-					<button type="submit" form="start" title={data?.user ? m.subscribe_title_continue() : m.subscribe_title_please_sign_in()} formaction={$form.recipient === 'me' && data?.user ? '?/subscribe' : isOrder && !data?.user ? '?/guestOrder' : '?/gift'} class="sub-cta__btn" disabled={$submitting || (!data?.user && !isOrder)}>
+					<button
+						type="submit"
+						form="start"
+						title={m.subscribe_title_continue()}
+						formaction={checkoutAction}
+						class="sub-cta__btn"
+						disabled={$submitting}
+					>
 						{ctaLabel}
 					</button>
 				{/if}
@@ -651,18 +915,41 @@ function submitAfterAuth() {
 			<div class="steps">
 				{#if bothModes}
 					<div class="step">
-						<div class="step-head"><span class="step-num">01</span><h2>{m.subscribe_step_who_title()}</h2></div>
+						<div class="step-head">
+							<span class="step-num">01</span>
+							<h2>{m.subscribe_step_who_title()}</h2>
+						</div>
 						<div class="step-body">
 							<div class="choice-grid">
-								<button type="button" class="choice" class:active={$form.recipient === 'me'} onclick={() => selectRecipient('me')}>
+								<button
+									type="button"
+									class="choice"
+									class:active={$form.recipient === 'me'}
+									onclick={() => selectRecipient('me')}
+								>
 									<h3>{m.subscribe_who_me_title()}</h3>
-									<p>{m.subscribe_choice_me_desc()}</p>
-									<span class="choice-tag">{m.subscribe_tag_monthly_subscription()}</span>
+									<p>
+										{meBucketMixed
+											? m.subscribe_choice_me_desc_mixed()
+											: m.subscribe_choice_me_desc()}
+									</p>
+									<span class="choice-tag"
+										>{meBucketMixed
+											? m.subscribe_tag_sub_or_one_off()
+											: m.subscribe_tag_monthly_subscription()}</span
+									>
 								</button>
-								<button type="button" class="choice" class:active={$form.recipient === 'gift'} onclick={() => selectRecipient('gift')}>
+								<button
+									type="button"
+									class="choice"
+									class:active={$form.recipient === 'gift'}
+									onclick={() => selectRecipient('gift')}
+								>
 									<h3>{m.subscribe_who_gift_title()}</h3>
 									<p>{m.subscribe_choice_gift_desc()}</p>
-									<span class="choice-tag">{m.subscribe_tag_one_time_from({ price: giftFromPrice.toFixed(2) })}</span>
+									<span class="choice-tag"
+										>{m.subscribe_tag_one_time_from({ price: giftFromPrice.toFixed(2) })}</span
+									>
 								</button>
 							</div>
 						</div>
@@ -671,17 +958,29 @@ function submitAfterAuth() {
 
 				{#if $form.recipient === 'gift'}
 					<div class="step gift-step">
-						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>{m.subscribe_step_gift_heading()}</h2></div>
+						<div class="step-head">
+							<span class="step-num">{stepNo('plan')}</span>
+							<h2>{m.subscribe_step_gift_heading()}</h2>
+						</div>
 						<div class="step-body">
 							<span class="gift-label">{m.subscribe_gift_label_no_sub()}</span>
 							<div class="gift-grid">
 								{#each giftPlans as plan (plan.id)}
-									<button type="button" class="plan text-left" class:active={$form.plan === plan.id} onclick={() => ($form.plan = plan.id)}>
+									<button
+										type="button"
+										class="plan text-left"
+										class:active={$form.plan === plan.id}
+										onclick={() => ($form.plan = plan.id)}
+									>
 										<h3>{plan.name}</h3>
 										<p class="plan-sub">{plan.sub}</p>
 										<div class="price">£{plan.price.toFixed(2)}</div>
 										<div class="freq">{plan.freq}</div>
-										<div class="btn-outline btn-full margin-top-fallback">{$form.plan === plan.id ? m.subscribe_btn_selected() : m.subscribe_btn_select()}</div>
+										<div class="btn-outline btn-full margin-top-fallback">
+											{$form.plan === plan.id
+												? m.subscribe_btn_selected()
+												: m.subscribe_btn_select()}
+										</div>
 									</button>
 								{/each}
 							</div>
@@ -689,14 +988,23 @@ function submitAfterAuth() {
 					</div>
 				{:else}
 					<div class="step">
-						<div class="step-head"><span class="step-num">{stepNo('plan')}</span><h2>{m.subscribe_step_plan_title()}</h2></div>
+						<div class="step-head">
+							<span class="step-num">{stepNo('plan')}</span>
+							<h2>{m.subscribe_step_plan_title()}</h2>
+						</div>
 						<div class="step-body">
 							<div class="plans-grid">
 								{#each subscriptionPlans as plan (plan.id)}
-									<button type="button" class="plan text-left" class:featured={plan.featured} class:active={$form.plan === plan.id} onclick={() => ($form.plan = plan.id)}>
+									<button
+										type="button"
+										class="plan text-left"
+										class:featured={plan.featured}
+										class:active={$form.plan === plan.id}
+										onclick={() => ($form.plan = plan.id)}
+									>
 										<h3>{plan.name}</h3>
 										<p class="plan-sub">{plan.sub}</p>
-										<div class="price">£{plan.price.toFixed(0)}</div>
+										<div class="price">£{plan.price.toFixed(plan.price % 1 === 0 ? 0 : 2)}</div>
 										<div class="freq">{plan.freq}</div>
 										<ul>
 											{#if plan.bullet && plan.bullet.trim() !== ''}
@@ -714,38 +1022,66 @@ function submitAfterAuth() {
 				{/if}
 
 				<div class="step">
-					<div class="step-head"><span class="step-num">{stepNo('delivery')}</span><h2>{m.subscribe_step_delivery_heading()}</h2></div>
+					<div class="step-head">
+						<span class="step-num">{stepNo('delivery')}</span>
+						<h2>{m.subscribe_step_delivery_heading()}</h2>
+					</div>
 					<div class="step-body">
 						<div class="delivery-grid">
 							<div class="field-box">
-								<label class="field-label" for="delivery-day">{m.subscribe_field_delivery_day_label()}</label>
-								<select id="delivery-day" class="select" bind:value={$form.deliveryDay}><option value="Saturday">{m.subscribe_option_saturday()}</option></select>
+								<label class="field-label" for="delivery-day"
+									>{m.subscribe_field_delivery_day_label()}</label
+								>
+								<select id="delivery-day" class="select" bind:value={$form.deliveryDay}
+									><option value="Saturday">{m.subscribe_option_saturday()}</option></select
+								>
 								<div class="field-help">{m.subscribe_help_delivery_day()}</div>
 							</div>
-							<div class="field-box">
-								<label class="field-label" for="frequency">{m.subscribe_field_frequency_label()}</label>
-								<select id="frequency" class="select" bind:value={$form.frequency}><option value="Monthly">{m.subscribe_option_monthly()}</option></select>
-								<div class="field-help">{m.subscribe_help_frequency()}</div>
-							</div>
+							<!-- Billing cadence only exists for a recurring plan. A gift or a one-off
+							     is charged once, so offering a "Monthly" frequency there describes a
+							     schedule the order never has. -->
+							{#if !currentIsOneOff}
+								<div class="field-box">
+									<label class="field-label" for="frequency"
+										>{m.subscribe_field_frequency_label()}</label
+									>
+									<select id="frequency" class="select" bind:value={$form.frequency}
+										><option value="Monthly">{m.subscribe_option_monthly()}</option></select
+									>
+									<div class="field-help">{m.subscribe_help_frequency()}</div>
+								</div>
+							{/if}
 						</div>
 					</div>
 				</div>
 
 				{#if hasAddons}
 					<div class="step">
-						<div class="step-head"><span class="step-num">{stepNo('addons')}</span><h2>{m.subscribe_step_addons_heading()}</h2></div>
+						<div class="step-head">
+							<span class="step-num">{stepNo('addons')}</span>
+							<h2>{m.subscribe_step_addons_heading()}</h2>
+						</div>
 						<div class="step-body">
 							<div class="addons-grid">
 								{#each data?.addons as item (item.id)}
 									{@const chosen = $form.addonIds.includes(item.id)}
 									<div class="addon-wrap">
-										<button type="button" class="{chosen ? 'addon active' : 'addon'} text-left" onclick={() => toggleAddon(item.id)}>
+										<button
+											type="button"
+											class="{chosen ? 'addon active' : 'addon'} text-left"
+											onclick={() => toggleAddon(item.id)}
+										>
 											<div class="addon-img">
-												<span class="ph-label">{item.name} · {m.subscribe_addon_photo_suffix()}</span>
+												<span class="ph-label"
+													>{item.name} · {m.subscribe_addon_photo_suffix()}</span
+												>
 												<span class="ph-sub">{m.subscribe_addon_photo_style()}</span>
 											</div>
 											<div class="addon-top">
-												<div><h3>{item.name}</h3><div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div></div>
+												<div>
+													<h3>{item.name}</h3>
+													<div class="addon-price">+ £{(item.pricePence / 100).toFixed(2)}</div>
+												</div>
 												<div class="check">✓</div>
 											</div>
 											{#if item.description}<p>{item.description}</p>{/if}
@@ -771,81 +1107,199 @@ function submitAfterAuth() {
 									</div>
 								{/each}
 							</div>
-							{#if $errors.addonIds?._errors}<span class="form-error">{$errors.addonIds._errors}</span>{/if}
+							{#if $errors.addonIds?._errors}<span class="form-error"
+									>{$errors.addonIds._errors}</span
+								>{/if}
 						</div>
 					</div>
 				{/if}
 				<div class="step">
-					<div class="step-head"><span class="step-num">{stepNo('details')}</span><h2>{$form.recipient === 'gift' ? m.subscribe_step_details_gift_title() : m.subscribe_step_details_me_title()}</h2></div>
+					<div class="step-head">
+						<span class="step-num">{stepNo('details')}</span>
+						<h2>
+							{$form.recipient === 'gift'
+								? m.subscribe_step_details_gift_title()
+								: m.subscribe_step_details_me_title()}
+						</h2>
+					</div>
 					<div class="step-body">
 						{#if $form.recipient === 'gift'}
 							<div class="field full">
-							   	<div class="sub-field">
-                            <label for="phone">{m.subscribe_field_phone_label()}</label>
-                            <input id="phone" type="tel" bind:value={$form.phone} required />
-                        </div>
+								<div class="sub-field">
+									<label for="phone">{m.subscribe_field_phone_label()}</label>
+									<input
+										id="phone"
+										type="tel"
+										bind:value={$form.phone}
+										required
+										autocomplete="tel"
+									/>
+								</div>
 								<div class="field full">
-									<label class="field-label" for="buyerEmail">{m.subscribe_field_email_label()}</label>
-									<input id="buyerEmail" class="input" type="email" placeholder={m.subscribe_placeholder_email()} bind:value={$form.buyerEmail} />
+									<label class="field-label" for="buyerEmail"
+										>{m.subscribe_field_email_label()}</label
+									>
+									<input
+										id="buyerEmail"
+										class="input"
+										type="email"
+										placeholder={m.subscribe_placeholder_email()}
+										bind:value={$form.buyerEmail}
+										autocomplete="email"
+									/>
 									<div class="field-help">{m.subscribe_note_confirmation_receipt()}</div>
 									{#if $errors.buyerEmail}<span class="form-error">{$errors.buyerEmail}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="recipientName">{m.subscribe_field_recipient_name_label()}</label>
-									<input id="recipientName" class="input" type="text" bind:value={$form.recipientName} />
-									{#if $errors.recipientName}<span class="form-error">{$errors.recipientName}</span>{/if}
+									<label class="field-label" for="recipientName"
+										>{m.subscribe_field_recipient_name_label()}</label
+									>
+									<input
+										id="recipientName"
+										class="input"
+										type="text"
+										bind:value={$form.recipientName}
+										autocomplete="name"
+									/>
+									{#if $errors.recipientName}<span class="form-error">{$errors.recipientName}</span
+										>{/if}
 								</div>
 								<div class="field full">
 									<label class="field-label" for="line1">{m.subscribe_field_line1_label()}</label>
-									<input id="line1" class="input" type="text" bind:value={$form.line1} />
+									<input
+										id="line1"
+										class="input"
+										type="text"
+										bind:value={$form.line1}
+										autocomplete="address-line1"
+									/>
 									{#if $errors.line1}<span class="form-error">{$errors.line1}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="line2">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional()}</span></label>
-									<input id="line2" class="input" type="text" bind:value={$form.line2} />
+									<label class="field-label" for="line2"
+										>{m.subscribe_field_line2_label()}
+										<span class="opt">{m.subscribe_opt_optional()}</span></label
+									>
+									<input
+										id="line2"
+										class="input"
+										type="text"
+										bind:value={$form.line2}
+										autocomplete="address-line2"
+									/>
 								</div>
 								<div class="field">
 									<label class="field-label" for="city">{m.subscribe_field_city_label()}</label>
-									<input id="city" class="input" disabled type="text" bind:value={$form.city} />
+									<input
+										id="city"
+										class="input"
+										disabled
+										type="text"
+										bind:value={$form.city}
+										autocomplete="address-level2"
+									/>
 								</div>
 								<div class="field">
-									<label class="field-label" for="postcode">{m.subscribe_field_postcode_label()}</label>
-									<input id="postcode" class="input" type="text" bind:value={$form.postcode} />
+									<label class="field-label" for="postcode"
+										>{m.subscribe_field_postcode_label()}</label
+									>
+									<input
+										id="postcode"
+										class="input"
+										type="text"
+										bind:value={$form.postcode}
+										autocomplete="postal-code"
+										list={postcode.listId}
+										oninput={(e) => postcode.search(e.currentTarget.value)}
+									/>
 									{#if $errors.postcode}<span class="form-error">{$errors.postcode}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="giftMessage">{m.subscribe_field_gift_message_label()} <span class="opt">{m.subscribe_opt_optional()}</span></label>
-									<textarea id="giftMessage" class="input textarea" rows="3" bind:value={$form.giftMessage}></textarea>
+									<label class="field-label" for="giftMessage"
+										>{m.subscribe_field_gift_message_label()}
+										<span class="opt">{m.subscribe_opt_optional()}</span></label
+									>
+									<textarea
+										id="giftMessage"
+										class="input textarea"
+										rows="3"
+										bind:value={$form.giftMessage}></textarea>
 								</div>
 							</div>
 						{:else}
 							<div class="detail-grid">
-							  <div class="field full">
-							   	<div class="sub-field">
-                            <label for="phone">{m.subscribe_field_phone_label()}</label>
-                            <input id="phone" type="tel" bind:value={$form.phone} required />
-                        </div>
-						</div>
 								<div class="field full">
-									<label class="field-label" for="addressLabel">{m.subscribe_field_label_label()} <span class="opt">{m.subscribe_opt_optional_label()}</span></label>
-									<input id="addressLabel" class="input" type="text" bind:value={$form.addressLabel} />
+									<div class="sub-field">
+										<label for="phone">{m.subscribe_field_phone_label()}</label>
+										<input
+											id="phone"
+											type="tel"
+											bind:value={$form.phone}
+											required
+											autocomplete="tel"
+										/>
+									</div>
+								</div>
+								<div class="field full">
+									<label class="field-label" for="addressLabel"
+										>{m.subscribe_field_label_label()}
+										<span class="opt">{m.subscribe_opt_optional_label()}</span></label
+									>
+									<input
+										id="addressLabel"
+										class="input"
+										type="text"
+										bind:value={$form.addressLabel}
+									/>
 								</div>
 								<div class="field full">
 									<label class="field-label" for="line1d">{m.subscribe_field_line1_label()}</label>
-									<input id="line1d" class="input" type="text" bind:value={$form.line1} />
+									<input
+										id="line1d"
+										class="input"
+										type="text"
+										bind:value={$form.line1}
+										autocomplete="address-line1"
+									/>
 									{#if $errors.line1}<span class="form-error">{$errors.line1}</span>{/if}
 								</div>
 								<div class="field full">
-									<label class="field-label" for="line2d">{m.subscribe_field_line2_label()} <span class="opt">{m.subscribe_opt_optional()}</span></label>
-									<input id="line2d" class="input" type="text" bind:value={$form.line2} />
+									<label class="field-label" for="line2d"
+										>{m.subscribe_field_line2_label()}
+										<span class="opt">{m.subscribe_opt_optional()}</span></label
+									>
+									<input
+										id="line2d"
+										class="input"
+										type="text"
+										bind:value={$form.line2}
+										autocomplete="address-line2"
+									/>
 								</div>
 								<div class="field">
-									<label class="field-label"  for="cityd">{m.subscribe_field_city_label()}</label>
-									<input id="cityd" disabled class="input" type="text" bind:value={$form.city} />
+									<label class="field-label" for="cityd">{m.subscribe_field_city_label()}</label>
+									<input
+										id="cityd"
+										disabled
+										class="input"
+										type="text"
+										bind:value={$form.city}
+										autocomplete="address-level2"
+									/>
 								</div>
 								<div class="field">
-									<label class="field-label" for="postcoded">{m.subscribe_field_postcode_label()}</label>
-									<input id="postcoded" class="input" type="text" bind:value={$form.postcode} />
+									<label class="field-label" for="postcoded"
+										>{m.subscribe_field_postcode_label()}</label
+									>
+									<input
+										id="postcoded"
+										class="input"
+										type="text"
+										bind:value={$form.postcode}
+										autocomplete="postal-code"
+										list={postcode.listId}
+										oninput={(e) => postcode.search(e.currentTarget.value)}
+									/>
 									{#if $errors.postcode}<span class="form-error">{$errors.postcode}</span>{/if}
 								</div>
 								<label class="opt-in full">
@@ -865,20 +1319,38 @@ function submitAfterAuth() {
 				</div>
 				<div class="sum-body">
 					<div class="sum-row">
-	<span class="sum-label">{m.subscribe_label_plan()}</span>
-	<div class="sum-val">{currentPlanDetails?.name} · {$form.recipient === 'gift' ? m.subscribe_label_one_time_pack() : currentPlanDetails?.freq}{#if qty > 1} {m.subscribe_qty_suffix({ qty })}{/if}</div>
-</div>
+						<span class="sum-label">{m.subscribe_label_plan()}</span>
+						<div class="sum-val">
+							{currentPlanDetails?.name} · {$form.recipient === 'gift'
+								? m.subscribe_label_one_time_pack()
+								: currentPlanDetails?.freq}{#if qty > 1}
+								{m.subscribe_qty_suffix({ qty })}{/if}
+						</div>
+					</div>
 					<div class="sum-row sum-row--qty">
 						<span class="sum-label">{m.subscribe_label_quantity()}</span>
 						<div class="qty-stepper">
-							<button type="button" class="qty-btn qty-btn--minus" onclick={decQty} disabled={qty <= 1} aria-label={m.subscribe_aria_decrease_qty()}>−</button>
+							<button
+								type="button"
+								class="qty-btn qty-btn--minus"
+								onclick={decQty}
+								disabled={qty <= 1}
+								aria-label={m.subscribe_aria_decrease_qty()}>−</button
+							>
 							<span class="qty-value">{qty}</span>
-							<button type="button" class="qty-btn qty-btn--plus" onclick={incQty} aria-label={m.subscribe_aria_increase_qty()}>+</button>
+							<button
+								type="button"
+								class="qty-btn qty-btn--plus"
+								onclick={incQty}
+								aria-label={m.subscribe_aria_increase_qty()}>+</button
+							>
 						</div>
 					</div>
 					<div class="sum-row">
 						<span class="sum-label">{m.subscribe_label_delivery()}</span>
-						<div class="sum-val">{$form.deliveryDay} · {$form.frequency}</div>
+						<div class="sum-val">
+							{$form.deliveryDay}{currentIsOneOff ? '' : ` · ${$form.frequency}`}
+						</div>
 						<div class="sum-sub">{m.subscribe_note_london_only()}</div>
 					</div>
 					{#if activeAddons.length > 0}
@@ -893,24 +1365,63 @@ function submitAfterAuth() {
 					{/if}
 					<div class="sum-row">
 						<span class="sum-label">{m.subscribe_label_total()}</span>
-<div class="price-line">
-	<span>{currentPlanDetails?.name} {m.subscribe_label_product_suffix()}{#if qty > 1} × {qty}{/if}</span>
-	<span>£{planLineTotal.toFixed(2)}</span>
-</div>						{#each activeAddons as item (item.id)}
+						<div class="price-line">
+							<span
+								>{currentPlanDetails?.name}
+								{m.subscribe_label_product_suffix()}{#if qty > 1}
+									× {qty}{/if}</span
+							>
+							<span>£{planLineTotal.toFixed(2)}</span>
+						</div>
+						{#each activeAddons as item (item.id)}
 							<div class="price-line">
-								<span>{item.name}{#if addonQty(item.id) > 1} × {addonQty(item.id)}{/if}</span>
+								<span
+									>{item.name}{#if addonQty(item.id) > 1}
+										× {addonQty(item.id)}{/if}</span
+								>
 								<span>£{((item.pricePence / 100) * addonQty(item.id)).toFixed(2)}</span>
 							</div>
 						{/each}
-						<div class="price-line total"><span>{m.subscribe_label_first_payment()}</span><strong>£{finalTotalPrice.toFixed(2)}</strong></div>
+						<div class="price-line total">
+							<span>{m.subscribe_label_first_payment()}</span><strong
+								>£{finalTotalPrice.toFixed(2)}</strong
+							>
+						</div>
 					</div>
 					<div class="sum-actions">
-						{#if $form.recipient === 'me' && !data.user}
-							<AuthSheet onAuthenticated={submitAfterAuth} title={m.subscribe_cta_subscribe()} variant="default" data={data?.signupForm} bind:loginOpen bind:signupOpen />
+						{#if requiresAccount}
+							<AuthSheet
+								onAuthenticated={submitAfterAuth}
+								title={m.subscribe_cta_subscribe()}
+								variant="default"
+								data={data?.signupForm}
+								bind:loginOpen
+								bind:signupOpen
+							/>
 						{:else if $form.recipient === 'me'}
-							<Button type="submit" class="w-full! rounded-none! p-6!" form="start" disabled={!data?.user && $submitting && !isOrder} title={data?.user ? undefined : m.subscribe_title_login_to_subscribe()} formaction={isOrder && !data?.user ? "?/guestOrder" : "?/subscribe"}>{$submitting ? m.subscribe_cta_starting() : data?.subscriptionPlans.find(sub => sub.id === $form.plan)?.kind === 'order' ? m.subscribe_cta_order() : m.subscribe_cta_subscribe()}</Button>
+							<Button
+								type="submit"
+								class="w-full! rounded-none! p-6!"
+								form="start"
+								disabled={$submitting}
+								formaction={checkoutAction}
+								>{$submitting
+									? m.subscribe_cta_starting()
+									: isOrder
+										? m.subscribe_cta_order()
+										: m.subscribe_cta_subscribe()}</Button
+							>
 						{:else}
-							<Button type="submit" form="start" disabled={!data?.user && $submitting} title={data?.user ? undefined : m.subscribe_title_login_to_gift()} formaction="?/gift" class="btn btn-full">{$submitting ? m.subscribe_cta_processing() : m.subscribe_cta_continue_as_gift()}</Button>
+							<Button
+								type="submit"
+								form="start"
+								disabled={$submitting}
+								formaction={checkoutAction}
+								class="btn btn-full"
+								>{$submitting
+									? m.subscribe_cta_processing()
+									: m.subscribe_cta_continue_as_gift()}</Button
+							>
 						{/if}
 
 						{#if !data?.user && isOrder}
@@ -918,9 +1429,14 @@ function submitAfterAuth() {
 
                          <button form="start" title="Checkout Without an account"  class="sub-cta__btn" type="submit" formaction="?/guestOrder" onclick={()=>$form.guestCheckout = true}>Guest Checkout</button>
                          {/if} -->
-						    <div class="flex flex-row gap-2" >
-							 <p>{m.subscribe_already_have_account()}</p>
-							<AuthSheet  onAuthenticated={submitAfterAuth} data={data?.signupForm} bind:loginOpen bind:signupOpen />
+							<div class="flex flex-row gap-2">
+								<p>{m.subscribe_already_have_account()}</p>
+								<AuthSheet
+									onAuthenticated={submitAfterAuth}
+									data={data?.signupForm}
+									bind:loginOpen
+									bind:signupOpen
+								/>
 							</div>
 						{/if}
 					</div>
@@ -937,56 +1453,336 @@ function submitAfterAuth() {
 
 <style>
 	/* ═══════════ MOBILE WIZARD ═══════════ */
-	.sub-page { min-height: 20dvh; background: #1a1a1a; display: flex; flex-direction: column; font-family: 'Jost', sans-serif; }
-	.sub-bg { flex: 1; display: flex; flex-direction: column; padding: 48px 24px 0; padding-bottom: 6px; position: relative; min-height: 0; }
-	.sub-plan-hero { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 12px; min-height: 150px; }
-	.sub-plan-eyebrow { font-family: 'Jost', sans-serif; font-size: .6rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: #9a4f22;  display: block; }
-	.sub-plan-name { font-family: 'Cormorant Garamond', serif; font-size: 36px; font-style: italic; font-weight: 400; color: rgba(250,248,244,.9); line-height: .95; margin-bottom: 12px; display: block; }
-	.sub-plan-name em { font-style: italic; }
-	.sub-plan-price { font-family: 'Jost', sans-serif; font-size: .88rem; color: rgba(250,248,244,.45); letter-spacing: .04em; }
-	.sub-plan-price strong { color: rgba(250,248,244,.75); font-weight: 500; }
-	.sub-progress { height: 2px; background: rgba(255,255,255,.08); flex-shrink: 0; }
-	.sub-progress__fill { height: 100%; background: #9a4f22; transition: width .4s cubic-bezier(.4,0,.2,1); }
-	.sub-card-wrap { flex-shrink: 0; position: relative; display: block; }
-	.sub-card { background: #faf8f4; border-top: 2px solid #9a4f22; -webkit-overflow-scrolling: touch; transition: opacity .18s ease, transform .18s ease; }
-	.sub-card.animating { opacity: 0; transform: translateY(12px); }
-	.sub-card__head { padding: 22px 20px 14px; position: sticky; top: 0; background: #faf8f4; z-index: 1; border-bottom: 1px solid #e8e4e0; }
-	.sub-back { position: absolute; top: 16px; right: 18px; display: inline-flex; align-items: center; gap: 3px; background: none; border: none; padding: 4px 2px; font-family: 'Jost', sans-serif; font-size: .64rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #b3ada7; cursor: pointer; transition: color .15s; }
-	.sub-back:hover, .sub-back:active { color: #9a4f22; }
-	.sub-back svg { stroke: currentColor; display: block; }
-	.sub-card__title { font-family: 'Cormorant Garamond', serif; font-size: 1.55rem; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 2px; line-height: 1.1; }
-	.sub-card__sub { font-family: 'Jost', sans-serif; font-size: .75rem; color: #7a746e; display: block; }
-	.sub-card__body { padding: 16px 20px; }
-	.sub-cta { background: #faf8f4; border-top: 1px solid #e8e4e0; padding: 12px 20px; padding-bottom: max(12px, env(safe-area-inset-bottom)); flex-shrink: 0; }
-	.sub-cta__btn { width: 100%; background: #1a1a1a; color: #faf8f4; border: none; padding: 16px; font-family: 'Jost', sans-serif; font-size: .8rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: background .15s; }
-	.sub-cta__btn:active { background: #2d2d2d; }
-	.sub-cta__btn:disabled { opacity: .5; cursor: not-allowed; }
-	.plan-sel { display: flex; flex-direction: column; gap: 8px; }
-	.plan-sel-card { border: 1px solid #e8e4e0; padding: 8px; display: flex; align-items: center; cursor: pointer; transition: border-color .12s; position: relative; background: #fff; width: 100%; text-align: left; font-family: inherit; }
-	.plan-sel-card.active { border-color: #1a1a1a; }
-	.plan-sel-card__badge { position: absolute; top: -1px; left: 12px; background: #1a1a1a; color: #faf8f4; font-size: .58rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; }
-	.plan-sel-card__name { flex: 1; }
-	.plan-sel-card__name.pad, .plan-sel-card__price.pad { padding-top: 10px; }
-	.plan-sel-card__name h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; font-weight: 500; color: #1a1a1a; margin: 0 0 2px; }
-	.plan-sel-card__name p { font-size: .75rem; color: #7a746e; margin: 0; }
-	.plan-sel-card__price { text-align: right; }
-	.plan-sel-card__price-num { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; font-weight: 500; color: #1a1a1a; display: block; line-height: 1; }
-	.plan-sel-card__price-freq { font-size: .68rem; color: #7a746e; display: block; margin-top: 1px; }
-	.plan-sel-card__dot { width: 16px; height: 16px; border: 1.5px solid #e8e4e0; border-radius: 50%; margin-left: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-	.plan-sel-card.active .plan-sel-card__dot { border-color: #1a1a1a; background: #1a1a1a; }
-	.plan-sel-card.active .plan-sel-card__dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #faf8f4; }
-	.who-cards { display: flex; flex-direction: column; gap: 8px; }
-	.who-card { border: 1px solid #e8e4e0; padding: 18px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; background: #fff; transition: border-color .12s; width: 100%; text-align: left; font-family: inherit; }
-	.who-card.active { border-color: #1a1a1a; }
-	.who-card__icon { width: 40px; height: 40px; border: 1px solid #e8e4e0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #9a4f22; }
-	.who-card.active .who-card__icon { border-color: #1a1a1a; color: #1a1a1a; }
-	.who-card__text { flex: 1; }
-	.who-card__text h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 500; color: #1a1a1a; margin: 0 0 2px; }
-	.who-card__text p { font-size: .75rem; color: #7a746e; margin: 0; }
-	.who-card__price { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 500; color: #9a4f22; text-align: right; flex-shrink: 0; white-space: nowrap; }
-	.who-card__price span { font-size: .65rem; color: #7a746e; font-family: 'Jost', sans-serif; }
-	.extras-row { display: flex; gap: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scroll-snap-type: x mandatory; }
-	.extras-row::-webkit-scrollbar { display: none; }
+	.sub-page {
+		min-height: 20dvh;
+		background: #1a1a1a;
+		display: flex;
+		flex-direction: column;
+		font-family: 'Jost', sans-serif;
+	}
+	.sub-bg {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		padding: 48px 24px 0;
+		padding-bottom: 6px;
+		position: relative;
+		min-height: 0;
+	}
+	.sub-plan-hero {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding-bottom: 12px;
+		min-height: 150px;
+	}
+	.sub-plan-eyebrow {
+		font-family: 'Jost', sans-serif;
+		font-size: 0.6rem;
+		font-weight: 500;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: #9a4f22;
+		display: block;
+	}
+	.sub-plan-name {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 36px;
+		font-style: italic;
+		font-weight: 400;
+		color: rgba(250, 248, 244, 0.9);
+		line-height: 0.95;
+		margin-bottom: 12px;
+		display: block;
+	}
+	.sub-plan-name em {
+		font-style: italic;
+	}
+	.sub-plan-price {
+		font-family: 'Jost', sans-serif;
+		font-size: 0.88rem;
+		color: rgba(250, 248, 244, 0.45);
+		letter-spacing: 0.04em;
+	}
+	.sub-plan-price strong {
+		color: rgba(250, 248, 244, 0.75);
+		font-weight: 500;
+	}
+	.sub-progress {
+		height: 2px;
+		background: rgba(255, 255, 255, 0.08);
+		flex-shrink: 0;
+	}
+	.sub-progress__fill {
+		height: 100%;
+		background: #9a4f22;
+		transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	.sub-card-wrap {
+		flex-shrink: 0;
+		position: relative;
+		display: block;
+	}
+	.sub-card {
+		background: #faf8f4;
+		border-top: 2px solid #9a4f22;
+		-webkit-overflow-scrolling: touch;
+		transition:
+			opacity 0.18s ease,
+			transform 0.18s ease;
+	}
+	.sub-card.animating {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	.sub-card__head {
+		padding: 22px 20px 14px;
+		position: sticky;
+		top: 0;
+		background: #faf8f4;
+		z-index: 1;
+		border-bottom: 1px solid #e8e4e0;
+	}
+	.sub-back {
+		position: absolute;
+		top: 16px;
+		right: 18px;
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		background: none;
+		border: none;
+		padding: 4px 2px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.64rem;
+		font-weight: 500;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: #b3ada7;
+		cursor: pointer;
+		transition: color 0.15s;
+	}
+	.sub-back:hover,
+	.sub-back:active {
+		color: #9a4f22;
+	}
+	.sub-back svg {
+		stroke: currentColor;
+		display: block;
+	}
+	.sub-card__title {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.55rem;
+		font-weight: 500;
+		color: #1a1a1a;
+		display: block;
+		margin-bottom: 2px;
+		line-height: 1.1;
+	}
+	.sub-card__sub {
+		font-family: 'Jost', sans-serif;
+		font-size: 0.75rem;
+		color: #7a746e;
+		display: block;
+	}
+	.sub-card__body {
+		padding: 16px 20px;
+	}
+	.sub-cta {
+		background: #faf8f4;
+		border-top: 1px solid #e8e4e0;
+		padding: 12px 20px;
+		padding-bottom: max(12px, env(safe-area-inset-bottom));
+		flex-shrink: 0;
+	}
+	.sub-cta__btn {
+		width: 100%;
+		background: #1a1a1a;
+		color: #faf8f4;
+		border: none;
+		padding: 16px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.8rem;
+		font-weight: 500;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+	.sub-cta__btn:active {
+		background: #2d2d2d;
+	}
+	.sub-cta__btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.plan-sel {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.plan-sel-card {
+		border: 1px solid #e8e4e0;
+		padding: 8px;
+		display: flex;
+		align-items: center;
+		cursor: pointer;
+		transition: border-color 0.12s;
+		position: relative;
+		background: #fff;
+		width: 100%;
+		text-align: left;
+		font-family: inherit;
+	}
+	.plan-sel-card.active {
+		border-color: #1a1a1a;
+	}
+	.plan-sel-card__badge {
+		position: absolute;
+		top: -1px;
+		left: 12px;
+		background: #1a1a1a;
+		color: #faf8f4;
+		font-size: 0.58rem;
+		font-weight: 600;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		padding: 3px 8px;
+	}
+	.plan-sel-card__name {
+		flex: 1;
+	}
+	.plan-sel-card__name.pad,
+	.plan-sel-card__price.pad {
+		padding-top: 10px;
+	}
+	.plan-sel-card__name h3 {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.2rem;
+		font-weight: 500;
+		color: #1a1a1a;
+		margin: 0 0 2px;
+	}
+	.plan-sel-card__name p {
+		font-size: 0.75rem;
+		color: #7a746e;
+		margin: 0;
+	}
+	.plan-sel-card__price {
+		text-align: right;
+	}
+	.plan-sel-card__price-num {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.5rem;
+		font-weight: 500;
+		color: #1a1a1a;
+		display: block;
+		line-height: 1;
+	}
+	.plan-sel-card__price-freq {
+		font-size: 0.68rem;
+		color: #7a746e;
+		display: block;
+		margin-top: 1px;
+	}
+	.plan-sel-card__dot {
+		width: 16px;
+		height: 16px;
+		border: 1.5px solid #e8e4e0;
+		border-radius: 50%;
+		margin-left: 14px;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.plan-sel-card.active .plan-sel-card__dot {
+		border-color: #1a1a1a;
+		background: #1a1a1a;
+	}
+	.plan-sel-card.active .plan-sel-card__dot::after {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #faf8f4;
+	}
+	.who-cards {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.who-card {
+		border: 1px solid #e8e4e0;
+		padding: 18px 16px;
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		cursor: pointer;
+		background: #fff;
+		transition: border-color 0.12s;
+		width: 100%;
+		text-align: left;
+		font-family: inherit;
+	}
+	.who-card.active {
+		border-color: #1a1a1a;
+	}
+	.who-card__icon {
+		width: 40px;
+		height: 40px;
+		border: 1px solid #e8e4e0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		color: #9a4f22;
+	}
+	.who-card.active .who-card__icon {
+		border-color: #1a1a1a;
+		color: #1a1a1a;
+	}
+	.who-card__text {
+		flex: 1;
+	}
+	.who-card__text h3 {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.15rem;
+		font-weight: 500;
+		color: #1a1a1a;
+		margin: 0 0 2px;
+	}
+	.who-card__text p {
+		font-size: 0.75rem;
+		color: #7a746e;
+		margin: 0;
+	}
+	.who-card__price {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.1rem;
+		font-weight: 500;
+		color: #9a4f22;
+		text-align: right;
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+	.who-card__price span {
+		font-size: 0.65rem;
+		color: #7a746e;
+		font-family: 'Jost', sans-serif;
+	}
+	.extras-row {
+		display: flex;
+		gap: 10px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		padding-bottom: 4px;
+		scroll-snap-type: x mandatory;
+	}
+	.extras-row::-webkit-scrollbar {
+		display: none;
+	}
 	.addon-wrap {
 		display: flex;
 		flex-direction: column;
@@ -1021,151 +1817,823 @@ function submitAfterAuth() {
 		opacity: 0.7;
 	}
 
-	.extra-card { flex-shrink: 0; width: 130px; border: 1px solid #e8e4e0; background: #fff; scroll-snap-align: start; cursor: pointer; transition: border-color .12s; padding: 0; text-align: left; font-family: inherit; }
-	.extra-card.added { border-color: #1a1a1a; }
-	.extra-card__img { height: 100px; background: #f5f2ed; display: flex; align-items: center; justify-content: center; font-size: .65rem; color: #7a746e; text-align: center; padding: 8px; }
-	.extra-card__body { padding: 10px 10px 12px; }
-	.extra-card__name { font-family: 'Cormorant Garamond', serif; font-size: .95rem; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 2px; }
-	.extra-card__desc { font-size: .65rem; color: #7a746e; display: block; margin-bottom: 8px; }
-	.extra-card__price { font-size: .75rem; color: #9a4f22; font-weight: 500; display: block; margin-bottom: 8px; }
-	.extra-card__btn { display: block; width: 100%; border: 1px solid #e8e4e0; background: #fff; padding: 7px 0; font-family: 'Jost', sans-serif; font-size: .65rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: #1a1a1a; text-align: center; }
-	.extra-card.added .extra-card__btn { background: #1a1a1a; color: #faf8f4; border-color: #1a1a1a; }
-	.sub-field { margin-bottom: 14px; }
-	.sub-field label { display: block; font-size: .62rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: #7a746e; margin-bottom: 6px; }
-	.sub-field label .opt { text-transform: none; letter-spacing: 0; font-weight: 400; }
-	.sub-field input { display: block; width: 100%; border: 1px solid #e8e4e0; background: #fff; padding: 6px 14px; font-family: 'Jost', sans-serif; font-size: 16px; color: #1a1a1a; outline: none; -webkit-appearance: none; }
-	.sub-field input:focus { border-color: #1a1a1a; }
-	.sub-field input::placeholder { color: rgba(122,116,110,.4); }
-	.sub-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-	.sub-field-note { font-size: .68rem; color: #7a746e; margin-top: 5px; display: block; }
-	.sub-divider { height: 1px; background: #e8e4e0; margin: 18px 0 14px; }
-	.sub-section-label { font-size: .6rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: #b5622a; display: block; margin-bottom: 12px; }
-	.opt-in-m { display: flex; align-items: center; gap: 9px; font-size: .8rem; color: #433e39; cursor: pointer; margin-top: 4px; }
-	.opt-in-m input { width: 16px; height: 16px; accent-color: #9a4f22; }
-	.pay-summary { border: 1px solid #e8e4e0; margin-bottom: 18px; }
-	.pay-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-bottom: 1px solid #e8e4e0; font-size: .82rem; }
-	.pay-row:last-child { border-bottom: none; }
-	.pay-row__label { color: #7a746e; }
-	.pay-row__val { color: #1a1a1a; font-weight: 500; }
-	.pay-total { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; background: #1a1a1a; font-size: .82rem; }
-	.pay-total__label { color: rgba(250,248,244,.6); }
-	.pay-total__val { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: #faf8f4; font-weight: 500; }
-	.secure-note { display: flex; align-items: center; gap: 7px; font-size: .7rem; color: #7a746e; margin-bottom: 14px; }
-	.secure-note svg { flex-shrink: 0; stroke: #7a746e; }
-	.terms-note { font-size: .68rem; color: rgba(122,116,110,.7); line-height: 1.6; text-align: center; }
-	.terms-note a { color: #9a4f22; }
-	.sub-error { font-size: .78rem; color: #a33a2b; margin-top: 10px; display: block; }
-	.skip-link { display: block; text-align: center; font-size: .75rem; color: #7a746e; padding: 10px 0 2px; cursor: pointer; background: none; border: none; width: 100%; text-decoration: underline; font-family: 'Jost', sans-serif; }
+	.extra-card {
+		flex-shrink: 0;
+		width: 130px;
+		border: 1px solid #e8e4e0;
+		background: #fff;
+		scroll-snap-align: start;
+		cursor: pointer;
+		transition: border-color 0.12s;
+		padding: 0;
+		text-align: left;
+		font-family: inherit;
+	}
+	.extra-card.added {
+		border-color: #1a1a1a;
+	}
+	.extra-card__img {
+		height: 100px;
+		background: #f5f2ed;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.65rem;
+		color: #7a746e;
+		text-align: center;
+		padding: 8px;
+	}
+	.extra-card__body {
+		padding: 10px 10px 12px;
+	}
+	.extra-card__name {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: #1a1a1a;
+		display: block;
+		margin-bottom: 2px;
+	}
+	.extra-card__desc {
+		font-size: 0.65rem;
+		color: #7a746e;
+		display: block;
+		margin-bottom: 8px;
+	}
+	.extra-card__price {
+		font-size: 0.75rem;
+		color: #9a4f22;
+		font-weight: 500;
+		display: block;
+		margin-bottom: 8px;
+	}
+	.extra-card__btn {
+		display: block;
+		width: 100%;
+		border: 1px solid #e8e4e0;
+		background: #fff;
+		padding: 7px 0;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.65rem;
+		font-weight: 500;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: #1a1a1a;
+		text-align: center;
+	}
+	.extra-card.added .extra-card__btn {
+		background: #1a1a1a;
+		color: #faf8f4;
+		border-color: #1a1a1a;
+	}
+	.sub-field {
+		margin-bottom: 14px;
+	}
+	.sub-field label {
+		display: block;
+		font-size: 0.62rem;
+		font-weight: 500;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: #7a746e;
+		margin-bottom: 6px;
+	}
+	.sub-field label .opt {
+		text-transform: none;
+		letter-spacing: 0;
+		font-weight: 400;
+	}
+	.sub-field input {
+		display: block;
+		width: 100%;
+		border: 1px solid #e8e4e0;
+		background: #fff;
+		padding: 6px 14px;
+		font-family: 'Jost', sans-serif;
+		font-size: 16px;
+		color: #1a1a1a;
+		outline: none;
+		-webkit-appearance: none;
+	}
+	.sub-field input:focus {
+		border-color: #1a1a1a;
+	}
+	.sub-field input::placeholder {
+		color: rgba(122, 116, 110, 0.4);
+	}
+	.sub-field-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+	.sub-field-note {
+		font-size: 0.68rem;
+		color: #7a746e;
+		margin-top: 5px;
+		display: block;
+	}
+	.sub-divider {
+		height: 1px;
+		background: #e8e4e0;
+		margin: 18px 0 14px;
+	}
+	.sub-section-label {
+		font-size: 0.6rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: #b5622a;
+		display: block;
+		margin-bottom: 12px;
+	}
+	.opt-in-m {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 0.8rem;
+		color: #433e39;
+		cursor: pointer;
+		margin-top: 4px;
+	}
+	.opt-in-m input {
+		width: 16px;
+		height: 16px;
+		accent-color: #9a4f22;
+	}
+	.pay-summary {
+		border: 1px solid #e8e4e0;
+		margin-bottom: 18px;
+	}
+	.pay-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 11px 14px;
+		border-bottom: 1px solid #e8e4e0;
+		font-size: 0.82rem;
+	}
+	.pay-row:last-child {
+		border-bottom: none;
+	}
+	.pay-row__label {
+		color: #7a746e;
+	}
+	.pay-row__val {
+		color: #1a1a1a;
+		font-weight: 500;
+	}
+	.pay-total {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 13px 14px;
+		background: #1a1a1a;
+		font-size: 0.82rem;
+	}
+	.pay-total__label {
+		color: rgba(250, 248, 244, 0.6);
+	}
+	.pay-total__val {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.3rem;
+		color: #faf8f4;
+		font-weight: 500;
+	}
+	.secure-note {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 0.7rem;
+		color: #7a746e;
+		margin-bottom: 14px;
+	}
+	.secure-note svg {
+		flex-shrink: 0;
+		stroke: #7a746e;
+	}
+	.terms-note {
+		font-size: 0.68rem;
+		color: rgba(122, 116, 110, 0.7);
+		line-height: 1.6;
+		text-align: center;
+	}
+	.terms-note a {
+		color: #9a4f22;
+	}
+	.sub-error {
+		font-size: 0.78rem;
+		color: #a33a2b;
+		margin-top: 10px;
+		display: block;
+	}
+	.skip-link {
+		display: block;
+		text-align: center;
+		font-size: 0.75rem;
+		color: #7a746e;
+		padding: 10px 0 2px;
+		cursor: pointer;
+		background: none;
+		border: none;
+		width: 100%;
+		text-decoration: underline;
+		font-family: 'Jost', sans-serif;
+	}
 
 	/* ═══════════ QUANTITY STEPPER ═══════════ */
-	.qty-stepper { display: inline-flex; align-items: stretch; height: 38px; border: 1px solid #e8e4e0; background: #fff; overflow: hidden; user-select: none; }
-	.qty-btn { width: 38px; border: none; cursor: pointer; font-family: 'Jost', sans-serif; font-size: 1.1rem; line-height: 1; display: flex; align-items: center; justify-content: center; transition: opacity .15s, background .15s; padding: 0; }
-	.qty-btn--minus { background: #1a1a1a; color: #faf8f4; }
-	.qty-btn--minus:active { background: #2d2d2d; }
-	.qty-btn--minus:disabled { opacity: .35; cursor: not-allowed; }
-	.qty-btn--plus { background: #9a4f22; color: #fff; }
-	.qty-btn--plus:active { background: #833f18; }
-	.qty-value { min-width: 46px; display: flex; align-items: center; justify-content: center; font-family: 'Jost', sans-serif; font-size: .95rem; font-weight: 500; color: #1a1a1a; background: #fff; }
-	.sum-row--qty { display: flex; align-items: center; justify-content: space-between; }
+	.qty-stepper {
+		display: inline-flex;
+		align-items: stretch;
+		height: 38px;
+		border: 1px solid #e8e4e0;
+		background: #fff;
+		overflow: hidden;
+		user-select: none;
+	}
+	.qty-btn {
+		width: 38px;
+		border: none;
+		cursor: pointer;
+		font-family: 'Jost', sans-serif;
+		font-size: 1.1rem;
+		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition:
+			opacity 0.15s,
+			background 0.15s;
+		padding: 0;
+	}
+	.qty-btn--minus {
+		background: #1a1a1a;
+		color: #faf8f4;
+	}
+	.qty-btn--minus:active {
+		background: #2d2d2d;
+	}
+	.qty-btn--minus:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+	.qty-btn--plus {
+		background: #9a4f22;
+		color: #fff;
+	}
+	.qty-btn--plus:active {
+		background: #833f18;
+	}
+	.qty-value {
+		min-width: 46px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: #1a1a1a;
+		background: #fff;
+	}
+	.sum-row--qty {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
 
 	/* ═══════════ DESKTOP STACKED ═══════════ */
-	h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; line-height: 1.02; }
-	p { line-height: 1.65; color: #433e39; }
-	.eyebrow { display: block; margin-bottom: 10px; font-size: .7rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--copper); }
-	.btn-full { width: 100%; }
-	.text-left { text-align: left; font-family: inherit; }
-	.page-head { padding: 48px 0 32px; background: linear-gradient(180deg, #fcfbf8 0%, var(--cream) 100%); border-bottom: 1px solid var(--border); max-width: 1200px; margin: 0 auto; }
-	.page-head h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); font-style: italic; margin-bottom: 8px; }
-	.page-head p { font-size: .9rem; color: var(--taupe); max-width: 480px; }
-	.wrap { padding: 32px 0 80px; max-width: 1200px; margin: 0 auto; }
-	.layout { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; }
-	.steps { display: flex; flex-direction: column; gap: 2px; }
-	.step { background: #fff; border: 1px solid var(--border); overflow: hidden; }
-	.step-head { padding: 20px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 12px; }
-	.step-num { font-family: 'Cormorant Garamond', serif; font-size: 1rem; color: rgba(181,98,42,.4); font-weight: 600; min-width: 20px; }
-	.step-head h2 { font-size: 1.4rem; }
-	.step-body { padding: 20px 22px; }
-	.choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-	.choice { border: 1px solid var(--border); background: var(--cream); padding: 16px; cursor: pointer; transition: all .15s; }
-	.choice:hover { border-color: rgba(181,98,42,.35); }
-	.choice.active { border-color: var(--copper); background: #fbf4ee; }
-	.choice h3 { font-size: 1.15rem; margin-bottom: 5px; }
-	.choice p { font-size: .8rem; color: var(--taupe); line-height: 1.5; margin-bottom: 8px; }
-	.choice-tag { font-size: .66rem; text-transform: uppercase; letter-spacing: .10em; color: var(--copper); font-weight: 500; }
-	.gift-step { border-top: 2px solid rgba(181,98,42,.15); }
-	.gift-label { display: inline-block; margin-bottom: 14px; font-size: .66rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; background: rgba(181,98,42,.08); color: var(--copper); padding: 3px 9px; border: 1px solid rgba(181,98,42,.18); }
-	.gift-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-	.margin-top-fallback { margin-top: 12px; }
-	.plans-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-	.plan { border: 1px solid var(--border); background: var(--cream); padding: 16px; cursor: pointer; transition: all .15s; }
-	.plan:hover { border-color: rgba(181,98,42,.35); }
-	.plan.active { border-color: var(--copper); background: #fbf4ee; }
-	.plan.featured { background: var(--copper); border-color: var(--copper); }
-	.plan.featured h3, .plan.featured .price { color: #fff; }
-	.plan.featured .plan-sub, .plan.featured .freq, .plan.featured li { color: rgba(255,255,255,.8); }
-	.plan h3 { font-size: 1.2rem; margin-bottom: 4px; }
-	.plan-sub { font-size: .8rem; color: var(--taupe); margin-bottom: 10px; }
-	.price { font-family: 'Cormorant Garamond', serif; font-size: 2.2rem; color: var(--copper); line-height: 1; }
-	.freq { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--taupe); margin: 3px 0 10px; }
-	.plan ul { list-style: none; display: grid; gap: 5px; }
-	.plan li { font-size: .8rem; color: #463f39; padding-left: 10px; position: relative; }
-	.plan li::before { content: '—'; position: absolute; left: 0; color: rgba(181,98,42,.35); font-size: .65rem; }
-	.plan.featured li::before { color: rgba(255,255,255,.4); }
-	.delivery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-	.field-box { border: 1px solid var(--border); background: var(--cream); padding: 14px 16px; }
-	.field-label { font-size: .66rem; text-transform: uppercase; letter-spacing: .12em; color: var(--copper); font-weight: 500; display: block; margin-bottom: 8px; }
-	.select { width: 100%; min-height: 40px; border: 1px solid rgba(122,116,110,.22); background: #fff; padding: 0 12px; font-family: 'Jost', sans-serif; font-size: .88rem; color: var(--ink); }
-	.field-help { font-size: .76rem; color: var(--taupe); margin-top: 7px; }
-	.addons-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-	.addon { border: 1px solid var(--border); background: var(--cream); cursor: pointer; transition: all .15s; overflow: hidden; padding: 0; }
-	.addon:hover { border-color: rgba(181,98,42,.35); }
-	.addon.active { border-color: var(--copper); background: #fbf4ee; }
-	.addon-img { width: 100%; aspect-ratio: 4/3; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
-	.addon-top { display: flex; justify-content: space-between; align-items: flex-start; margin: 12px 14px 5px; }
-	.addon h3 { font-size: 1rem; }
-	.addon-price { font-size: .78rem; font-weight: 500; color: var(--copper); }
-	.addon p { font-size: .78rem; color: var(--taupe); line-height: 1.5; margin: 0 14px 14px; }
-	.check { width: 20px; height: 20px; border: 1px solid rgba(181,98,42,.28); display: flex; align-items: center; justify-content: center; background: #fff; color: transparent; flex-shrink: 0; font-size: .75rem; }
-	.addon.active .check { background: var(--copper); color: #fff; }
-	.ph-label { font-size: .62rem; letter-spacing: .16em; text-transform: uppercase; color: var(--taupe); font-weight: 500; }
-	.ph-sub { font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: rgba(122,116,110,.5); }
-	.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-	.field { display: flex; flex-direction: column; }
-	.field.full { grid-column: 1 / -1; }
-	.input { width: 100%; min-height: 40px; border: 1px solid rgba(122,116,110,.22); background: #fff; padding: 0 12px; font-family: 'Jost', sans-serif; font-size: .88rem; color: var(--ink); }
-	.input:focus { outline: none; border-color: var(--copper); }
-	.textarea { min-height: 72px; padding: 10px 12px; resize: vertical; line-height: 1.5; }
-	.opt { text-transform: none; letter-spacing: 0; color: rgba(122,116,110,.7); font-weight: 400; }
-	.opt-in { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; font-size: .82rem; color: #433e39; cursor: pointer; }
-	.opt-in input { width: 16px; height: 16px; accent-color: var(--copper); }
-	.form-error { display: block; margin-top: 6px; font-size: .76rem; color: #b23a2a; }
-	.summary { position: sticky; top: 88px; }
-	.sum-head { padding: 20px 20px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
-	.sum-head small { display: block; margin-bottom: 6px; font-size: .66rem; text-transform: uppercase; letter-spacing: .16em; color: var(--taupe); font-weight: 500; }
-	.sum-head h2 { font-size: 1.8rem; font-style: italic; }
-	.sum-body { padding: 20px; background: #fff; border: 1px solid var(--border); border-top: none; }
-	.sum-row { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
-	.sum-row:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-	.sum-label { display: block; margin-bottom: 6px; font-size: .66rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--copper); }
-	.sum-val { font-size: .9rem; color: var(--ink); line-height: 1.5; }
-	.sum-sub { font-size: .78rem; color: var(--taupe); }
-	.price-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: .88rem; color: #433e39; }
-	.price-line.total { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border); font-weight: 500; }
-	.price-line.total strong { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; color: var(--copper); line-height: 1; }
-	.sum-actions { display: grid; gap: 8px; margin-top: 18px; }
-	.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 22px; border-radius: 2px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 500; background: var(--copper); color: #fff; border: 1px solid var(--copper); cursor: pointer; font-family: inherit; }
-	.btn[disabled] { opacity: .6; cursor: not-allowed; }
-	.sum-note { margin-top: 12px; font-size: .74rem; color: var(--taupe); line-height: 1.6; }
-	.trust-panel-strip { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-	.trust-quote { font-family: 'Cormorant Garamond', serif; font-size: .95rem; font-style: italic; color: var(--taupe); line-height: 1.5; margin-bottom: 6px; }
-	.trust-attr { font-size: .64rem; text-transform: uppercase; letter-spacing: .12em; color: rgba(122,116,110,.5); font-weight: 500; }
+	h1,
+	h2,
+	h3 {
+		font-family: 'Cormorant Garamond', serif;
+		font-weight: 600;
+		line-height: 1.02;
+	}
+	p {
+		line-height: 1.65;
+		color: #433e39;
+	}
+	.eyebrow {
+		display: block;
+		margin-bottom: 10px;
+		font-size: 0.7rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--copper);
+	}
+	.btn-full {
+		width: 100%;
+	}
+	.text-left {
+		text-align: left;
+		font-family: inherit;
+	}
+	.page-head {
+		padding: 48px 0 32px;
+		background: linear-gradient(180deg, #fcfbf8 0%, var(--cream) 100%);
+		border-bottom: 1px solid var(--border);
+		max-width: 1200px;
+		margin: 0 auto;
+	}
+	.page-head h1 {
+		font-size: clamp(2.2rem, 5vw, 3.6rem);
+		font-style: italic;
+		margin-bottom: 8px;
+	}
+	.page-head p {
+		font-size: 0.9rem;
+		color: var(--taupe);
+		max-width: 480px;
+	}
+	.wrap {
+		padding: 32px 0 80px;
+		max-width: 1200px;
+		margin: 0 auto;
+	}
+	.layout {
+		display: grid;
+		grid-template-columns: 1fr 360px;
+		gap: 24px;
+		align-items: start;
+	}
+	.steps {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.step {
+		background: #fff;
+		border: 1px solid var(--border);
+		overflow: hidden;
+	}
+	.step-head {
+		padding: 20px 22px;
+		border-bottom: 1px solid var(--border);
+		display: flex;
+		align-items: baseline;
+		gap: 12px;
+	}
+	.step-num {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1rem;
+		color: rgba(181, 98, 42, 0.4);
+		font-weight: 600;
+		min-width: 20px;
+	}
+	.step-head h2 {
+		font-size: 1.4rem;
+	}
+	.step-body {
+		padding: 20px 22px;
+	}
+	.choice-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+	}
+	.choice {
+		border: 1px solid var(--border);
+		background: var(--cream);
+		padding: 16px;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+	.choice:hover {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.choice.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.choice h3 {
+		font-size: 1.15rem;
+		margin-bottom: 5px;
+	}
+	.choice p {
+		font-size: 0.8rem;
+		color: var(--taupe);
+		line-height: 1.5;
+		margin-bottom: 8px;
+	}
+	.choice-tag {
+		font-size: 0.66rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--copper);
+		font-weight: 500;
+	}
+	.gift-step {
+		border-top: 2px solid rgba(181, 98, 42, 0.15);
+	}
+	.gift-label {
+		display: inline-block;
+		margin-bottom: 14px;
+		font-size: 0.66rem;
+		font-weight: 600;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		background: rgba(181, 98, 42, 0.08);
+		color: var(--copper);
+		padding: 3px 9px;
+		border: 1px solid rgba(181, 98, 42, 0.18);
+	}
+	.gift-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+	}
+	.margin-top-fallback {
+		margin-top: 12px;
+	}
+	.plans-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 10px;
+	}
+	.plan {
+		border: 1px solid var(--border);
+		background: var(--cream);
+		padding: 16px;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+	.plan:hover {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.plan.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.plan.featured {
+		background: var(--copper);
+		border-color: var(--copper);
+	}
+	.plan.featured h3,
+	.plan.featured .price {
+		color: #fff;
+	}
+	.plan.featured .plan-sub,
+	.plan.featured .freq,
+	.plan.featured li {
+		color: rgba(255, 255, 255, 0.8);
+	}
+	.plan h3 {
+		font-size: 1.2rem;
+		margin-bottom: 4px;
+	}
+	.plan-sub {
+		font-size: 0.8rem;
+		color: var(--taupe);
+		margin-bottom: 10px;
+	}
+	.price {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 2.2rem;
+		color: var(--copper);
+		line-height: 1;
+	}
+	.freq {
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--taupe);
+		margin: 3px 0 10px;
+	}
+	.plan ul {
+		list-style: none;
+		display: grid;
+		gap: 5px;
+	}
+	.plan li {
+		font-size: 0.8rem;
+		color: #463f39;
+		padding-left: 10px;
+		position: relative;
+	}
+	.plan li::before {
+		content: '—';
+		position: absolute;
+		left: 0;
+		color: rgba(181, 98, 42, 0.35);
+		font-size: 0.65rem;
+	}
+	.plan.featured li::before {
+		color: rgba(255, 255, 255, 0.4);
+	}
+	.delivery-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+	}
+	.field-box {
+		border: 1px solid var(--border);
+		background: var(--cream);
+		padding: 14px 16px;
+	}
+	.field-label {
+		font-size: 0.66rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: var(--copper);
+		font-weight: 500;
+		display: block;
+		margin-bottom: 8px;
+	}
+	.select {
+		width: 100%;
+		min-height: 40px;
+		border: 1px solid rgba(122, 116, 110, 0.22);
+		background: #fff;
+		padding: 0 12px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.88rem;
+		color: var(--ink);
+	}
+	.field-help {
+		font-size: 0.76rem;
+		color: var(--taupe);
+		margin-top: 7px;
+	}
+	.addons-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 10px;
+	}
+	.addon {
+		border: 1px solid var(--border);
+		background: var(--cream);
+		cursor: pointer;
+		transition: all 0.15s;
+		overflow: hidden;
+		padding: 0;
+	}
+	.addon:hover {
+		border-color: rgba(181, 98, 42, 0.35);
+	}
+	.addon.active {
+		border-color: var(--copper);
+		background: #fbf4ee;
+	}
+	.addon-img {
+		width: 100%;
+		aspect-ratio: 4/3;
+		background: var(--panel);
+		border-bottom: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+	}
+	.addon-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin: 12px 14px 5px;
+	}
+	.addon h3 {
+		font-size: 1rem;
+	}
+	.addon-price {
+		font-size: 0.78rem;
+		font-weight: 500;
+		color: var(--copper);
+	}
+	.addon p {
+		font-size: 0.78rem;
+		color: var(--taupe);
+		line-height: 1.5;
+		margin: 0 14px 14px;
+	}
+	.check {
+		width: 20px;
+		height: 20px;
+		border: 1px solid rgba(181, 98, 42, 0.28);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: #fff;
+		color: transparent;
+		flex-shrink: 0;
+		font-size: 0.75rem;
+	}
+	.addon.active .check {
+		background: var(--copper);
+		color: #fff;
+	}
+	.ph-label {
+		font-size: 0.62rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--taupe);
+		font-weight: 500;
+	}
+	.ph-sub {
+		font-size: 0.58rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: rgba(122, 116, 110, 0.5);
+	}
+	.detail-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+	.field {
+		display: flex;
+		flex-direction: column;
+	}
+	.field.full {
+		grid-column: 1 / -1;
+	}
+	.input {
+		width: 100%;
+		min-height: 40px;
+		border: 1px solid rgba(122, 116, 110, 0.22);
+		background: #fff;
+		padding: 0 12px;
+		font-family: 'Jost', sans-serif;
+		font-size: 0.88rem;
+		color: var(--ink);
+	}
+	.input:focus {
+		outline: none;
+		border-color: var(--copper);
+	}
+	.textarea {
+		min-height: 72px;
+		padding: 10px 12px;
+		resize: vertical;
+		line-height: 1.5;
+	}
+	.opt {
+		text-transform: none;
+		letter-spacing: 0;
+		color: rgba(122, 116, 110, 0.7);
+		font-weight: 400;
+	}
+	.opt-in {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 0.82rem;
+		color: #433e39;
+		cursor: pointer;
+	}
+	.opt-in input {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--copper);
+	}
+	.form-error {
+		display: block;
+		margin-top: 6px;
+		font-size: 0.76rem;
+		color: #b23a2a;
+	}
+	.summary {
+		position: sticky;
+		top: 88px;
+	}
+	.sum-head {
+		padding: 20px 20px 16px;
+		background: var(--panel);
+		border-bottom: 1px solid var(--border);
+	}
+	.sum-head small {
+		display: block;
+		margin-bottom: 6px;
+		font-size: 0.66rem;
+		text-transform: uppercase;
+		letter-spacing: 0.16em;
+		color: var(--taupe);
+		font-weight: 500;
+	}
+	.sum-head h2 {
+		font-size: 1.8rem;
+		font-style: italic;
+	}
+	.sum-body {
+		padding: 20px;
+		background: #fff;
+		border: 1px solid var(--border);
+		border-top: none;
+	}
+	.sum-row {
+		padding-bottom: 14px;
+		margin-bottom: 14px;
+		border-bottom: 1px solid var(--border);
+	}
+	.sum-row:last-of-type {
+		border-bottom: none;
+		margin-bottom: 0;
+		padding-bottom: 0;
+	}
+	.sum-label {
+		display: block;
+		margin-bottom: 6px;
+		font-size: 0.66rem;
+		font-weight: 500;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--copper);
+	}
+	.sum-val {
+		font-size: 0.9rem;
+		color: var(--ink);
+		line-height: 1.5;
+	}
+	.sum-sub {
+		font-size: 0.78rem;
+		color: var(--taupe);
+	}
+	.price-line {
+		display: flex;
+		justify-content: space-between;
+		padding: 6px 0;
+		font-size: 0.88rem;
+		color: #433e39;
+	}
+	.price-line.total {
+		padding-top: 12px;
+		margin-top: 4px;
+		border-top: 1px solid var(--border);
+		font-weight: 500;
+	}
+	.price-line.total strong {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 1.8rem;
+		color: var(--copper);
+		line-height: 1;
+	}
+	.sum-actions {
+		display: grid;
+		gap: 8px;
+		margin-top: 18px;
+	}
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 46px;
+		padding: 0 22px;
+		border-radius: 2px;
+		font-size: 0.72rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		font-weight: 500;
+		background: var(--copper);
+		color: #fff;
+		border: 1px solid var(--copper);
+		cursor: pointer;
+		font-family: inherit;
+	}
+	.btn[disabled] {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+	.sum-note {
+		margin-top: 12px;
+		font-size: 0.74rem;
+		color: var(--taupe);
+		line-height: 1.6;
+	}
+	.trust-panel-strip {
+		margin-top: 16px;
+		padding-top: 16px;
+		border-top: 1px solid var(--border);
+	}
+	.trust-quote {
+		font-family: 'Cormorant Garamond', serif;
+		font-size: 0.95rem;
+		font-style: italic;
+		color: var(--taupe);
+		line-height: 1.5;
+		margin-bottom: 6px;
+	}
+	.trust-attr {
+		font-size: 0.64rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: rgba(122, 116, 110, 0.5);
+		font-weight: 500;
+	}
 
 	/* ═══════════ RESPONSIVE VIEW TOGGLE (CSS-only, no JS) ═══════════ */
-	.mobile-view { display: flex !important; }
-	.desktop-view { display: none !important; }
+	.mobile-view {
+		display: flex !important;
+	}
+	.desktop-view {
+		display: none !important;
+	}
 	@media (min-width: 921px) {
-		.mobile-view { display: none !important; }
-		.desktop-view { display: block !important; }
+		.mobile-view {
+			display: none !important;
+		}
+		.desktop-view {
+			display: block !important;
+		}
 	}
 
 	.auth-panel {
@@ -1204,6 +2672,12 @@ function submitAfterAuth() {
 		color: var(--taupe);
 		text-align: center;
 	}
-	.auth-fine a { color: var(--taupe); text-decoration: underline; text-underline-offset: 2px; }
-	.auth-fine a:hover { color: var(--copper); }
+	.auth-fine a {
+		color: var(--taupe);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.auth-fine a:hover {
+		color: var(--copper);
+	}
 </style>

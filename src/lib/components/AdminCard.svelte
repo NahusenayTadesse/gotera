@@ -44,13 +44,13 @@
 	<!-- Content -->
 	<div class="relative">
 		<CardHeader class="pb-4">
-			<div class="flex items-start justify-between">
-				<div class="flex-1">
-					<CardTitle class="mb-2 text-xl">{title}</CardTitle>
+			<div class="flex items-start justify-between gap-3">
+				<div class="min-w-0 flex-1">
+					<CardTitle class="mb-2 text-lg sm:text-xl">{title}</CardTitle>
 					<CardDescription class="text-sm">{description}</CardDescription>
 				</div>
 				<div
-					class="ml-4 rounded-lg bg-primary/10 p-3 text-primary transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground"
+					class="shrink-0 rounded-lg bg-primary/10 p-2.5 text-primary transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground sm:p-3"
 				>
 					<IconComponent class="size-6" />
 				</div>
@@ -61,14 +61,14 @@
 			{#each items as item (item.href)}
 				<a
 					href={item.href}
-					class="group/link flex items-center justify-between rounded-lg px-4 py-3 transition-all duration-200 hover:bg-primary/10"
+					class="group/link flex min-h-11 items-center justify-between gap-3 rounded-lg px-3 py-3 transition-all duration-200 hover:bg-primary/10 active:bg-primary/15 sm:px-4"
 				>
 					<span class="font-medium text-foreground/80 group-hover/link:text-foreground"
 						>{item.name}</span
 					>
 					<ArrowRightIcon
-						class="size-4 text-muted-foreground opacity-0 transition-all duration-200
-					 group-hover/link:translate-x-1 group-hover/link:opacity-100"
+						class="size-4 shrink-0 text-muted-foreground opacity-60 transition-all duration-200
+					 group-hover/link:translate-x-1 group-hover/link:opacity-100 sm:opacity-0"
 					/>
 				</a>
 			{/each}

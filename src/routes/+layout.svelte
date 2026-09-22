@@ -10,6 +10,7 @@
 	import { Hamburger, Menu } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+	import AppPrompts from '$lib/components/AppPrompts.svelte';
 
 	let { data, children } = $props();
 
@@ -46,7 +47,7 @@
 			name: 'GOTERA',
 			legalName: 'GOTERA Foods Ltd',
 			url: 'https://gotera.co.uk',
-			logo: 'https://gotera.co.uk/logo192.jpg',
+			logo: 'https://gotera.co.uk/icon-512.png',
 			image: 'https://gotera.co.uk/og-image.jpg',
 			email: 'hello@gotera.co.uk',
 			description: m.home_meta_description(),
@@ -103,6 +104,8 @@
 <ProgressBar color="#bc3d00" zIndex={1000} />
 
 {#if !page.url.pathname.startsWith('/dashboard')}
+	<AppPrompts signedIn={!!data.user} />
+
 	<nav class="nav desktop-only">
 		<div class="container nav-inner">
 			<a href="/" class="logo">{m.layout_brand_logo()}</a>
@@ -134,7 +137,7 @@
 		<a
 			href="/"
 			class="nav-logo {nonWhiteBG && !isScrolled ? 'text-white!' : ''}"
-			aria-label={m.layout_hero_logo_aria()}>GOTERA</a
+			aria-label={m.layout_hero_logo_aria()}>{m.layout_brand_logo()}</a
 		>
 
 		<button
@@ -153,7 +156,7 @@
 
 	<div class="drawer" class:open={isDrawerOpen}>
 		<div class="drawer-head">
-			<span class="drawer-logo">GOTERA</span>
+			<span class="drawer-logo">{m.layout_brand_logo()}</span>
 
 			<button class="drawer-close" onclick={closeDrawer} aria-label={m.layout_menu_close_aria()}>
 				<svg viewBox="0 0 24 24">
@@ -164,7 +167,9 @@
 		</div>
 
 		<nav class="drawer-nav" aria-label={m.layout_drawer_nav_aria()}>
-			<a href="/subscribe" onclick={closeDrawer} class="drawer-link">{m.layout_drawer_subscribe()}</a>
+			<a href="/subscribe" onclick={closeDrawer} class="drawer-link"
+				>{m.layout_drawer_subscribe()}</a
+			>
 
 			<a href="/about" onclick={closeDrawer} class="drawer-link">{m.layout_drawer_about()}</a>
 
@@ -216,15 +221,15 @@
 
 			<div class="footer-bottom">
 				<span>{m.layout_footer_copyright({ year: new Date().getFullYear().toString() })}</span>
-				<span class="flex flex-row gap-2">{m.layout_footer_bottom_tagline()} <LanguageSelector /></span>
-				
+				<span class="flex flex-row gap-2"
+					>{m.layout_footer_bottom_tagline()} <LanguageSelector /></span
+				>
 			</div>
 		</div>
 	</footer>
 {:else}
 	{@render children()}
 {/if}
-
 
 <style>
 	:global(:root) {

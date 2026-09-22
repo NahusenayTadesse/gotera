@@ -1,0 +1,1 @@
+import"./B5ng10cP.js";import{ft as e}from"./B_reaiHn.js";var t=768,n=class extends e{constructor(e=t){super(`max-width: ${e-1}px`)}};export{n as t};

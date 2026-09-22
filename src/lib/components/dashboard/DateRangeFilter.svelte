@@ -19,7 +19,7 @@
 			bind:this={presetEl}
 			id="preset"
 			name="preset"
-			class="border-input h-9 rounded-md border bg-transparent px-3 text-sm capitalize"
+			class="border-input h-9 rounded-md border bg-transparent px-3 text-base capitalize md:text-sm"
 			onchange={(e) => e.currentTarget.form?.requestSubmit()}
 		>
 			{#each datePresets as p (p.value)}
