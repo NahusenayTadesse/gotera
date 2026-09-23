@@ -17,6 +17,13 @@
 		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-title" content="GOTERA" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+		<script>
+			// Chrome can fire this before the app hydrates; hold it for AppPrompts / InstallAppRow.
+			window.addEventListener('beforeinstallprompt', function (e) {
+				e.preventDefault();
+				window.__installPrompt = e;
+			});
+		</script>
 		%sveltekit.head%
 	</head>
 

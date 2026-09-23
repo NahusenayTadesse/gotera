@@ -54,6 +54,7 @@
 		function onBeforeInstallPrompt(e: Event) {
 			e.preventDefault();
 			install.prompt = e as BeforeInstallPromptEvent;
+			delete window.__installPrompt;
 			if (snoozed(INSTALL_KEY)) return;
 			timers.push(
 				setTimeout(
@@ -73,6 +74,8 @@
 		}
 
 		window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+		// Fired before hydration and caught by the inline script in app.html.
+		if (window.__installPrompt) onBeforeInstallPrompt(window.__installPrompt);
 		window.addEventListener('appinstalled', onAppInstalled);
 
 		// iOS Safari never fires beforeinstallprompt, so there all we can do is explain

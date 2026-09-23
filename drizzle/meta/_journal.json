@@ -127,6 +127,13 @@
       "when": 1788857826849,
       "tag": "0017_shocking_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1790110450006,
+      "tag": "0018_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

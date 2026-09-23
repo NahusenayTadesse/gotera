@@ -943,5 +943,6 @@
 	"account_tab_history": "History",
 	"account_tab_details": "Details",
 	"account_tab_plan": "Plan",
-	"account_tabs_aria": "Account sections"
+	"account_tabs_aria": "Account sections",
+	"app_install_menu_body": "Open your browser menu and choose “Install app” or “Add to Home screen”."
 }

@@ -53,8 +53,9 @@
 		:global(body:has(.account-tabbar)) {
 			padding-bottom: calc(60px + env(safe-area-inset-bottom));
 		}
+		/* !important: svelte-sonner sets this variable as an inline style. */
 		:global(body:has(.account-tabbar) [data-sonner-toaster]) {
-			--mobile-offset-bottom: calc(72px + env(safe-area-inset-bottom));
+			--mobile-offset-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
 		}
 	}
 

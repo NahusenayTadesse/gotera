@@ -2,14 +2,16 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { install, promptInstall } from '$lib/install.svelte';
 
-	let showIosHint = $state(false);
+	let showHint = $state(false);
 
-	// Only offered where installing is actually possible from here, and never once installed.
-	const available = $derived(!install.installed && (install.prompt !== null || install.ios));
+	// Offered everywhere until installed. Where the browser gave us a prompt it opens the
+	// real install dialog; elsewhere (iOS, Firefox, a dismissed Chrome prompt) it explains
+	// the manual step instead.
+	const available = $derived(!install.installed);
 
 	function onclick() {
 		if (install.prompt) promptInstall();
-		else showIosHint = !showIosHint;
+		else showHint = !showHint;
 	}
 </script>
 
@@ -18,7 +20,7 @@
 		<button
 			type="button"
 			class="install-row"
-			aria-expanded={install.prompt ? undefined : showIosHint}
+			aria-expanded={install.prompt ? undefined : showHint}
 			{onclick}
 		>
 			<svg
@@ -33,8 +35,10 @@
 			</svg>
 			{m.app_install_row()}
 		</button>
-		{#if showIosHint}
-			<p class="install-hint">{m.app_install_ios_body()}</p>
+		{#if showHint}
+			<p class="install-hint">
+				{install.ios ? m.app_install_ios_body() : m.app_install_menu_body()}
+			</p>
 		{/if}
 	</div>
 {/if}

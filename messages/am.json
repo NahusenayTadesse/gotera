@@ -943,5 +943,6 @@
 	"account_tab_history": "ታሪክ",
 	"account_tab_details": "መረጃ",
 	"account_tab_plan": "ዕቅድ",
-	"account_tabs_aria": "የመለያ ክፍሎች"
+	"account_tabs_aria": "የመለያ ክፍሎች",
+	"app_install_menu_body": "የአሳሽዎን ምናሌ ይክፈቱ፣ ከዚያ “Install app” ወይም “Add to Home screen” የሚለውን ይምረጡ።"
 }

@@ -11,6 +11,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 	import AppPrompts from '$lib/components/AppPrompts.svelte';
+	import InstallAppRow from '$lib/components/InstallAppRow.svelte';
+	import NotificationToggle from '$lib/components/NotificationToggle.svelte';
 
 	let { data, children } = $props();
 
@@ -179,6 +181,12 @@
 				>{data?.user ? m.layout_drawer_account() : m.layout_drawer_signin()}</a
 			>
 		</nav>
+
+		<!-- Same quiet rows as the account settings; each hides itself when it can't apply. -->
+		<div class="drawer-settings">
+			{#if data?.user}<NotificationToggle />{/if}
+			<InstallAppRow />
+		</div>
 
 		<div class="drawer-bottom">
 			<a href="/subscribe" onclick={closeDrawer} class="drawer-cta">{m.layout_drawer_cta()}</a>
@@ -475,6 +483,20 @@
 
 	.drawer-link:active {
 		color: var(--copper);
+	}
+
+	/* The rows are styled for the cream site; re-point their colour tokens for the
+	   dark drawer instead of forking the components. */
+	.drawer-settings {
+		--taupe: rgba(250, 248, 244, 0.55);
+		--ink: var(--cream);
+		--panel: rgba(255, 255, 255, 0.05);
+		--border: rgba(255, 255, 255, 0.18);
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 12px calc(var(--px) - 12px);
+		flex-shrink: 0;
 	}
 
 	.drawer-bottom {

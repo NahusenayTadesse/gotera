@@ -373,6 +373,14 @@
 		display: none;
 	}
 
+	/* Below 960px the root layout swaps to a fixed, out-of-flow header, so the page
+	   header has to clear it itself. */
+	@media (max-width: 960px) {
+		.page-header {
+			padding-top: calc(var(--nav-h) + 28px);
+		}
+	}
+
 	@media (max-width: 800px) {
 		/* The bottom tab bar takes over navigation; stack the layout. */
 		.layout {
@@ -393,7 +401,8 @@
 		/* Compact header: plan and payment details are already on the Overview page, so
 		   dropping them here gets the content on screen sooner. */
 		.page-header {
-			padding: 24px 0 20px;
+			padding-top: calc(var(--nav-h) + 20px);
+			padding-bottom: 20px;
 		}
 
 		.page-header-inner {
