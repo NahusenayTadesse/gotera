@@ -1,0 +1,1 @@
+import{n as e}from"./Bi76Sbi7.js";var t=()=>`Sorry, we only deliver within London. Please enter a London postcode.`,n=()=>`ይቅርታ፣ የምናደርሰው በለንደን ውስጥ ብቻ ነው። እባክዎ የለንደን ፖስትኮድ ያስገቡ።`,r=((r={},i={})=>(i.locale??e())===`am`?n(r):t(r));export{r as t};

@@ -1,5 +1,5 @@
 import { sequence } from '@sveltejs/kit/hooks';
-import { getTextDirection, cookieName, cookieMaxAge } from '$lib/paraglide/runtime';
+import { getTextDirection, cookieName, cookieMaxAge, deLocalizeUrl } from '$lib/paraglide/runtime';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { error, redirect, type Handle } from '@sveltejs/kit';
 import { building } from '$app/environment';
@@ -31,8 +31,19 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 // NOT run them before a form `action`, so gating admin access there alone leaves every
 // POST to a `?/action` on any /dashboard route reachable by anyone with a session (or
 // no session at all). Enforce the check here instead, where it covers actions too.
+//
+// Match on the route that was actually resolved, not the raw URL: `reroute` strips locale
+// prefixes, so `/am/dashboard/...` serves the dashboard while its pathname doesn't start
+// with `/dashboard`. The delocalized path is checked as well so an unmatched dashboard URL
+// (route id null) is still refused rather than falling through to a 404 page.
+function isDashboardRequest(event: { route: { id: string | null }; url: URL }) {
+	if (event.route.id === '/dashboard' || event.route.id?.startsWith('/dashboard/')) return true;
+	const path = deLocalizeUrl(event.url).pathname;
+	return path === '/dashboard' || path.startsWith('/dashboard/');
+}
+
 const handleDashboardGuard: Handle = async ({ event, resolve }) => {
-	if (event.url.pathname.startsWith('/dashboard')) {
+	if (isDashboardRequest(event)) {
 		if (!event.locals.user) {
 			return redirect(302, '/login');
 		}

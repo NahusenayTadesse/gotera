@@ -3,6 +3,7 @@ import type { LayoutServerLoad } from './$types';
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 
 import { db } from '$lib/server/db';
+import { subscriptionUnitPrice } from '$lib/server/plans';
 import {
 	subscribers,
 	subscriptions,
@@ -42,7 +43,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			planName: plans.name,
 			packs: plans.packs,
 			interval: plans.interval,
-			pricePence: plans.pricePence
+			pricePence: subscriptionUnitPrice
 		})
 		.from(subscriptions)
 		.innerJoin(plans, eq(plans.id, subscriptions.planId))

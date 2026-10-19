@@ -2,7 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { and, eq, asc, desc } from 'drizzle-orm';
-import { fail } from '@sveltejs/kit';
+import { fail, type RequestEvent } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import {
 	deliveries,
@@ -17,7 +17,8 @@ import {
 	subscriberAddons,
 	addons as addonsTable
 } from '$lib/server/db/schema';
-import { contentCrud } from '$lib/server/crud';
+import { contentCrud, idSchema } from '$lib/server/crud';
+import { deleteReleasingStock, syncDeliveryStock } from '$lib/server/stock';
 import { sendBulkEmailAction } from '$lib/server/bulkEmail';
 import { bulkEmailSchema } from '$lib/schemas/bulkEmail';
 import { parseJsonColumn } from '$lib/components/dashboard/format';
@@ -25,6 +26,15 @@ import { deliverySchema } from './schema';
 import { skipDateSchema, type AffectedRecipient, type SkipDateFormMessage } from './skipDateSchema';
 import { nextDeliveryDateAfter } from '$lib/server/deliverySchedule';
 import { fullDate } from '$lib/format';
+import { syncAfter, syncAllocations, traceSummaries, type ShipmentRef } from '$lib/server/traceability';
+
+/** Id of the row a superforms CRUD action just saved, if the save was valid. */
+function savedId(res: unknown): string | null {
+	const form =
+		(res as { form?: { valid?: boolean; data?: { id?: string } } })?.form ??
+		(res as { data?: { form?: { valid?: boolean; data?: { id?: string } } } })?.data?.form;
+	return form?.valid && form.data?.id ? form.data.id : null;
+}
 
 const crud = contentCrud({
 	table: deliveries,
@@ -130,11 +140,12 @@ export const load: PageServerLoad = async () => {
 		return {
 			id: r.id,
 			type: 'guest' as const,
-			scheduledDate: r.createdAt,
+			scheduledDate: r.deliveryDate ?? r.createdAt,
 			status: r.status,
 			subscriberEmail: r.buyerEmail,
 			subscriberName: r.buyerName || r.recipientName,
-			planName: 'Guest order',
+			// Quantity 0 = add-ons bought on their own from /addons, with no injera.
+			planName: r.quantity === 0 ? 'Add-ons only' : 'Guest order',
 			addressLine1: address.line1,
 			addressCity: address.city,
 			addressPostcode: address.postcode,
@@ -152,7 +163,7 @@ export const load: PageServerLoad = async () => {
 		return {
 			id: r.id,
 			type: 'one-time' as const,
-			scheduledDate: r.createdAt,
+			scheduledDate: r.deliveryDate ?? r.createdAt,
 			status: r.status,
 			subscriberEmail: r.buyerEmail,
 			subscriberName: r.buyerName || r.recipientName,
@@ -165,18 +176,70 @@ export const load: PageServerLoad = async () => {
 		};
 	});
 
-	const rows = [...subscriptionDeliveries, ...guestDeliveries, ...giftDeliveries].sort(
+	const merged = [...subscriptionDeliveries, ...guestDeliveries, ...giftDeliveries].sort(
 		(a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
 	);
+
+	// Batch traceability per row. The table calls gift orders 'one-time'.
+	const refOf = (r: (typeof merged)[number]): ShipmentRef => ({
+		type: r.type === 'one-time' ? 'gift' : r.type,
+		id: r.id
+	});
+	const traces = await traceSummaries(merged.map(refOf));
+	const TRACE_LABEL = { traced: 'Traced', partial: 'Partly traced', missing: 'No batch', none: 'Not shipping' };
+	const rows = merged.map((r) => {
+		const ref = refOf(r);
+		const t = traces.get(`${ref.type}:${ref.id}`) ?? { state: 'none' as const, batches: [] };
+		return {
+			...r,
+			traceType: ref.type,
+			trace: TRACE_LABEL[t.state],
+			traceState: t.state,
+			batches: t.batches
+		};
+	});
 
 	return { form, bulkEmailForm, skipDateForm, skipDates, rows, addonCatalogue };
 };
 
 // Deliveries are generated from a subscription's billing cycle; admins only edit/delete existing ones.
 export const actions: Actions = {
-	edit: crud.actions.edit,
-	delete: crud.actions.delete,
+	// Re-syncs batches after a save: dispatching assigns them, skipping releases them.
+	// Stock follows the same way: skipping/failing gives the units back, a new date moves them.
+	edit: syncAfter('subscription', async (event: RequestEvent) => {
+		const res = await crud.actions.edit(event);
+		const id = savedId(res);
+		if (id) {
+			try {
+				await syncDeliveryStock(id);
+			} catch (err) {
+				console.error('Stock sync after delivery edit failed:', err);
+			}
+		}
+		return res;
+	}),
+	delete: async (event: RequestEvent) => {
+		const form = await superValidate(event.request.clone(), zod4(idSchema));
+		if (!form.valid) return crud.actions.delete(event);
+		return deleteReleasingStock('delivery', form.data.id, () => crud.actions.delete(event));
+	},
 	sendBulkEmail: sendBulkEmailAction,
+
+	// Auto-assign (FEFO) batches for the selected rows.
+	assignBatches: async ({ request, locals }) => {
+		const f = await request.formData();
+		const refs = f
+			.getAll('refs')
+			.map(String)
+			.map((v) => {
+				const [type, id] = v.split(':');
+				return { type, id } as ShipmentRef;
+			})
+			.filter((r) => ['subscription', 'guest', 'gift', 'partner'].includes(r.type) && r.id)
+			.slice(0, 1000);
+		if (!refs.length) return fail(400, { error: 'Nothing selected' });
+		return { sync: await syncAllocations({ refs }, locals.user?.id) };
+	},
 
 	// Guest and one-time orders live in their own tables (edited on their own dashboard
 	// pages), but showing up in this merged list is what surfaced them for deletion here.
@@ -189,7 +252,9 @@ export const actions: Actions = {
 		}
 
 		const table = type === 'guest' ? guestOrders : giftOrders;
-		await db.delete(table).where(eq(table.id, id));
+		await deleteReleasingStock(type === 'guest' ? 'guest' : 'gift', id, () =>
+			db.delete(table).where(eq(table.id, id))
+		);
 		return { success: true };
 	},
 
@@ -224,6 +289,7 @@ export const actions: Actions = {
 
 		const affectedRows = await db
 			.select({
+				id: deliveries.id,
 				email: subscribers.email,
 				name: subscribers.fullName
 			})
@@ -243,6 +309,15 @@ export const actions: Actions = {
 			.update(deliveries)
 			.set({ scheduledDate: newDate })
 			.where(and(eq(deliveries.status, 'scheduled'), eq(deliveries.scheduledDate, skipDate)));
+
+		// Move each delivery's stock with it, off the skipped Saturday onto the new one.
+		for (const r of affectedRows) {
+			try {
+				await syncDeliveryStock(r.id);
+			} catch (err) {
+				console.error('Stock move after skip date failed:', err);
+			}
+		}
 
 		const seen = new Set<string>();
 		const affected: AffectedRecipient[] = [];

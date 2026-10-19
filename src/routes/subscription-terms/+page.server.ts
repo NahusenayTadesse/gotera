@@ -1,9 +1,11 @@
 import type { PageServerLoad } from './$types';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, inArray } from 'drizzle-orm';
 
 // Adjust to your project's paths.
 import { db } from '$lib/server/db';
 import { plans } from '$lib/server/db/schema';
+import { getLocale } from '$lib/paraglide/runtime';
+import { localizePlan, sellablePlan } from '$lib/server/plans';
 
 // The homepage curates a fixed set of cards (not "all plans"): the three
 // self plans plus a single gift teaser. Prices/existence/featured come from
@@ -19,17 +21,22 @@ const subscriptionPlans = await db
 		packs: plans.packs,
 		interval: plans.interval,
 		featured: plans.featured,
-		bullets: plans.bullets
+		bullets: plans.bullets,
+		freqLabel: plans.freqLabel,
+		injeraPerPack: plans.injeraPerPack,
+		translations: plans.translations
 	})
 	.from(plans)
-	.where(eq(plans.active, true))
+	.where(sellablePlan())
 	.orderBy(
 		asc(plans.sortOrder),
 		asc(plans.pricePence)
 	);
 
+   const locale = getLocale();
    const displayPlans = subscriptionPlans.map((plan) => ({
 	...plan,
+	...localizePlan(plan, Array.isArray(plan.bullets) ? plan.bullets : [], locale),
 	price: new Intl.NumberFormat('en-GB', {
 		style: 'currency',
 		currency: 'GBP'
@@ -42,7 +49,7 @@ const subscriptionPlans = await db
 				? '2 months'
 				: 'one-off',
 
-	contents: `${plan.packs} ${plan.packs === 1 ? 'pack' : 'packs'}`
+	contents: `${plan.packs} ${plan.packs === 1 ? 'pack' : 'packs'} (${plan.packs * plan.injeraPerPack} injera)`
 }));
 
 

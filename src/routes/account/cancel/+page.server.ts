@@ -6,6 +6,7 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import type Stripe from 'stripe';
 import { stripe } from '$lib/server/stripe';
 import { db } from '$lib/server/db';
+import { subscriptionUnitPrice } from '$lib/server/plans';
 import { subscribers, subscriptions, plans, addresses } from '$lib/server/db/schema';
 import { instantDate, money } from '$lib/format';
 import { sendSubscriptionCancelled, notifyAdminSubscriptionCancelled } from '$lib/server/email';
@@ -28,7 +29,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			addressId: subscriptions.addressId,
 			planName: plans.name,
 			planFreq: plans.freqLabel,
-			pricePence: plans.pricePence
+			pricePence: subscriptionUnitPrice
 		})
 		.from(subscriptions)
 		.innerJoin(plans, eq(subscriptions.planId, plans.id))

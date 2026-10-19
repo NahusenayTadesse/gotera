@@ -103,6 +103,13 @@ export const notifyAdminGiftOrder = (data: {
 	return sendEmail(SMTP_USER, subject, html);
 };
 
+export const notifyAdminPartnerApplication = (
+	data: Parameters<typeof t.adminPartnerApplication>[0]
+) => {
+	const { subject, html } = t.adminPartnerApplication(data);
+	return sendEmail(SMTP_USER, subject, html);
+};
+
 export const notifyAdminPaymentFailed = (data: { name: string; email: string }) => {
 	const { subject, html } = t.adminPaymentFailed(data);
 	return sendEmail(SMTP_USER, subject, html);

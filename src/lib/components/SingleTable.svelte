@@ -4,9 +4,9 @@
 	import Statuses from './Table/statuses.svelte';
 	// import JSPDF from "$lib/JSPDF.svelte"
 
-	type SingleTable = { name: string; value: string };
+	type Row = { name: string; value: string | number | null | undefined };
 
-	let { singleTable }: { singleTable: SingleTable } = $props();
+	let { singleTable }: { singleTable: Row[] } = $props();
 </script>
 
 <!--
@@ -31,9 +31,9 @@
 					<td class="px-4 py-3 font-semibold">{value.name}</td>
 					<td class="break-words capitalize">
 						{#if value.name === 'Phone'}
-							<Copy data={value.value} />
+							<Copy data={String(value.value ?? '')} />
 						{:else if value.name === 'Status'}
-							<Statuses status={value.value} />
+							<Statuses status={String(value.value ?? '')} />
 						{:else}
 							{value.value}
 						{/if}</td

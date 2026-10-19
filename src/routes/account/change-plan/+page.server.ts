@@ -6,6 +6,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/mysql-core';
 
 import { db } from '$lib/server/db';
+import { sellablePlan, subscriptionUnitPrice } from '$lib/server/plans';
 import { addresses, plans, subscribers, subscriptions } from '$lib/server/db/schema';
 import { instantDate, money } from '$lib/format';
 import { sendPlanChanged, notifyAdminPlanChanged } from '$lib/server/email';
@@ -33,7 +34,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			planId: subscriptions.planId,
 			planName: plans.name,
 			planKind: plans.kind,
-			pricePence: plans.pricePence,
+			pricePence: subscriptionUnitPrice,
 			freqLabel: plans.freqLabel,
 			sortOrder: plans.sortOrder,
 			addressLabel: addresses.label,
@@ -83,7 +84,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			featured: plans.featured
 		})
 		.from(plans)
-		.where(and(eq(plans.active, true), eq(plans.kind, 'subscription')))
+		.where(and(sellablePlan(), eq(plans.kind, 'subscription')))
 		.orderBy(asc(plans.sortOrder));
 
 	const planOptions = catalogue.map((p) => ({
@@ -187,7 +188,7 @@ export const actions: Actions = {
 			})
 			.from(plans)
 			.where(
-				and(eq(plans.id, form.data.planId), eq(plans.active, true), eq(plans.kind, 'subscription'))
+				and(eq(plans.id, form.data.planId), sellablePlan(), eq(plans.kind, 'subscription'))
 			);
 
 		if (!target) {

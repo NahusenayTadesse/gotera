@@ -25,7 +25,15 @@ const SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 const SERIF = "Georgia, 'Times New Roman', serif";
 
 /** Shared shell: copper header + logo, white body, panel footer. */
-function layout({ heading, body, preheader = '' }: { heading: string; body: string; preheader?: string }) {
+function layout({
+	heading,
+	body,
+	preheader = ''
+}: {
+	heading: string;
+	body: string;
+	preheader?: string;
+}) {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,7 +95,33 @@ function esc(s: string) {
 		.replace(/&/g, '&amp;')
 		.replace(/</g, '&lt;')
 		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;');
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+type Escaped<T> = T extends string
+	? string
+	: T extends readonly (infer U)[]
+		? Escaped<U>[]
+		: T extends object
+			? { [K in keyof T]: Escaped<T[K]> }
+			: T;
+
+/**
+ * HTML-escaped copy of a template's data: every string, including inside arrays.
+ *
+ * Names, addresses and messages come from public checkout forms and Stripe, so they're
+ * untrusted — without this a buyer could put markup (say, a fake "approve refund" link)
+ * into the admin's inbox. Templates build their HTML from this copy and their plain-text
+ * subject line from the raw data, where escaping would show up as literal `&amp;`.
+ */
+function escAll<T>(value: T): Escaped<T> {
+	if (typeof value === 'string') return esc(value) as Escaped<T>;
+	if (Array.isArray(value)) return value.map(escAll) as Escaped<T>;
+	if (value && typeof value === 'object') {
+		return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, escAll(v)])) as Escaped<T>;
+	}
+	return value as Escaped<T>;
 }
 
 /** Detail rows for confirmation / admin emails. */
@@ -133,17 +167,19 @@ export const customerVerifyEmail = (url: string) => ({
 	})
 });
 
-export const customerSubscriptionConfirmed = (data: {
+export const customerSubscriptionConfirmed = (raw: {
 	name: string;
 	planName: string;
 	amountLabel: string;
 	nextDeliveryLabel: string;
-}) => ({
-	subject: 'Your GOTERA subscription is live',
-	html: layout({
-		heading: 'Subscription Confirmed',
-		preheader: `Your ${data.planName} plan is active. First delivery on ${data.nextDeliveryLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: 'Your GOTERA subscription is live',
+		html: layout({
+			heading: 'Subscription Confirmed',
+			preheader: `Your ${data.planName} plan is active. First delivery on ${data.nextDeliveryLabel}.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Your subscription is live — real injera, made in Ethiopia, on its way to your door.</p>
 			${detailTable(
@@ -154,21 +190,24 @@ export const customerSubscriptionConfirmed = (data: {
 			${button('View your account', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Pause, skip, or change your plan any time from your account.</p>
 		`
-	})
-});
+		})
+	};
+};
 
-export const customerUpcomingDelivery = (data: {
+export const customerUpcomingDelivery = (raw: {
 	name: string;
 	deliveryLabel: string;
 	cutoffLabel: string;
 	address: string;
 	addonsUrl?: string;
-}) => ({
-	subject: `Your injera arrives ${data.deliveryLabel}`,
-	html: layout({
-		heading: 'Delivery on the way',
-		preheader: `Next delivery ${data.deliveryLabel}. Changes before ${data.cutoffLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Your injera arrives ${raw.deliveryLabel}`,
+		html: layout({
+			heading: 'Delivery on the way',
+			preheader: `Next delivery ${data.deliveryLabel}. Changes before ${data.cutoffLabel}.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Your next GOTERA delivery is scheduled.</p>
 			${detailTable(
@@ -185,44 +224,50 @@ export const customerUpcomingDelivery = (data: {
 					: ''
 			}
 		`
-	})
-});
+		})
+	};
+};
 
 /**
  * Sent when the Saturday a customer would normally have got was already at capacity, so
  * their first delivery is the one after. Names both dates explicitly — the useful fact is
  * *when it will arrive*, not that something was full.
  */
-export const customerDeliveryRolled = (data: {
+export const customerDeliveryRolled = (raw: {
 	name: string;
 	originalLabel: string;
 	deliveryLabel: string;
-}) => ({
-	subject: `Your first delivery is ${data.deliveryLabel}`,
-	html: layout({
-		heading: 'Your delivery date',
-		preheader: `We'll deliver on ${data.deliveryLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Your first delivery is ${raw.deliveryLabel}`,
+		html: layout({
+			heading: 'Your delivery date',
+			preheader: `We'll deliver on ${data.deliveryLabel}.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Thanks for your order! Our ${data.originalLabel} run is fully booked, so we've scheduled you for the next one:</p>
 			${detailTable(detailRow('Delivery date', data.deliveryLabel))}
 			<p style="margin:14px 0 6px;">Nothing for you to do — we'll email you again a couple of days before it arrives.</p>
 		`
-	})
-});
+		})
+	};
+};
 
 /** Low-stock warning to the shop owner (SMTP_USER), not to a customer. */
-export const adminStockLow = (data: {
+export const adminStockLow = (raw: {
 	itemLabel: string;
 	deliveryLabel: string;
 	remaining: number;
 	capacity: number;
-}) => ({
-	subject: `Low stock: ${data.itemLabel} for ${data.deliveryLabel}`,
-	html: layout({
-		heading: 'Stock running low',
-		preheader: `${data.remaining} left of ${data.capacity} for ${data.deliveryLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Low stock: ${raw.itemLabel} for ${raw.deliveryLabel}`,
+		html: layout({
+			heading: 'Stock running low',
+			preheader: `${data.remaining} left of ${data.capacity} for ${data.deliveryLabel}.`,
+			body: `
 			<p style="margin:0 0 6px;">Stock is running low for an upcoming delivery date:</p>
 			${detailTable(
 				detailRow('Item', data.itemLabel) +
@@ -232,54 +277,63 @@ export const adminStockLow = (data: {
 			<p style="margin:14px 0 6px;">Once it hits zero, new orders roll to the following Saturday automatically.</p>
 			${button('Manage stock', `${SITE}/dashboard/stock`)}
 		`
-	})
-});
+		})
+	};
+};
 
-export const customerAddonsAdded = (data: {
+export const customerAddonsAdded = (raw: {
 	name: string;
 	deliveryLabel: string;
 	amountLabel: string;
 	addonLines: string[];
-}) => ({
-	subject: `Added to your ${data.deliveryLabel} delivery`,
-	html: layout({
-		heading: 'Extras added',
-		preheader: `${data.addonLines.join(', ')} — added to your next delivery.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Added to your ${raw.deliveryLabel} delivery`,
+		html: layout({
+			heading: 'Extras added',
+			preheader: `${data.addonLines.join(', ')} — added to your next delivery.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Thanks — we've added the following to your delivery on ${data.deliveryLabel}:</p>
 			${detailTable(data.addonLines.map((line) => detailRow('', line)).join('') + detailRow('Charged', data.amountLabel))}
 		`
-	})
-});
+		})
+	};
+};
 
-export const customerPaymentFailed = (data: { name: string }) => ({
-	subject: 'Payment issue with your GOTERA subscription',
-	html: layout({
-		heading: 'Payment didn\u2019t go through',
-		preheader: 'Update your payment method to keep your injera coming.',
-		body: `
+export const customerPaymentFailed = (raw: { name: string }) => {
+	const data = escAll(raw);
+	return {
+		subject: 'Payment issue with your GOTERA subscription',
+		html: layout({
+			heading: 'Payment didn\u2019t go through',
+			preheader: 'Update your payment method to keep your injera coming.',
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 14px;">We couldn't process the payment for your subscription. To avoid a gap in your deliveries, please update your payment method.</p>
 			${button('Update payment', `${SITE}/account/payment`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">We'll try again automatically over the next few days.</p>
 		`
-	})
-});
+		})
+	};
+};
 
 /* ─────────────────────────── ADMIN TEMPLATES ─────────────────────────── */
 
-export const adminNewSubscriber = (data: {
+export const adminNewSubscriber = (raw: {
 	name: string;
 	email: string;
 	planName: string;
 	amountLabel: string;
-}) => ({
-	subject: `New subscriber: ${data.name}`,
-	html: layout({
-		heading: 'New subscriber',
-		preheader: `${data.name} started the ${data.planName} plan.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `New subscriber: ${raw.name}`,
+		html: layout({
+			heading: 'New subscriber',
+			preheader: `${data.name} started the ${data.planName} plan.`,
+			body: `
 			<p style="margin:0 0 6px;">A new subscription just went live.</p>
 			${detailTable(
 				detailRow('Name', data.name) +
@@ -289,20 +343,63 @@ export const adminNewSubscriber = (data: {
 			)}
 			${button('Open admin', `${SITE}/admin`)}
 		`
-	})
-});
+		})
+	};
+};
 
-export const adminGiftOrder = (data: {
+export const adminPartnerApplication = (data: {
+	id: string;
+	type: 'partner' | 'supplier';
+	businessName: string;
+	contactName: string;
+	email: string;
+	phone?: string | null;
+	website?: string | null;
+	city?: string | null;
+	postcode?: string | null;
+	category: string;
+	message: string;
+}) => {
+	const kind = data.type === 'supplier' ? 'supplier' : 'partner';
+	return {
+		subject: `New ${kind} application: ${data.businessName}`,
+		html: layout({
+			heading: `New ${kind} application`,
+			preheader: `${esc(data.businessName)} wants to work with GOTERA.`,
+			body: `
+			${detailTable(
+				detailRow('Type', kind === 'supplier' ? 'Supplier' : 'Partner') +
+					detailRow('Business', esc(data.businessName)) +
+					detailRow('Contact', esc(data.contactName)) +
+					detailRow('Email', esc(data.email)) +
+					(data.phone ? detailRow('Phone', esc(data.phone)) : '') +
+					(data.website ? detailRow('Website', esc(data.website)) : '') +
+					(data.city || data.postcode
+						? detailRow('Location', esc([data.city, data.postcode].filter(Boolean).join(', ')))
+						: '') +
+					detailRow('Category', esc(data.category))
+			)}
+			<p style="margin:14px 0 6px; color:${C.taupe}; font-size:13px;">Message</p>
+			<p style="margin:0; white-space:pre-line;">${esc(data.message)}</p>
+			${button('Review application', `${SITE}/dashboard/partners/${data.id}`)}
+		`
+		})
+	};
+};
+
+export const adminGiftOrder = (raw: {
 	buyerName: string;
 	buyerEmail: string;
 	recipientName: string;
 	amountLabel: string;
-}) => ({
-	subject: `New gift order for ${data.recipientName}`,
-	html: layout({
-		heading: 'New gift order',
-		preheader: `${data.buyerName} sent a gift to ${data.recipientName}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `New gift order for ${raw.recipientName}`,
+		html: layout({
+			heading: 'New gift order',
+			preheader: `${data.buyerName} sent a gift to ${data.recipientName}.`,
+			body: `
 			${detailTable(
 				detailRow('From', `${data.buyerName} (${data.buyerEmail})`) +
 					detailRow('To', data.recipientName) +
@@ -310,21 +407,24 @@ export const adminGiftOrder = (data: {
 			)}
 			${button('Open admin', `${SITE}/admin`)}
 		`
-	})
-});
+		})
+	};
+};
 
-export const adminPaymentFailed = (data: { name: string; email: string }) => ({
-	subject: `Payment failed: ${data.email}`,
-	html: layout({
-		heading: 'Payment failed',
-		preheader: `A subscription payment failed for ${data.email}.`,
-		body: `
+export const adminPaymentFailed = (raw: { name: string; email: string }) => {
+	const data = escAll(raw);
+	return {
+		subject: `Payment failed: ${raw.email}`,
+		html: layout({
+			heading: 'Payment failed',
+			preheader: `A subscription payment failed for ${data.email}.`,
+			body: `
 			<p style="margin:0 0 6px;">A recurring payment failed — Stripe will retry, but worth keeping an eye on.</p>
 			${detailTable(detailRow('Name', data.name) + detailRow('Email', data.email))}
 		`
-	})
-});
-
+		})
+	};
+};
 
 export const customerMagicLink = (url: string) => ({
 	subject: 'Your GOTERA sign-in link',
@@ -354,20 +454,20 @@ export const customerChangeEmail = (url: string) => ({
 	})
 });
 
-
-
-export const customerOrderConfirmed = (data: {
+export const customerOrderConfirmed = (raw: {
 	name: string;
 	amountLabel: string;
 	deliveryLabel: string;
 	addressLines: string[];
 	addonNames?: string[];
-}) => ({
-	subject: 'Your GOTERA order is confirmed',
-	html: layout({
-		heading: 'Order confirmed',
-		preheader: `Your injera is booked in for ${data.deliveryLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: 'Your GOTERA order is confirmed',
+		html: layout({
+			heading: 'Order confirmed',
+			preheader: `Your injera is booked in for ${data.deliveryLabel}.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Thank you — your payment has gone through and your order is confirmed. This is a one-time order: there's no subscription, and nothing will renew.</p>
 			${detailTable(
@@ -384,20 +484,23 @@ export const customerOrderConfirmed = (data: {
 			${button('View your order', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Address wrong? Reply to this email and we'll fix it before dispatch.</p>
 		`
-	})
-});
+		})
+	};
+};
 
 /** Sent to the person who BOUGHT the gift, confirming it's booked in. */
-export const customerGiftReceived = (data: {
+export const customerGiftReceived = (raw: {
 	buyerName: string;
 	recipientName: string;
 	amountLabel: string;
-}) => ({
-	subject: `Your gift for ${data.recipientName} is confirmed`,
-	html: layout({
-		heading: 'Gift confirmed',
-		preheader: `Your injera gift for ${data.recipientName} is booked in.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Your gift for ${raw.recipientName} is confirmed`,
+		html: layout({
+			heading: 'Gift confirmed',
+			preheader: `Your injera gift for ${data.recipientName} is booked in.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.buyerName},</p>
 			<p style="margin:0 0 6px;">Thank you — your payment has gone through and the gift is booked in. We'll deliver it to ${data.recipientName} on our next Saturday run.</p>
 			${detailTable(
@@ -409,8 +512,9 @@ export const customerGiftReceived = (data: {
 			${button('View your order', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Wrong address or spelling? Reply to this email and we'll fix it before dispatch.</p>
 		`
-	})
-});
+		})
+	};
+};
 
 /** SMTP health check — no customer ever sees this. */
 export const adminTest = () => ({
@@ -427,18 +531,20 @@ export const adminTest = () => ({
 
 /* ──────────────────── PLAN CHANGE / CANCELLATION ──────────────────── */
 
-export const customerPlanChanged = (data: {
+export const customerPlanChanged = (raw: {
 	name: string;
 	fromPlanName: string;
 	toPlanName: string;
 	toPlanPriceLabel: string;
 	effectiveLabel: string;
-}) => ({
-	subject: `Your plan changes to ${data.toPlanName} on ${data.effectiveLabel}`,
-	html: layout({
-		heading: 'Plan change scheduled',
-		preheader: `${data.fromPlanName} → ${data.toPlanName}, from ${data.effectiveLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Your plan changes to ${raw.toPlanName} on ${raw.effectiveLabel}`,
+		html: layout({
+			heading: 'Plan change scheduled',
+			preheader: `${data.fromPlanName} → ${data.toPlanName}, from ${data.effectiveLabel}.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Your plan change is booked in. Nothing changes on this billing period — the new plan starts at your next renewal, so you're not charged or refunded mid-cycle.</p>
 			${detailTable(
@@ -451,22 +557,25 @@ export const customerPlanChanged = (data: {
 			${button('View your account', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Changed your mind? You can switch back from your account before ${data.effectiveLabel}.</p>
 		`
-	})
-});
+		})
+	};
+};
 
-export const adminPlanChanged = (data: {
+export const adminPlanChanged = (raw: {
 	name: string;
 	email: string;
 	fromPlanName: string;
 	toPlanName: string;
 	toPlanPriceLabel: string;
 	effectiveLabel: string;
-}) => ({
-	subject: `Plan change: ${data.name} → ${data.toPlanName}`,
-	html: layout({
-		heading: 'Plan change',
-		preheader: `${data.name} switched ${data.fromPlanName} → ${data.toPlanName}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Plan change: ${raw.name} → ${raw.toPlanName}`,
+		html: layout({
+			heading: 'Plan change',
+			preheader: `${data.name} switched ${data.fromPlanName} → ${data.toPlanName}.`,
+			body: `
 			<p style="margin:0 0 6px;">A subscriber scheduled a plan change.</p>
 			${detailTable(
 				detailRow('Customer', data.name) +
@@ -478,22 +587,25 @@ export const adminPlanChanged = (data: {
 			)}
 			${button('Open admin', `${SITE}/admin`)}
 		`
-	})
-});
+		})
+	};
+};
 
-export const customerSubscriptionCancelled = (data: {
+export const customerSubscriptionCancelled = (raw: {
 	name: string;
 	planName: string;
 	/** Last day of the paid period, or null when the plan stopped immediately. */
 	endsLabel: string | null;
-}) => ({
-	subject: 'Your GOTERA subscription has been cancelled',
-	html: layout({
-		heading: 'Subscription cancelled',
-		preheader: data.endsLabel
-			? `Your ${data.planName} plan runs until ${data.endsLabel}.`
-			: `Your ${data.planName} plan has been cancelled.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: 'Your GOTERA subscription has been cancelled',
+		html: layout({
+			heading: 'Subscription cancelled',
+			preheader: data.endsLabel
+				? `Your ${data.planName} plan runs until ${data.endsLabel}.`
+				: `Your ${data.planName} plan has been cancelled.`,
+			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">${
 				data.endsLabel
@@ -514,40 +626,44 @@ export const customerSubscriptionCancelled = (data: {
 				data.endsLabel ? ` before ${data.endsLabel}` : ''
 			} and we'll put it back.</p>
 		`
-	})
-});
+		})
+	};
+};
 
-export const adminSubscriptionCancelled = (data: {
+export const adminSubscriptionCancelled = (raw: {
 	name: string;
 	email: string;
 	planName: string;
 	endsLabel: string | null;
 	reason?: string | null;
 	feedback?: string | null;
-}) => ({
-	subject: `Cancellation: ${data.name} (${data.planName})`,
-	html: layout({
-		heading: 'Subscription cancelled',
-		preheader: `${data.name} cancelled the ${data.planName} plan.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `Cancellation: ${raw.name} (${raw.planName})`,
+		html: layout({
+			heading: 'Subscription cancelled',
+			preheader: `${data.name} cancelled the ${data.planName} plan.`,
+			body: `
 			<p style="margin:0 0 6px;">A subscriber cancelled.</p>
 			${detailTable(
 				detailRow('Customer', data.name) +
 					detailRow('Email', data.email) +
 					detailRow('Plan', data.planName) +
 					detailRow('Ends', data.endsLabel ?? 'Immediately (no paid period)') +
-					(data.reason ? detailRow('Reason', esc(data.reason)) : '')
+					(data.reason ? detailRow('Reason', data.reason) : '')
 			)}
 			${
 				data.feedback
 					? `<p style="margin:0 0 6px; color:${C.taupe}; font-size:13px;">Feedback:</p>
-			<p style="margin:0 0 14px; padding:12px 14px; background:${C.panel}; color:${C.body}; font-size:14px; line-height:1.6;">${esc(data.feedback)}</p>`
+			<p style="margin:0 0 14px; padding:12px 14px; background:${C.panel}; color:${C.body}; font-size:14px; line-height:1.6;">${data.feedback}</p>`
 					: ''
 			}
 			${button('Open admin', `${SITE}/admin`)}
 		`
-	})
-});
+		})
+	};
+};
 
 /* ──────────────────── BULK / MARKETING EMAIL ──────────────────── */
 
@@ -555,7 +671,7 @@ export const adminSubscriptionCancelled = (data: {
 export const customerBulkEmail = (data: { subject: string; bodyHtml: string }) => ({
 	subject: data.subject,
 	html: layout({
-		heading: data.subject,
+		heading: esc(data.subject),
 		preheader: data.bodyHtml
 			.replace(/<[^>]*>/g, ' ')
 			.replace(/\s+/g, ' ')
@@ -565,19 +681,21 @@ export const customerBulkEmail = (data: { subject: string; bodyHtml: string }) =
 	})
 });
 
-export const adminNewOrder = (data: {
+export const adminNewOrder = (raw: {
 	buyerName: string;
 	buyerEmail: string;
 	amountLabel: string;
 	deliveryLabel: string;
 	addressLines: string[];
 	addonNames?: string[];
-}) => ({
-	subject: `New one-off order — ${data.buyerName} (${data.amountLabel})`,
-	html: layout({
-		heading: 'New one-off order',
-		preheader: `${data.buyerName} ordered ${data.amountLabel} for ${data.deliveryLabel}.`,
-		body: `
+}) => {
+	const data = escAll(raw);
+	return {
+		subject: `New one-off order — ${raw.buyerName} (${raw.amountLabel})`,
+		html: layout({
+			heading: 'New one-off order',
+			preheader: `${data.buyerName} ordered ${data.amountLabel} for ${data.deliveryLabel}.`,
+			body: `
 			<p style="margin:0 0 14px;">A one-off order has been paid.</p>
 			${detailTable(
 				detailRow('Customer', data.buyerName) +
@@ -593,5 +711,6 @@ export const adminNewOrder = (data: {
 			</p>
 			${button('Open admin', `${SITE}/admin`)}
 		`
-	})
-});
+		})
+	};
+};

@@ -17,7 +17,7 @@
 
 <div class="dashboard-theme bg-background text-foreground">
 	<Sidebar.Provider>
-		<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
+		<AppSidebar />
 		<main class="min-w-0 flex-1 px-4">
 			<!--
 				Sticky on every size. It used to be `absolute` below `lg`, which meant the

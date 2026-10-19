@@ -115,6 +115,7 @@
 			<div class="nav-links">
 				<a href="/">{m.layout_nav_home()}</a>
 				<a href="/subscribe">{m.layout_nav_subscribe()}</a>
+				<a href="/addons">{m.layout_nav_addons()}</a>
 				<a href="/about">{m.layout_nav_about()}</a>
 			</div>
 
@@ -173,6 +174,7 @@
 				>{m.layout_drawer_subscribe()}</a
 			>
 
+			<a href="/addons" onclick={closeDrawer} class="drawer-link">{m.layout_nav_addons()}</a>
 			<a href="/about" onclick={closeDrawer} class="drawer-link">{m.layout_drawer_about()}</a>
 
 			<a href="/faq" onclick={closeDrawer} class="drawer-link">{m.layout_drawer_faq()}</a>
@@ -209,8 +211,10 @@
 					<div class="footer-links">
 						<a href="/">{m.layout_footer_home()}</a>
 						<a href="/subscribe">{m.layout_footer_subscribe()}</a>
+						<a href="/addons">{m.layout_nav_addons()}</a>
 						<a href="/about">{m.layout_footer_about()}</a>
 						<a href="/account">{m.layout_footer_account()}</a>
+						<a href="/partners" class="footer-partner">{m.layout_footer_partners()}</a>
 					</div>
 				</div>
 
@@ -610,6 +614,11 @@
 
 	.footer-links a:hover {
 		color: var(--ink);
+	}
+
+	.footer-links .footer-partner {
+		color: var(--copper);
+		font-weight: 500;
 	}
 
 	.footer-bottom {

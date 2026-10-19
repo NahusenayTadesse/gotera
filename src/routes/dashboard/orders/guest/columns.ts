@@ -53,7 +53,9 @@ export const columns = [
 		accessorKey: 'quantity',
 		header: ({ column }) =>
 			renderComponent(DataTableSort, { name: 'Qty', onclick: column.getToggleSortingHandler() }),
-		sortable: true
+		sortable: true,
+		// 0 packs of injera = an add-ons-only order from /addons.
+		cell: (info) => (info.getValue() === 0 ? 'Add-ons only' : info.getValue())
 	},
 	{
 		accessorKey: 'status',

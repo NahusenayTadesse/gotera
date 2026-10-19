@@ -34,6 +34,7 @@
 	let { data }: { data: PageData } = $props();
 
 	import { PostcodeLookup } from '$lib/postcode.svelte';
+	import { MAX_PLAN_QTY } from './limits';
 	const { form, errors, enhance, submitting, capture, restore } = superForm(data.form, {
 		dataType: 'json',
 		resetForm: false,
@@ -52,9 +53,9 @@
 	 * address blocks (mobile/desktop × me/gift) because only one is ever mounted and
 	 * filled at a time — they are the same address, rendered for different viewports.
 	 *
-	 * It only ever *adds* information: suggestions in a datalist and coordinates on the
-	 * form. It never sets an error or blocks the submit, so a customer whose postcode we
-	 * cannot resolve orders exactly as they do today.
+	 * It only ever *adds* information: suggestions in a datalist, coordinates on the form
+	 * and an early "outside London" warning. It never blocks the submit itself — the
+	 * London-only rule is enforced by the server actions.
 	 */
 	const postcode = new PostcodeLookup((match) => {
 		$form.latitude = match?.latitude;
@@ -74,9 +75,16 @@
 	);
 	const hasAddons = $derived((data?.addons?.length ?? 0) > 0);
 
+	// The plan a recipient starts on: the featured one, else Regular, else the first —
+	// whatever the catalogue holds, since plans are managed in the dashboard.
+	function defaultPlanFor(who: 'me' | 'gift') {
+		const list = who === 'me' ? subscriptionPlans : giftPlans;
+		return (list.find((p) => p.featured) ?? list.find((p) => p.id === 'regular') ?? list[0])?.id ?? '';
+	}
+
 	function selectRecipient(who: 'me' | 'gift') {
 		$form.recipient = who;
-		$form.plan = who === 'me' ? 'regular' : 'single-gift';
+		$form.plan = defaultPlanFor(who);
 	}
 
 	// If only one mode exists, auto-select it so the flow has a valid recipient/plan
@@ -151,9 +159,17 @@
 	// ── Quantity stepper (orders only) ──
 	// Writes back to $form.quantity, which qty derives from — keeps the stepper
 	// and every total in sync.
+	// A plan can cap its own quantity (dashboard "Max quantity"), within the global cap.
+	const maxQty = $derived(Math.min(currentPlanDetails?.maxQuantity ?? MAX_PLAN_QTY, MAX_PLAN_QTY));
+
 	function setQty(n: number) {
-		$form.quantity = Math.max(1, Math.floor(n) || 1);
+		$form.quantity = Math.min(maxQty, Math.max(1, Math.floor(n) || 1));
 	}
+
+	// Switching to a plan with a lower cap pulls the quantity down to it.
+	$effect(() => {
+		if (qty > maxQty) $form.quantity = maxQty;
+	});
 	function incQty() {
 		setQty(qty + 1);
 	}
@@ -561,7 +577,7 @@
 									>{/if}
 								<div class="plan-sel-card__name" class:pad={p.featured}>
 									<h3>{p.name}</h3>
-									<p>{p.freq}</p>
+									{#if !isOneOffPlan(p)}<p>{p.freq}</p>{/if}
 								</div>
 								<div class="plan-sel-card__price" class:pad={p.featured}>
 									<span class="plan-sel-card__price-num"
@@ -591,7 +607,13 @@
 									class:added={selected}
 									onclick={() => toggleAddon(addon.id)}
 								>
-									<div class="extra-card__img">{addon.name}</div>
+									<div class="extra-card__img">
+										{#if addon.image}
+											<img src={addon.image} alt={addon.name} loading="lazy" />
+										{:else}
+											{addon.name}
+										{/if}
+									</div>
 									<div class="extra-card__body">
 										<span class="extra-card__name">{addon.name}</span>
 										{#if addon.description}<span class="extra-card__desc">{addon.description}</span
@@ -707,7 +729,11 @@
 									/>
 								</div>
 							</div>
+							<span class="sub-field-note">{m.subscribe_note_london_delivery()}</span>
 							{#if $errors.postcode}<span class="sub-error">{$errors.postcode}</span>{/if}
+							{#if postcode.outsideLondon && !$errors.postcode}<span class="sub-error"
+									>{m.subscribe_error_outside_london()}</span
+								>{/if}
 						</div>
 						<div class="sub-field">
 							<label for="m-giftMessage"
@@ -784,6 +810,9 @@
 							</div>
 							<span class="sub-field-note">{m.subscribe_note_london_saturday()}</span>
 							{#if $errors.postcode}<span class="sub-error">{$errors.postcode}</span>{/if}
+							{#if postcode.outsideLondon && !$errors.postcode}<span class="sub-error"
+									>{m.subscribe_error_outside_london()}</span
+								>{/if}
 						</div>
 						<label class="opt-in-m">
 							<input type="checkbox" bind:checked={$form.marketingOptIn} />
@@ -810,6 +839,7 @@
 									type="button"
 									class="qty-btn qty-btn--plus"
 									onclick={incQty}
+									disabled={qty >= maxQty}
 									aria-label={m.subscribe_aria_increase_qty()}>+</button
 								>
 							</div>
@@ -1007,11 +1037,9 @@
 										<div class="price">£{plan.price.toFixed(plan.price % 1 === 0 ? 0 : 2)}</div>
 										<div class="freq">{plan.freq}</div>
 										<ul>
-											{#if plan.bullet && plan.bullet.trim() !== ''}
-												{#each JSON.parse(plan.bullet) as item}
-													<li>{item}</li>
-												{/each}
-											{/if}
+											{#each plan.bullet as item, i (i)}
+												<li>{item}</li>
+											{/each}
 										</ul>
 									</button>
 								{/each}
@@ -1072,10 +1100,14 @@
 											onclick={() => toggleAddon(item.id)}
 										>
 											<div class="addon-img">
-												<span class="ph-label"
-													>{item.name} · {m.subscribe_addon_photo_suffix()}</span
-												>
-												<span class="ph-sub">{m.subscribe_addon_photo_style()}</span>
+												{#if item.image}
+													<img src={item.image} alt={item.name} loading="lazy" />
+												{:else}
+													<span class="ph-label"
+														>{item.name} · {m.subscribe_addon_photo_suffix()}</span
+													>
+													<span class="ph-sub">{m.subscribe_addon_photo_style()}</span>
+												{/if}
 											</div>
 											<div class="addon-top">
 												<div>
@@ -1212,7 +1244,11 @@
 										list={postcode.listId}
 										oninput={(e) => postcode.search(e.currentTarget.value)}
 									/>
+									<div class="field-help">{m.subscribe_note_london_delivery()}</div>
 									{#if $errors.postcode}<span class="form-error">{$errors.postcode}</span>{/if}
+									{#if postcode.outsideLondon && !$errors.postcode}<span class="form-error"
+											>{m.subscribe_error_outside_london()}</span
+										>{/if}
 								</div>
 								<div class="field full">
 									<label class="field-label" for="giftMessage"
@@ -1300,7 +1336,11 @@
 										list={postcode.listId}
 										oninput={(e) => postcode.search(e.currentTarget.value)}
 									/>
+									<div class="field-help">{m.subscribe_note_london_delivery()}</div>
 									{#if $errors.postcode}<span class="form-error">{$errors.postcode}</span>{/if}
+									{#if postcode.outsideLondon && !$errors.postcode}<span class="form-error"
+											>{m.subscribe_error_outside_london()}</span
+										>{/if}
 								</div>
 								<label class="opt-in full">
 									<input type="checkbox" bind:checked={$form.marketingOptIn} />
@@ -1342,6 +1382,7 @@
 								type="button"
 								class="qty-btn qty-btn--plus"
 								onclick={incQty}
+								disabled={qty >= maxQty}
 								aria-label={m.subscribe_aria_increase_qty()}>+</button
 							>
 						</div>
@@ -1474,8 +1515,10 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
-		padding-bottom: 12px;
-		min-height: 150px;
+		padding-bottom: 4px;
+		/* Keeps the header from jumping between steps, but no taller than the
+		   two-line plan name needs — extra height here showed as a dark gap. */
+		min-height: 120px;
 	}
 	.sub-plan-eyebrow {
 		font-family: 'Jost', sans-serif;
@@ -1842,6 +1885,19 @@
 		color: #7a746e;
 		text-align: center;
 		padding: 8px;
+	}
+	.extra-card__img,
+	.addon-img {
+		position: relative;
+		overflow: hidden;
+	}
+	.extra-card__img img,
+	.addon-img img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 	.extra-card__body {
 		padding: 10px 10px 12px;
@@ -2633,6 +2689,95 @@
 		}
 		.desktop-view {
 			display: block !important;
+		}
+	}
+
+	/* ═══════════ MOBILE CHECKOUT TYPE SCALE ═══════════
+	   The mobile wizard's small print (labels, descriptions, totals) ran at 0.6–0.8rem,
+	   which reads cramped on a phone. Bumped here, scoped to the mobile view, so the
+	   desktop checkout keeps its own sizes. Inputs stay at 16px (iOS zooms below that). */
+	@media (max-width: 920px) {
+		.mobile-view .sub-plan-eyebrow {
+			font-size: 0.7rem;
+		}
+		.mobile-view .sub-plan-price {
+			font-size: 0.95rem;
+		}
+		.mobile-view .sub-back {
+			font-size: 0.74rem;
+		}
+		.mobile-view .sub-card__sub {
+			font-size: 0.85rem;
+		}
+		.mobile-view .sub-cta__btn {
+			font-size: 0.88rem;
+		}
+		.mobile-view .plan-sel-card__badge {
+			font-size: 0.66rem;
+		}
+		.mobile-view .plan-sel-card__name h3 {
+			font-size: 1.28rem;
+		}
+		.mobile-view .plan-sel-card__name p {
+			font-size: 0.85rem;
+		}
+		.mobile-view .plan-sel-card__price-freq {
+			font-size: 0.78rem;
+		}
+		.mobile-view .who-card__text h3 {
+			font-size: 1.22rem;
+		}
+		.mobile-view .who-card__text p {
+			font-size: 0.85rem;
+		}
+		.mobile-view .who-card__price span {
+			font-size: 0.74rem;
+		}
+		.mobile-view .extra-qty {
+			font-size: 0.86rem;
+		}
+		.mobile-view .extra-card__name {
+			font-size: 1.02rem;
+		}
+		.mobile-view .extra-card__desc {
+			font-size: 0.75rem;
+		}
+		.mobile-view .extra-card__price {
+			font-size: 0.84rem;
+		}
+		.mobile-view .extra-card__btn {
+			font-size: 0.74rem;
+		}
+		.mobile-view .sub-field label {
+			font-size: 0.72rem;
+		}
+		.mobile-view .sub-field-note {
+			font-size: 0.78rem;
+		}
+		.mobile-view .sub-section-label {
+			font-size: 0.7rem;
+		}
+		.mobile-view .opt-in-m {
+			font-size: 0.88rem;
+		}
+		.mobile-view .pay-row,
+		.mobile-view .pay-total {
+			font-size: 0.9rem;
+		}
+		.mobile-view .secure-note {
+			font-size: 0.78rem;
+		}
+		.mobile-view .terms-note {
+			font-size: 0.76rem;
+		}
+		.mobile-view .sub-error {
+			font-size: 0.86rem;
+		}
+		.mobile-view .skip-link {
+			font-size: 0.84rem;
+		}
+		.mobile-view .qty-value {
+			font-size: 1.02rem;
 		}
 	}
 

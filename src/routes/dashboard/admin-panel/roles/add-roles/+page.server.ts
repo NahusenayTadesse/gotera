@@ -3,7 +3,7 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 
 import { createRoleSchema as schema } from './schema';
 import { db } from '$lib/server/db';
-import { rolePermissions, roles } from '$lib/server/db/schema';
+import { roles } from '$lib/server/db/schema';
 import type { PageServerLoad, Actions } from './$types.js';
 
 export const load: PageServerLoad = async () => {
@@ -22,7 +22,7 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: 'Please check the form for Errors' });
 		}
 
-		const { name, description, permissions } = form.data;
+		const { name, description } = form.data;
 
 		try {
 			await db.insert(roles).values({ name, description });
@@ -35,16 +35,14 @@ export const actions: Actions = {
 			// );
 
 			return message(form, { type: 'success', text: 'Role added successfully.' });
-		} catch (err: any) {
-			if (err.code === 'ER_DUP_ENTRY') return setError(form, 'name', 'Role Name already exists.');
-
-			return message(form, {
-				type: 'error',
-				text:
-					err.code === 'ER_DUP_ENTRY'
-						? 'Role Name is already taken. Please choose another one.'
-						: err.message
-			});
+		} catch (err) {
+			// drizzle may wrap the driver error, so check its cause too.
+			const e = err as { code?: string; cause?: { code?: string } };
+			if (e.code === 'ER_DUP_ENTRY' || e.cause?.code === 'ER_DUP_ENTRY') {
+				return setError(form, 'name', 'Role Name already exists.');
+			}
+			console.error('Error adding role:', err);
+			return message(form, { type: 'error', text: 'Could not add the role. Please try again.' }, { status: 500 });
 		}
 	}
 } satisfies Actions;

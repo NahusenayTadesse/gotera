@@ -6,6 +6,8 @@ import { z } from 'zod/v4';
 
 // Adjust to your project's paths.
 import { db } from '$lib/server/db';
+import { subscriptionUnitPrice } from '$lib/server/plans';
+import { sellableWithInjera } from '$lib/server/addonCatalogue';
 import {
 	subscribers,
 	subscriptions,
@@ -20,6 +22,7 @@ import { auth } from '$lib/server/auth';
 import { stripe } from '$lib/server/stripe';
 import { fullDate, instantDate } from '$lib/format';
 import { cutoffDateFor, isPastCutoff } from '$lib/delivery';
+import { syncDeliveryStock } from '$lib/server/stock';
 
 const intervalLabel = (i: string) =>
 	i === 'monthly' ? 'monthly' : i === 'bi_monthly' ? 'bi-monthly' : 'one-time';
@@ -90,7 +93,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
 			pendingPlanAt: subscriptions.pendingPlanAt,
 			planName: plans.name,
-			pricePence: plans.pricePence,
+			pricePence: subscriptionUnitPrice,
 			packs: plans.packs,
 			interval: plans.interval,
 			addressLine1: addresses.line1,
@@ -207,7 +210,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const catalogue = await db
 		.select()
 		.from(addonsTable)
-		.where(eq(addonsTable.isActive, true))
+		.where(sellableWithInjera())
 		.orderBy(addonsTable.sortOrder);
 
 	// In-app notices (e.g. "your delivery moved because that Saturday was full"). Only
@@ -261,6 +264,13 @@ export const actions: Actions = {
 					eq(deliveries.status, 'scheduled')
 				)
 			);
+
+		// Free its slot so the Saturday doesn't stay "full" for other customers.
+		try {
+			await syncDeliveryStock(delivery.id);
+		} catch (e) {
+			console.error('stock release after skip failed', e);
+		}
 
 		return { message: 'Delivery skipped.' };
 	},
@@ -357,7 +367,7 @@ export const actions: Actions = {
 		const catalogue = await db
 			.select()
 			.from(addonsTable)
-			.where(eq(addonsTable.isActive, true));
+			.where(sellableWithInjera());
 
 		const items: { id: string; name: string; pricePence: number; quantity: number }[] = [];
 		for (const addon of catalogue) {

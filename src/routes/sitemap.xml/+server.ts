@@ -5,7 +5,9 @@ import type { RequestHandler } from './$types';
 const routes: { path: string; changefreq: string; priority: string }[] = [
 	{ path: '/', changefreq: 'weekly', priority: '1.0' },
 	{ path: '/subscribe', changefreq: 'weekly', priority: '0.9' },
+	{ path: '/addons', changefreq: 'weekly', priority: '0.8' },
 	{ path: '/about', changefreq: 'monthly', priority: '0.7' },
+	{ path: '/partners', changefreq: 'monthly', priority: '0.5' },
 	{ path: '/faq', changefreq: 'monthly', priority: '0.6' },
 	{ path: '/delivery', changefreq: 'monthly', priority: '0.6' },
 	{ path: '/allergens', changefreq: 'monthly', priority: '0.5' },

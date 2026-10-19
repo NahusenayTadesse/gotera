@@ -57,6 +57,7 @@ export const columns = [
 	{
 		accessorKey: 'actions',
 		header: 'Actions',
+		// "Delete" archives the plan (see the delete action) — subscribers keep their plan.
 		cell: ({ row }) => renderComponent(RowActions, { id: row.original.id, label: 'plan' })
 	}
 ];

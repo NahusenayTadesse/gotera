@@ -82,7 +82,9 @@ export const actions: Actions = {
 				form,
 				{
 					type: 'error',
-					text: 'Registration Failed' + error?.message
+					// Anything that isn't a Better Auth APIError is a driver/SQL failure: logged
+					// above, never echoed back.
+					text: 'Registration failed. Please try again.'
 				},
 				{
 					status: 500

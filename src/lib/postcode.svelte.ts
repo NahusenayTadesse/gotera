@@ -14,7 +14,8 @@
  * Geocoding must never block an order. Every failure path here — offline, 500, unknown
  * postcode, slow response — ends in "no suggestions, no coordinates" and the customer
  * carries on typing their address exactly as before. Nothing in here sets a form error,
- * disables a control, or gates a submit.
+ * disables a control, or gates a submit. (The London-only rule is enforced server-side by
+ * `isLondonPostcode`; `outsideLondon` below is just an early heads-up.)
  *
  * Usage:
  *   const pc = new PostcodeLookup((c) => { $form.latitude = c?.latitude ?? undefined; … });
@@ -29,6 +30,7 @@ export type PostcodeMatch = {
 	latitude: number;
 	longitude: number;
 	district: string | null;
+	region: string | null;
 };
 
 /** Keystrokes settle before we call out; ~250ms is below the threshold of feeling laggy. */
@@ -49,6 +51,12 @@ export class PostcodeLookup {
 	suggestions = $state<string[]>([]);
 	/** The resolved centroid, or null. Exposed so a page can show a quiet confirmation. */
 	match = $state<PostcodeMatch | null>(null);
+	/**
+	 * True once the postcode resolves to somewhere outside London, so the page can warn
+	 * before submit. Advisory only — the server makes the real call, and an unresolved
+	 * postcode is never flagged here.
+	 */
+	outsideLondon = $derived(!!this.match?.region && this.match.region !== 'London');
 
 	/** Unique per instance so several address blocks on one page don't share a datalist. */
 	readonly listId = `pc-list-${nextId++}`;

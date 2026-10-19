@@ -8,36 +8,50 @@ import { stripe } from '$lib/server/stripe';
 import { loginSchema, addUser } from '$lib/ZodSchema';
 // Adjust these to your project's paths.
 import { db } from '$lib/server/db';
-import { lookupPostcode } from '$lib/server/geocode';
+import { sellableWithInjera } from '$lib/server/addonCatalogue';
+import { isLondonPostcode, lookupPostcode } from '$lib/server/geocode';
+import { parseJsonColumn } from '$lib/components/dashboard/format';
+import { addonImageSrc } from '$lib/addons';
 import {
 	subscribers,
 	subscriptions,
-	subscriberAddons as subscriptionAddons,
 	addresses,
 	giftOrders,
 	addons as addonsTable,
 	plans,
 	guestOrders
 } from '$lib/server/db/schema';
-import {
-	checkoutSchema,
-	updateSubscriptionSchema,
-	cancelSubscriptionSchema,
-	type FormMessage,
-	ALL_PLANS
-} from './schema';
+import { checkoutSchema, type FormMessage } from './schema';
+import { getLocale } from '$lib/paraglide/runtime';
+import { localizePlan, normaliseSlug, sellablePlan } from '$lib/server/plans';
+import { MAX_PLAN_QTY } from './limits';
 
 type PlanRow = typeof plans.$inferSelect;
 type AddonRow = typeof addonsTable.$inferSelect;
 
 async function resolveAddons(ids: string[]) {
+	// Deduplicate first: a repeated id is still one add-on, and comparing a deduped
+	// catalogue match against a raw count would report a bogus "no longer exists".
+	ids = [...new Set(ids)];
 	if (ids.length === 0) return { rows: [] as AddonRow[], pence: 0, unknown: false };
 	// Only active add-ons are sellable, so a deactivated id is treated exactly like an
 	// unknown one: it fails the `unknown` check below and the customer gets a validation
 	// error, rather than paying for something that's been pulled from the catalogue.
-	const catalogue = await db.select().from(addonsTable).where(eq(addonsTable.isActive, true));
+	const catalogue = await db.select().from(addonsTable).where(sellableWithInjera());
 	const rows = catalogue.filter((a) => ids.includes(a.id));
 	return { rows, pence: rows.reduce((sum, a) => sum + a.pricePence, 0), unknown: rows.length !== ids.length };
+}
+
+/** `id:qty,id:qty` (as built by the /addons basket) -> clamped, de-duplicated pairs. */
+function parseAddonMetadataParam(raw: string | null): { id: string; quantity: number }[] {
+	if (!raw) return [];
+	const seen = new Map<string, number>();
+	for (const part of raw.split(',').slice(0, 50)) {
+		const [id, qty] = part.split(':');
+		if (!id?.trim()) continue;
+		seen.set(id.trim(), qtyOf({ [id.trim()]: Number(qty ?? 1) }, id.trim()));
+	}
+	return [...seen].map(([id, quantity]) => ({ id, quantity }));
 }
 
 /** Plan cadence -> the Stripe `recurring` shape an add-on line item has to match. */
@@ -100,8 +114,10 @@ function addonMetadata(rows: AddonRow[], quantities: Record<string, number> = {}
 }
 
 /** Ensure a subscriber (the person) row exists; return its id + stripe customer. */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 async function ensureSubscriber(
-	tx: typeof db,
+	tx: Tx,
 	user: { id: string; email: string; name?: string | null },
 	marketingOptIn: boolean
 ) {
@@ -146,6 +162,8 @@ async function oneTimeCheckout(opts: {
 		giftMessage: opts.giftMessage,
 		durationMonths: opts.durationMonths,
 		quantity: opts.quantity,
+		planId: opts.plan.id,
+		unitPricePence: opts.plan.pricePence,
 		status: 'pending'
 	});
 	const session = await stripe.checkout.sessions.create({
@@ -188,6 +206,8 @@ async function guestCheckout(opts: {
 		recipientName: opts.recipientName,
 		addressId: opts.addressId,
 		quantity: opts.quantity,
+		planId: opts.plan.id,
+		unitPricePence: opts.plan.pricePence,
 		recipientAddress: opts.recipientAddress,
 		status: 'pending'
 	});
@@ -227,43 +247,87 @@ async function coordsFor(data: { latitude?: number; longitude?: number; postcode
 	return hit ? { latitude: hit.latitude, longitude: hit.longitude, geocodedAt: new Date() } : {};
 }
 
-const toPlan = (p: PlanRow) => ({
-	id: p.slug,
-	name: p.name,
-	sub: p.subtitle ?? '',
-	price: p.pricePence / 100,
-	freq: p.freqLabel ?? '',
-	bullet: p.bullets,
-	kind: p.kind,
-	interval: p.interval,
-	featured: p.featured
-});
+/**
+ * `plans.bullets` as a string array, whatever shape the row holds.
+ *
+ * It's a JSON column, so mysql2 normally returns it parsed — but rows saved through some
+ * older paths hold a JSON *string* of the array instead. Normalising here means the page
+ * only ever sees `string[]`.
+ */
+function bulletsOf(value: unknown): string[] {
+	let parsed = parseJsonColumn<unknown>(value, []);
+	if (typeof parsed === 'string') parsed = parseJsonColumn<unknown>(parsed, []);
+	return Array.isArray(parsed) ? parsed.filter((b): b is string => typeof b === 'string') : [];
+}
+
+const toPlan = (p: PlanRow, locale: string) => {
+	const text = localizePlan(p, bulletsOf(p.bullets), locale);
+	return {
+		id: p.slug,
+		name: text.name,
+		sub: text.subtitle,
+		price: p.pricePence / 100,
+		freq: text.freqLabel,
+		bullet: text.bullets,
+		kind: p.kind,
+		interval: p.interval,
+		featured: p.featured,
+		packs: p.packs,
+		injeraPerPack: p.injeraPerPack,
+		maxQuantity: maxQuantityFor(p)
+	};
+};
+
+/** Most of this plan one checkout may buy: the plan's own cap, within the global one. */
+const maxQuantityFor = (p: PlanRow) => Math.min(p.maxQuantity ?? MAX_PLAN_QTY, MAX_PLAN_QTY);
+
+/** The live, on-sale plan behind a submitted slug — or nothing. */
+async function sellablePlanBySlug(slug: string) {
+	const [plan] = await db
+		.select()
+		.from(plans)
+		.where(and(eq(plans.slug, normaliseSlug(slug)), sellablePlan()));
+	return plan;
+}
 
 export const load: PageServerLoad = async ({ url }) => {
 	const catalogue = await db
 		.select()
 		.from(addonsTable)
-		.where(eq(addonsTable.isActive, true))
+		.where(sellableWithInjera())
 		.orderBy(asc(addonsTable.sortOrder));
 	const loginForm = await superValidate(zod4(loginSchema));
 	const signupForm = await superValidate(zod4(addUser));
 
-	const rows = await db.select().from(plans).where(eq(plans.active, true)).orderBy(asc(plans.sortOrder));
-	const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map(toPlan);
-	const giftPlans = rows.filter((p) => p.kind === 'gift').map(toPlan);
+	const locale = getLocale();
+	const rows = await db.select().from(plans).where(sellablePlan()).orderBy(asc(plans.sortOrder));
+	const subscriptionPlans = rows.filter((p) => p.kind !== 'gift').map((p) => toPlan(p, locale));
+	const giftPlans = rows.filter((p) => p.kind === 'gift').map((p) => toPlan(p, locale));
 
-	// ?plan=<slug> from the homepage cards. Must be (a) a real active plan and
-	// (b) known to the zod enum, or superValidate would reject the default.
-	const requested = url.searchParams.get('plan');
-	const match =
-		requested && (ALL_PLANS as readonly string[]).includes(requested)
-			? rows.find((p) => p.slug === requested)
-			: undefined;
+	// ?plan=<slug> from the homepage cards — only honoured for a plan on sale right now.
+	const requested = normaliseSlug(url.searchParams.get('plan'));
+	const match = requested ? rows.find((p) => p.slug === requested) : undefined;
 
-	const recipient = match ? (match.kind === 'gift' ? 'gift' : 'me') : undefined;
+	const recipient = match ? (match.kind === 'gift' ? ('gift' as const) : ('me' as const)) : undefined;
+
+	// ?addons=<id>:<qty>,… from the /addons shop's "Add to an injera order". Anything not
+	// in the with-injera catalogue is dropped silently: the customer still lands on a
+	// working checkout, just without the item that can't ride along.
+	const preselectedAddons = parseAddonMetadataParam(url.searchParams.get('addons')).filter((a) =>
+		catalogue.some((c) => c.id === a.id)
+	);
+	const initial = {
+		...(match ? { plan: match.slug, recipient } : {}),
+		...(preselectedAddons.length
+			? {
+					addonIds: preselectedAddons.map((a) => a.id),
+					addonQuantities: Object.fromEntries(preselectedAddons.map((a) => [a.id, a.quantity]))
+				}
+			: {})
+	};
 
 	const form = await superValidate(
-		match ? { plan: match.slug as PlanSlug, recipient } : undefined,
+		Object.keys(initial).length ? initial : undefined,
 		zod4(checkoutSchema),
 		// Don't surface "postcode is required" before they've typed anything.
 		{ errors: false }
@@ -273,7 +337,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		form,
 		subscriptionPlans,
 		giftPlans,
-		addons: catalogue,
+		addons: catalogue.map((a) => ({ ...a, image: addonImageSrc(a.imageUrl) })),
 		loginForm,
 		signupForm,
 		preselected: match ? { slug: match.slug, recipient: recipient! } : null
@@ -293,20 +357,26 @@ export const actions: Actions = {
 		if (!user) {
 			return message(form, { type: 'error', text: m.subscribe_error_sign_in_to_order() } satisfies FormMessage, { status: 401 });
 		}
+		if (!(await isLondonPostcode(form.data.postcode))) {
+			return setError(form, 'postcode', m.subscribe_error_outside_london());
+		}
 
-		const [plan] = await db
-			.select()
-			.from(plans)
-			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
-		if (!plan || (plan.kind !== 'subscription' && plan.kind !== 'order')) {
+		const plan = await sellablePlanBySlug(form.data.plan);
+		if (!plan) {
 			return message(form, { type: 'error', text: m.subscribe_error_plan_unavailable() } satisfies FormMessage, { status: 400 });
+		}
+		if (plan.kind !== 'subscription' && plan.kind !== 'order') {
+			return setError(form, 'plan', m.subscribe_error_choose_subscription_plan());
+		}
+		if ((form.data.quantity ?? 1) > maxQuantityFor(plan)) {
+			return setError(form, 'quantity', `At most ${maxQuantityFor(plan)} per order for this plan.`);
 		}
 		if (!plan.stripePriceId) {
 			return message(form, { type: 'error', text: m.subscribe_error_plan_no_price() } satisfies FormMessage, { status: 500 });
 		}
 
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
-		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
+		if (unknown) return setError(form, 'addonIds._errors', 'One of the selected add-ons no longer exists.');
 
 		const recipientAddress = {
 			line1: form.data.line1,
@@ -353,7 +423,7 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx) => {
-				const sub = await ensureSubscriber(tx as typeof db, user, form.data.marketingOptIn);
+				const sub = await ensureSubscriber(tx, user, form.data.marketingOptIn);
 				subscriberId = sub.id;
 				stripeCustomerId = sub.stripeCustomerId;
 
@@ -361,7 +431,6 @@ export const actions: Actions = {
 				addressId = crypto.randomUUID();
 				await tx.insert(addresses).values({
 					id: addressId,
-					phone: form.data.phone,
 					subscriberId,
 					label: form.data.addressLabel || null,
 					...recipientAddress,
@@ -422,11 +491,14 @@ export const actions: Actions = {
 		if (form.data.recipient !== 'gift') {
 			return message(form, { type: 'error', text: m.subscribe_error_wrong_flow_gift() } satisfies FormMessage, { status: 400 });
 		}
-		const [plan] = await db
-			.select()
-			.from(plans)
-			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
-		if (!plan || plan.kind !== 'gift') return setError(form, 'plan', 'Choose a gift pack.');
+		if (!(await isLondonPostcode(form.data.postcode))) {
+			return setError(form, 'postcode', m.subscribe_error_outside_london());
+		}
+		const plan = await sellablePlanBySlug(form.data.plan);
+		if (!plan || plan.kind !== 'gift') return setError(form, 'plan', m.subscribe_error_choose_gift_pack());
+		if (form.data.quantity > maxQuantityFor(plan)) {
+			return setError(form, 'quantity', `At most ${maxQuantityFor(plan)} per order for this plan.`);
+		}
 		if (!plan.stripePriceId) {
 			return message(form, { type: 'error', text: m.subscribe_error_gift_no_price() } satisfies FormMessage, { status: 500 });
 		}
@@ -435,7 +507,7 @@ export const actions: Actions = {
 		if (!buyerEmail) return setError(form, 'buyerEmail', 'Enter your email so we can send the confirmation.');
 
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
-		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
+		if (unknown) return setError(form, 'addonIds._errors', 'One of the selected add-ons no longer exists.');
 
 		let checkoutUrl: string;
 		try {
@@ -443,6 +515,7 @@ export const actions: Actions = {
 				plan,
 				addons: chosenAddons,
 				addonQuantities: form.data.addonQuantities,
+				quantity: form.data.quantity,
 				buyerEmail,
 				buyerName: form.data.buyerName || locals.user?.name || null,
 				recipientName: form.data.recipientName,
@@ -464,76 +537,33 @@ export const actions: Actions = {
 		redirect(303, checkoutUrl);
 	},
 
-	/* UPDATE — change add-ons on one subscription (plan swap handled elsewhere). */
-	updateSubscription: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(updateSubscriptionSchema));
-		if (!form.valid) return fail(400, { form });
-		const user = locals.user;
-		if (!user) return fail(401, { form });
-
-		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
-		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
-
-		try {
-			await db.transaction(async (tx) => {
-				// Verify this subscription belongs to the user (join through subscribers).
-				const [owned] = await tx
-					.select({ id: subscriptions.id })
-					.from(subscriptions)
-					.innerJoin(subscribers, eq(subscriptions.subscriberId, subscribers.id))
-					.where(and(eq(subscriptions.id, form.data.subscriptionId), eq(subscribers.userId, user.id)));
-				if (!owned) throw new Error('not found or not owned');
-
-				await tx.delete(subscriptionAddons).where(eq(subscriptionAddons.subscriptionId, owned.id));
-				if (chosenAddons.length) {
-					await tx.insert(subscriptionAddons).values(
-						chosenAddons.map((a) => ({ subscriptionId: owned.id, addonId: a.id, quantity: 1 }))
-					);
-				}
-			});
-		} catch (e) {
-			console.error('updateSubscription failed', e);
-			return message(form, { type: 'error', text: m.subscribe_error_update_failed() } satisfies FormMessage, { status: 400 });
-		}
-
-		return message(form, { type: 'success', text: m.subscribe_success_updated() } satisfies FormMessage);
-	},
-
-	/* CANCEL — one subscription at period end. */
-	cancelSubscription: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(cancelSubscriptionSchema));
-		if (!form.valid) return fail(400, { form });
-		const user = locals.user;
-		if (!user) return fail(401, { form });
-
-		const [owned] = await db
-			.select({ id: subscriptions.id, stripeSubscriptionId: subscriptions.stripeSubscriptionId })
-			.from(subscriptions)
-			.innerJoin(subscribers, eq(subscriptions.subscriberId, subscribers.id))
-			.where(and(eq(subscriptions.id, form.data.subscriptionId), eq(subscribers.userId, user.id)));
-		if (!owned) {
-			return message(form, { type: 'error', text: m.subscribe_error_not_found() } satisfies FormMessage, { status: 404 });
-		}
-
-		try {
-			if (owned.stripeSubscriptionId) {
-				await stripe.subscriptions.update(owned.stripeSubscriptionId, { cancel_at_period_end: true });
-				await db.update(subscriptions).set({ cancelAtPeriodEnd: true }).where(eq(subscriptions.id, owned.id));
-			} else {
-				await db.update(subscriptions).set({ status: 'cancelled' }).where(eq(subscriptions.id, owned.id));
-			}
-		} catch (e) {
-			console.error('cancelSubscription failed', e);
-			return message(form, { type: 'error', text: m.subscribe_error_cancel_failed() } satisfies FormMessage, { status: 400 });
-		}
-
-		return message(form, { type: 'success', text: m.subscribe_success_cancelled() } satisfies FormMessage);
-	},
+	/* GUEST ORDER — a one-off with no account; Stripe collects the buyer's email/name. */
 	guestOrder: async ({ request, url }) => {
-	const form = await superValidate(request, zod4(checkoutSchema));
-	if (!form.valid) return fail(400, { form });
+		const form = await superValidate(request, zod4(checkoutSchema));
+		if (!form.valid) return fail(400, { form });
+		if (form.data.recipient !== 'me') {
+			return message(form, { type: 'error', text: m.subscribe_error_wrong_flow_order() } satisfies FormMessage, { status: 400 });
+		}
+		if (!(await isLondonPostcode(form.data.postcode))) {
+			return setError(form, 'postcode', m.subscribe_error_outside_london());
+		}
+
+		// Everything is validated before anything is written, so a rejected attempt doesn't
+		// leave an orphan address (name, phone, postcode) behind.
+		const plan = await sellablePlanBySlug(form.data.plan);
+		if (!plan || plan.kind !== 'order') {
+			return message(form, { type: 'error', text: m.subscribe_error_guest_order_not_allowed() } satisfies FormMessage, { status: 400 });
+		}
+		if (form.data.quantity > maxQuantityFor(plan)) {
+			return setError(form, 'quantity', `At most ${maxQuantityFor(plan)} per order for this plan.`);
+		}
+		if (!plan.stripePriceId) {
+			return message(form, { type: 'error', text: m.subscribe_error_plan_no_price() } satisfies FormMessage, { status: 500 });
+		}
+
 		const { rows: chosenAddons, unknown } = await resolveAddons(form.data.addonIds);
-		if (unknown) return setError(form, 'addonIds', 'One of the selected add-ons no longer exists.');
+		if (unknown) return setError(form, 'addonIds._errors', 'One of the selected add-ons no longer exists.');
+
 		const recipientAddress = {
 			line1: form.data.line1,
 			line2: form.data.line2 || null,
@@ -545,55 +575,35 @@ export const actions: Actions = {
 		// address as JSON on the order instead, and the route planner geocodes those from
 		// their postcode when it builds the run (cached, so it costs one lookup each).
 		const coords = await coordsFor(form.data);
-      
-     let addressId = '';
-	addressId = crypto.randomUUID();
-				await db.insert(addresses).values({
-					id: addressId,
-					label: form.data.addressLabel || null,
-					...recipientAddress,
-					...coords,
-					isPrimary: false
-				});
 
-		const [plan] = await db
-			.select()
-			.from(plans)
-			.where(and(eq(plans.slug, form.data.plan), eq(plans.active, true)));
-		if (!plan || plan.kind !== 'order') {
-			   return message(form, { type:"error", text: m.subscribe_error_guest_order_not_allowed()}, { status: 400 })
-		}
-		
+		const addressId = crypto.randomUUID();
+		await db.insert(addresses).values({
+			id: addressId,
+			label: form.data.addressLabel || null,
+			...recipientAddress,
+			...coords,
+			isPrimary: false
+		});
 
-	const { recipientName } = form.data;
-
-	let checkoutUrl: string;
+		let checkoutUrl: string;
 		try {
 			checkoutUrl = await guestCheckout({
 				plan,
-				quantity: form.data.quantity, 
+				quantity: form.data.quantity,
 				addons: chosenAddons,
 				addonQuantities: form.data.addonQuantities,
-				recipientName: recipientName,
+				recipientName: form.data.recipientName,
 				buyerEmail: form.data.buyerEmail ?? null,
 				buyerName: form.data.buyerName ?? null,
 				addressId,
-				recipientAddress: {
-					line1: form.data.line1,
-					line2: form.data.line2 || null,
-					phone: form.data.phone,
-					city: form.data.city || 'London',
-					postcode: form.data.postcode
-				},
+				recipientAddress: { ...recipientAddress, phone: recipientAddress.phone || null },
 				successUrl: `${url.origin}/?checkout=gift-success`,
 				cancelUrl: `${url.origin}/subscribe`
 			});
 		} catch (e) {
-			console.error('one-off checkout failed', e);
+			console.error('guest checkout failed', e);
 			return message(form, { type: 'error', text: m.subscribe_error_checkout_failed() } satisfies FormMessage, { status: 500 });
 		}
 		redirect(303, checkoutUrl);
 	}
-	
-
 };

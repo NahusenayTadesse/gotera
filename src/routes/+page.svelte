@@ -3,6 +3,7 @@
 import type { PageData } from './$types';
 	import Origin from '$lib/origin.svelte';
 	import Final from '$lib/final.svelte';
+	import PartnersCta from '$lib/components/partners-cta.svelte';
 	import Testimonial from '$lib/testimonial.svelte';
 	import Truth from '$lib/Truth.svelte';
 	import Carousel from '$lib/components/carousel/carousel.svelte';
@@ -211,7 +212,7 @@ import type { PageData } from './$types';
 		</div>
 		<div class="proof-divider"></div>
 		<div class="proof-stat">
-			<span class="proof-stat-num">47</span>
+			<span class="proof-stat-num">300</span>
 			<span class="proof-stat-label">{m.home_proof_label_deliveries()}</span>
 		</div>
 		<div class="proof-divider"></div>
@@ -430,6 +431,7 @@ import type { PageData } from './$types';
 
 <Origin />
 <Final />
+<PartnersCta />
 
 <style>
 	:global(:root) {

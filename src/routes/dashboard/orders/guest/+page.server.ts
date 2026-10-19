@@ -2,9 +2,12 @@ import type { PageServerLoad, Actions } from './$types';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { desc } from 'drizzle-orm';
+import { syncAfter } from '$lib/server/traceability';
 import { db } from '$lib/server/db';
 import { guestOrders } from '$lib/server/db/schema';
-import { contentCrud } from '$lib/server/crud';
+import { contentCrud, idSchema } from '$lib/server/crud';
+import { deleteReleasingStock } from '$lib/server/stock';
+import type { RequestEvent } from '@sveltejs/kit';
 import { parseJsonColumn } from '$lib/components/dashboard/format';
 import { sendBulkEmailAction } from '$lib/server/bulkEmail';
 import { bulkEmailSchema } from '$lib/schemas/bulkEmail';
@@ -40,7 +43,12 @@ export const load: PageServerLoad = async () => {
 
 // Orders are created by the guest checkout flow; admins only edit/delete existing ones.
 export const actions: Actions = {
-	edit: crud.actions.edit,
-	delete: crud.actions.delete,
+	edit: syncAfter('guest', crud.actions.edit),
+	// Gives back the stock the order reserved for its delivery date.
+	delete: async (event: RequestEvent) => {
+		const form = await superValidate(event.request.clone(), zod4(idSchema));
+		if (!form.valid) return crud.actions.delete(event);
+		return deleteReleasingStock('guest', form.data.id, () => crud.actions.delete(event));
+	},
 	sendBulkEmail: sendBulkEmailAction
 };

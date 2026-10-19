@@ -8,7 +8,8 @@ import { APIError } from 'better-auth/api';
 // Adjust to your project's paths.
 import { auth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
-import { lookupPostcode } from '$lib/server/geocode';
+import { isLondonPostcode, lookupPostcode } from '$lib/server/geocode';
+import { m } from '$lib/paraglide/messages.js';
 import { subscribers, addresses } from '$lib/server/db/schema';
 
 import { emailSchema, phoneSchema, addressSchema, type DetailsMessage } from './schema';
@@ -82,6 +83,9 @@ export const actions: Actions = {
 		const form = await superValidate(request, zod4(addressSchema), { id: 'address' });
 		if (!locals.user) return fail(401, { form });
 		if (!form.valid) return fail(400, { form });
+		if (!(await isLondonPostcode(form.data.postcode))) {
+			return setError(form, 'postcode', m.acctdetails_error_outside_london());
+		}
 
 		const sub = await getSubscriber(locals.user.id);
 		if (!sub) {

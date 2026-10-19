@@ -22,7 +22,13 @@
 		PackageSearch,
 		RefreshCw,
 		Gift,
-		UserX
+		UserX,
+		Handshake,
+		Inbox,
+		MessageCircle,
+		BadgeCheck,
+		Ban,
+		Boxes
 	} from '@lucide/svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import type { ComponentProps } from 'svelte';
@@ -55,6 +61,22 @@
 			title: 'Deliveries',
 			url: '/dashboard/deliveries',
 			icon: Truck
+		},
+		{
+			title: 'Batches',
+			url: '/dashboard/batches',
+			icon: Boxes
+		},
+		{
+			title: 'Partners',
+			url: '/dashboard/partners',
+			icon: Handshake,
+			items: [
+				{ title: 'New', url: '/dashboard/partners/new', icon: Inbox },
+				{ title: 'Contacted', url: '/dashboard/partners/contacted', icon: MessageCircle },
+				{ title: 'Approved', url: '/dashboard/partners/approved', icon: BadgeCheck },
+				{ title: 'Declined / Ended', url: '/dashboard/partners/declined', icon: Ban }
+			]
 		},
 
 		{

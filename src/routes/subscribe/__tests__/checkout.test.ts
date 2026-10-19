@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 // superforms parses `__superform_json` with devalue, so the test must encode it the same way.
 import { stringify as devalueStringify } from 'devalue';
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 
 /**
  * Exercises the real subscribe/gift/guest actions against the local database, with only
@@ -28,7 +28,8 @@ const { db } = await import('$lib/server/db');
 const { addons, plans, subscriptions, addresses, giftOrders, guestOrders } = await import(
 	'$lib/server/db/schema'
 );
-const { actions } = await import('../+page.server');
+// Actions are async, but SvelteKit types them as MaybePromise — narrow so `.catch` type-checks.
+const actions = (await import('../+page.server')).actions as Record<string, (event: any) => Promise<any>>;
 
 const TEST_PREFIX = 'vitest-';
 let activeAddon: any;
@@ -72,22 +73,13 @@ beforeEach(async () => {
 
 	// Reuse real plans from the seeded local DB so the test exercises production-shaped data.
 	const allPlans = await db.select().from(plans).where(eq(plans.active, true));
-	// Only slugs in the zod enum can be submitted, so pick from those rather than
-	// whatever happens to be first in the table.
 	subPlan = allPlans.find((p) => p.slug === 'regular');
 	orderPlan = allPlans.find((p) => p.slug === 'one-off');
 
-	giftPlan = allPlans.find((p) => p.slug === 'single-gift');
-	if (!giftPlan) {
-		// The local DB has no gift plan; create the one the schema's GIFT_PLANS allows.
-		const id = crypto.randomUUID();
-		await db.insert(plans).values({
-			id, slug: 'single-gift', name: `${TEST_PREFIX}gift`, pricePence: 3000,
-			interval: 'one_time', packs: 1, kind: 'gift', active: true,
-			stripePriceId: 'price_test_gift'
-		});
-		[giftPlan] = await db.select().from(plans).where(eq(plans.id, id));
-	}
+	// Any live gift plan will do. Without one, use a fixture under a `vitest-` slug —
+	// never a real slug like 'single-gift', which would pass a test row off as the real
+	// product on the local site — and remove it again in afterAll.
+	giftPlan = allPlans.find((p) => p.kind === 'gift') ?? (await testPlan({ kind: 'gift' }));
 
 	const existing = await db.select().from(addons);
 	activeAddon = existing.find((a) => a.isActive && !a.name.startsWith(TEST_PREFIX));
@@ -107,6 +99,33 @@ beforeEach(async () => {
 		});
 		[inactiveAddon] = await db.select().from(addons).where(eq(addons.id, id));
 	}
+});
+
+/**
+ * A throwaway plan under a `vitest-` slug, removed in afterAll. Plans are validated
+ * against the DB rather than a hardcoded list, so these are buyable like any real plan.
+ */
+async function testPlan(overrides: Partial<typeof plans.$inferInsert> = {}) {
+	const id = crypto.randomUUID();
+	const kind = overrides.kind ?? 'order';
+	await db.insert(plans).values({
+		id,
+		slug: `${TEST_PREFIX}${kind}-${id.slice(0, 8)}`,
+		name: `${TEST_PREFIX}${kind}`,
+		pricePence: 1234,
+		interval: kind === 'subscription' ? 'monthly' : 'one_time',
+		packs: 2,
+		kind,
+		active: true,
+		stripePriceId: `price_${TEST_PREFIX}${id.slice(0, 8)}`,
+		...overrides
+	});
+	const [row] = await db.select().from(plans).where(eq(plans.id, id));
+	return row;
+}
+
+afterAll(async () => {
+	await db.delete(plans).where(like(plans.slug, `${TEST_PREFIX}%`));
 });
 
 const baseAddress = {
@@ -203,7 +222,7 @@ describe('add-on pricing sent to Stripe', () => {
 					user
 				)
 			)
-			.catch((e) => e);
+			.catch((e: any) => e);
 
 		// resolveAddons filters on isActive, so the id reads as unknown and setError fires.
 		expect(created).toHaveLength(0);
@@ -238,6 +257,8 @@ describe('gift order creation', () => {
 		expect(created).toHaveLength(1);
 		expect(created[0].mode).toBe('payment');
 		expect(created[0].metadata.giftOrderId).toBe(row!.id);
+		expect(row?.planId).toBe(giftPlan.id);
+		expect(row?.unitPricePence).toBe(giftPlan.pricePence);
 	});
 });
 
@@ -286,20 +307,68 @@ describe('subscription row creation', () => {
 	});
 });
 
-describe('plan catalogue vs the submittable enum', () => {
-	it('every active non-gift plan the page shows can actually be submitted', async () => {
-		// The page lists plans straight from the DB, but `checkoutSchema.plan` is a hardcoded
-		// zod enum (SUB_PLANS). Any active plan missing from that enum is displayed to
-		// customers and then rejected on submit with "choose a subscription plan".
-		const { SUB_PLANS } = await import('../schema');
-		const shown = await db.select().from(plans).where(eq(plans.active, true));
-		const selectable = new Set<string>(SUB_PLANS as readonly string[]);
+describe('plans come from the database, not a hardcoded list', () => {
+	it('sells a plan added to the catalogue without any code change', async () => {
+		const plan = await testPlan({ kind: 'order' });
+		const marker = `New plan ${crypto.randomUUID().slice(0, 8)}`;
+		await actions
+			.guestOrder(
+				event({ ...baseAddress, plan: plan.slug, recipient: 'me', quantity: '2', recipientName: marker })
+			)
+			.catch(() => {});
 
-		const orphaned = shown
-			.filter((p) => p.kind !== 'gift' && !selectable.has(p.slug))
-			.map((p) => p.slug);
+		expect(created).toHaveLength(1);
+		expect(created[0].line_items[0]).toEqual({ price: plan.stripePriceId, quantity: 2 });
+		// The order records which plan it was and the unit price it was sold at.
+		const [row] = await db.select().from(guestOrders).where(eq(guestOrders.recipientName, marker));
+		expect(row.planId).toBe(plan.id);
+		expect(row.unitPricePence).toBe(plan.pricePence);
+	});
 
-		expect(orphaned).toEqual([]);
+	it('matches slugs case-insensitively, so old ?plan=Family links still work', async () => {
+		const plan = await testPlan({ kind: 'order' });
+		await actions
+			.guestOrder(event({ ...baseAddress, plan: plan.slug.toUpperCase(), recipient: 'me', quantity: '1', recipientName: 'Caps' }))
+			.catch(() => {});
+		expect(created).toHaveLength(1);
+		expect(created[0].line_items[0].price).toBe(plan.stripePriceId);
+	});
+
+	it('refuses a plan whose sale window has ended', async () => {
+		const plan = await testPlan({ kind: 'order', availableUntil: new Date(Date.now() - 60_000) });
+		const res: any = await actions
+			.guestOrder(event({ ...baseAddress, plan: plan.slug, recipient: 'me', quantity: '1', recipientName: 'Late' }))
+			.catch((e: any) => e);
+		expect(res.status).toBe(400);
+		expect(created).toHaveLength(0);
+	});
+
+	it('refuses a plan that has not gone on sale yet', async () => {
+		const plan = await testPlan({ kind: 'order', availableFrom: new Date(Date.now() + 86_400_000) });
+		const res: any = await actions
+			.guestOrder(event({ ...baseAddress, plan: plan.slug, recipient: 'me', quantity: '1', recipientName: 'Early' }))
+			.catch((e: any) => e);
+		expect(res.status).toBe(400);
+		expect(created).toHaveLength(0);
+	});
+
+	it("enforces a plan's own max quantity", async () => {
+		const plan = await testPlan({ kind: 'order', maxQuantity: 2 });
+		const res: any = await actions
+			.guestOrder(event({ ...baseAddress, plan: plan.slug, recipient: 'me', quantity: '3', recipientName: 'Bulk' }))
+			.catch((e: any) => e);
+		expect(res.status).toBe(400);
+		expect(res.data.form.errors.quantity).toBeTruthy();
+		expect(created).toHaveLength(0);
+	});
+
+	it('refuses a gift plan posted to the "for me" flow', async () => {
+		const user = { id: crypto.randomUUID(), email: 'kind@test.co', name: 'Kind' };
+		const res: any = await actions
+			.subscribe(event({ ...baseAddress, plan: giftPlan.slug, recipient: 'me', quantity: '1' }, user))
+			.catch((e: any) => e);
+		expect(res.status).toBe(400);
+		expect(created).toHaveLength(0);
 	});
 });
 

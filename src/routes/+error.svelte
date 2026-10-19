@@ -9,7 +9,7 @@
   <meta name="description" content="The page you were looking for could not be found."/>
   <title>GOTERA — Page not found</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,400;1,600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
   
   </svelte:head>    

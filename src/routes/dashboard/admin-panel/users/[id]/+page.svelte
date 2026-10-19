@@ -21,10 +21,11 @@
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import { columns } from './columns.js';
 
+	type FieldName = 'name' | 'email' | 'role';
+
 	let singleTable = $derived([
 		{ name: 'Name', value: data.singleUser?.name },
 		{ name: 'Email', value: data.singleUser?.email },
-		{ name: 'Phone', value: data.singleUser?.phone },
 		{ name: 'Role', value: data.singleUser?.role },
 		{ name: 'Created At', value: data.singleUser?.createdAt.toLocaleString() },
 		{ name: 'Updated At', value: data.singleUser?.updatedAt.toLocaleString() }
@@ -55,9 +56,6 @@
 
 	let edit = $state(false);
 
-	$form.name = data.singleUser?.name;
-	$form.email = data.singleUser?.email;
-	$form.role = data.singleUser?.roleId;
 </script>
 
 <svelte:head>
@@ -118,7 +116,7 @@
 
 {#snippet fe(
 	label = '',
-	name = '',
+	name: FieldName = 'name',
 	type = '',
 	placeholder = '',
 	required = false,
@@ -142,7 +140,7 @@
 		{/if}
 	</div>
 {/snippet}
-{#snippet selects(name, items)}
+{#snippet selects(name: FieldName, items: { value: number; name: string }[])}
 	<div class="flex w-full flex-col justify-start gap-2">
 		<Label for={name} class="capitalize">{name.replace(/([a-z])([A-Z])/g, '$1 $2')}:</Label>
 

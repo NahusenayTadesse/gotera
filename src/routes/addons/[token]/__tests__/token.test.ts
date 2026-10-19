@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 
@@ -25,11 +25,21 @@ vi.mock('$lib/server/stripe', () => ({
 
 const { db } = await import('$lib/server/db');
 const { deliveries, addons } = await import('$lib/server/db/schema');
-const { load, actions } = await import('../+page.server');
+const mod = await import('../+page.server');
+const load = mod.load as (event: any) => Promise<any>;
+// Async at runtime, typed as MaybePromise by SvelteKit — narrow so `.catch` type-checks.
+const actions = mod.actions as Record<string, (event: any) => Promise<any>>;
 
 let token: string;
 let deliveryId: string;
 let addonId: string;
+let original: { status: any; scheduledDate: Date; addonAccessToken: string | null };
+
+/** Local midnight `days` from today — how mysql2 hands `date` columns back. */
+const daysFromNow = (days: number) => {
+	const d = new Date();
+	return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+};
 
 beforeEach(async () => {
 	created.length = 0;
@@ -39,12 +49,23 @@ beforeEach(async () => {
 
 	const [delivery] = await db.select().from(deliveries);
 	deliveryId = delivery.id;
+	original = {
+		status: delivery.status,
+		scheduledDate: delivery.scheduledDate,
+		addonAccessToken: delivery.addonAccessToken
+	};
 
+	// Well clear of the change cut-off, whatever date the seeded row happens to have.
 	token = randomBytes(24).toString('base64url');
 	await db
 		.update(deliveries)
-		.set({ addonAccessToken: token, status: 'scheduled' })
+		.set({ addonAccessToken: token, status: 'scheduled', scheduledDate: daysFromNow(30) })
 		.where(eq(deliveries.id, deliveryId));
+});
+
+// Other test files reuse this same seeded row, so put it back as it was.
+afterEach(async () => {
+	await db.update(deliveries).set(original).where(eq(deliveries.id, deliveryId));
 });
 
 const ev = (tok: string, form?: Record<string, string>) => {
@@ -131,6 +152,17 @@ describe('checkout from the token page', () => {
 		expect(created).toHaveLength(0);
 
 		await db.update(deliveries).set({ status: 'scheduled' }).where(eq(deliveries.id, deliveryId));
+	});
+
+	it('refuses once the change cut-off has passed', async () => {
+		await db.update(deliveries).set({ scheduledDate: daysFromNow(1) }).where(eq(deliveries.id, deliveryId));
+
+		const data: any = await load(ev(token));
+		expect(data.open).toBe(false);
+
+		const res: any = await actions.checkout(ev(token, { [`qty_${addonId}`]: '1' }));
+		expect(res.status).toBe(400);
+		expect(created).toHaveLength(0);
 	});
 
 	it('never writes delivery_addons before payment', async () => {

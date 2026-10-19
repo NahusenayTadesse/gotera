@@ -7,6 +7,7 @@ import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
 import SelectHeader from '$lib/components/Table/select-header.svelte';
 import SelectCell from '$lib/components/Table/select-cell.svelte';
 import { formatEthiopianDate } from '$lib/global.svelte';
+import BatchesCell from '$lib/components/dashboard/BatchesCell.svelte';
 
 export const columns = [
 	{
@@ -71,6 +72,19 @@ export const columns = [
 				id: row.original.id,
 				type: row.original.type,
 				addons: row.original.addons
+			})
+	},
+	{
+		accessorKey: 'trace',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, { name: 'Batches', onclick: column.getToggleSortingHandler() }),
+		sortable: true,
+		cell: ({ row }) =>
+			renderComponent(BatchesCell, {
+				type: row.original.traceType,
+				id: row.original.id,
+				state: row.original.traceState,
+				batches: row.original.batches
 			})
 	},
 	{

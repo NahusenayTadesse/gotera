@@ -9,7 +9,9 @@
 	const labels: Record<string, string> = {
 		subscription: 'Subscription',
 		guest: 'Guest',
-		'one-time': 'One-time'
+		'one-time': 'One-time',
+		gift: 'One-time / Gift',
+		partner: 'Trade partner'
 	};
 </script>
 

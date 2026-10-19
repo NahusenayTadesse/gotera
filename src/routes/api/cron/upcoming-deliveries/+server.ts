@@ -6,11 +6,13 @@ import { CRON_SECRET } from '$env/static/private';
 
 import { db } from '$lib/server/db';
 import { deliveries, subscribers, addresses, addons } from '$lib/server/db/schema';
+import { sellableWithInjera } from '$lib/server/addonCatalogue';
 import { sendUpcomingDelivery } from '$lib/server/email';
 import { SITE } from '$lib/server/emailTemplates';
 import { fullDate } from '$lib/format';
 import { cutoffDateFor } from '$lib/delivery';
 import { shiftDays, todayInTimeZone } from '$lib/format';
+import { cleanupAbandonedCheckouts } from '$lib/server/cleanup';
 
 /** How many days before the scheduled date the reminder goes out. */
 const REMINDER_LEAD_DAYS = 2;
@@ -62,11 +64,21 @@ export const GET: RequestHandler = async ({ request }) => {
 			.innerJoin(subscribers, eq(subscribers.id, deliveries.subscriberId))
 			.innerJoin(addresses, eq(addresses.id, deliveries.addressId))
 			.where(and(eq(deliveries.status, 'scheduled'), eq(deliveries.scheduledDate, targetDate))),
-		db.select({ id: addons.id }).from(addons).where(eq(addons.isActive, true)).limit(1)
+		db.select({ id: addons.id }).from(addons).where(sellableWithInjera()).limit(1)
 	]);
 
+	// Daily housekeeping rides on the same cron. A failure here must not hide the
+	// reminder results, so it is logged and reported rather than thrown.
+	let cleanedUp: Awaited<ReturnType<typeof cleanupAbandonedCheckouts>> | { error: string };
+	try {
+		cleanedUp = await cleanupAbandonedCheckouts();
+	} catch (e) {
+		console.error('abandoned checkout cleanup failed', e);
+		cleanedUp = { error: 'cleanup failed' };
+	}
+
 	if (upcoming.length === 0) {
-		return json({ targetDate: targetDateString, checked: 0, sent: 0 });
+		return json({ targetDate: targetDateString, checked: 0, sent: 0, cleanedUp });
 	}
 
 	// Only offer the "add extras" link while there's actually something to add — and
@@ -104,5 +116,5 @@ export const GET: RequestHandler = async ({ request }) => {
 	const sent = results.filter((r) => r.status === 'fulfilled').length;
 	const failed = results.length - sent;
 
-	return json({ targetDate: targetDateString, checked: upcoming.length, sent, failed });
+	return json({ targetDate: targetDateString, checked: upcoming.length, sent, failed, cleanedUp });
 };

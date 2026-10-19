@@ -57,6 +57,17 @@
 		unremovable: { icon: BadgeCheck, colour: 'bg-green-400' },
 		removable: { icon: OctagonMinus, colour: 'bg-red-500' },
 
+		/* partner applications */
+		new: { icon: Clock, colour: 'bg-blue-500' },
+		contacted: { icon: Loader, colour: 'bg-yellow-500' },
+		approved: { icon: BadgeCheck, colour: 'bg-green-400' },
+		declined: { icon: OctagonMinus, colour: 'bg-red-500' },
+
+		/* batches */
+		quarantined: { icon: PauseCircle, colour: 'bg-orange-500' },
+		recalled: { icon: XCircle, colour: 'bg-red-600' },
+		depleted: { icon: OctagonMinus, colour: 'bg-gray-400' },
+
 		/* fallback */
 		unknown: { icon: Loader, colour: 'bg-gray-500' }
 	} as const;

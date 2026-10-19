@@ -180,6 +180,7 @@
 								id="city"
 								class="edit-input"
 								name="city"
+								readonly
 								bind:value={$addressForm.city}
 								autocomplete="address-level2"
 							/>
@@ -200,7 +201,12 @@
 								{#each postcode.suggestions as s (s)}<option value={s}></option>{/each}
 							</datalist>
 							{#if $addressErrors.postcode}<span class="form-error">{$addressErrors.postcode}</span
+								>{:else if postcode.outsideLondon}<span class="form-error"
+									>{m.acctdetails_error_outside_london()}</span
 								>{/if}
+						</div>
+						<div class="af full">
+							<span class="edit-note">{m.acctdetails_note_london_only()}</span>
 						</div>
 					</div>
 					<div class="edit-actions">

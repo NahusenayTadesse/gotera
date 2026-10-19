@@ -73,8 +73,6 @@ export const auth = betterAuth({
 							userId: user.id,
 							email: user.email,
 							fullName: user.name ?? null,
-							plan: null,
-							status: 'pending',
 							marketingOptIn: true
 						});
 					}

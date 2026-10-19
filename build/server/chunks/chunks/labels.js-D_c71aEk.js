@@ -1,0 +1,67 @@
+//#region src/routes/dashboard/partners/labels.ts
+/** Dashboard (English-only) labels for the category keys stored by the public /partners form. */
+var CATEGORY_LABELS = {
+	restaurant: "Restaurant / café",
+	shop: "Shop / grocery",
+	caterer: "Caterer / events",
+	community: "Church / community",
+	corporate: "Office / corporate",
+	teff: "Teff & grains",
+	spices: "Spices",
+	produce: "Fresh produce",
+	packaging: "Packaging",
+	logistics: "Delivery & logistics",
+	other: "Other"
+};
+var categoryLabel = (key) => key && CATEGORY_LABELS[key] || key || "—";
+var PARTNER_CATEGORY_KEYS = [
+	"restaurant",
+	"shop",
+	"caterer",
+	"community",
+	"corporate",
+	"other"
+];
+var SUPPLIER_CATEGORY_KEYS = [
+	"teff",
+	"spices",
+	"produce",
+	"packaging",
+	"logistics",
+	"other"
+];
+var STATUS_PAGES = [
+	{
+		status: null,
+		title: "All",
+		heading: "Partners & Suppliers",
+		href: "/dashboard/partners"
+	},
+	{
+		status: "new",
+		title: "New",
+		heading: "New applications",
+		href: "/dashboard/partners/new"
+	},
+	{
+		status: "contacted",
+		title: "Contacted",
+		heading: "Contacted",
+		href: "/dashboard/partners/contacted"
+	},
+	{
+		status: "approved",
+		title: "Approved",
+		heading: "Approved partners & suppliers",
+		href: "/dashboard/partners/approved"
+	},
+	{
+		status: "declined",
+		title: "Declined / Ended",
+		heading: "Declined & ended",
+		href: "/dashboard/partners/declined"
+	}
+];
+
+export { CATEGORY_LABELS as C, PARTNER_CATEGORY_KEYS as P, STATUS_PAGES as S, SUPPLIER_CATEGORY_KEYS as a, categoryLabel as c };
+//# sourceMappingURL=labels.js-D_c71aEk.js.map

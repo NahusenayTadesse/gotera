@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 // Adjust to your project's paths.
@@ -18,8 +18,7 @@ import {
     addresses,
     giftOrders,
     addons,
-    guestOrders,
-    user
+    guestOrders
 } from '$lib/server/db/schema';
 import {
     sendSubscriptionConfirmed,
@@ -34,8 +33,10 @@ import {
 } from '$lib/server/email';
 import { auth } from '$lib/server/auth';
 import { nextDeliveryDate, nextDeliveryDateIgnoringCapacity } from '$lib/server/deliverySchedule';
-import { consumeStock, notify } from '$lib/server/stock';
+import { consumeStock, deliveryUnits, notify, reserveOrderStock } from '$lib/server/stock';
+import { invoiceSubscriptionId } from '$lib/server/stripeInvoice';
 import { toCalendarString } from '$lib/format';
+import { planForStripePrice, subscriptionUnitPrice } from '$lib/server/plans';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
 
@@ -56,6 +57,15 @@ function mapStatus(sub: Stripe.Subscription): 'pending' | 'active' | 'paused' | 
 
 const deliveryFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 const money = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+
+const idOf = (ref: string | { id: string } | null | undefined) =>
+    ref ? (typeof ref === 'string' ? ref : ref.id) : null;
+
+/** MySQL unique-key violation, whether or not drizzle wrapped the driver error. */
+function isDuplicateKey(e: unknown): boolean {
+    const err = e as { code?: string; cause?: { code?: string } } | null;
+    return err?.code === 'ER_DUP_ENTRY' || err?.cause?.code === 'ER_DUP_ENTRY';
+}
 
 /**
  * A one-off order's add-ons only ever exist in Stripe metadata (checkout.session
@@ -146,32 +156,41 @@ async function handleDeliveryAddonPurchase(session: Stripe.Checkout.Session) {
         .filter((i): i is { id: string; name: string; pricePence: number; quantity: number } => i !== null);
     if (items.length === 0) return;
 
+    // The dedupe row and the quantity changes commit together: if anything fails midway
+    // the whole purchase rolls back, so Stripe's retry applies it in full instead of
+    // finding a "processed" marker for items that were never added.
     try {
-        await db.insert(deliveryAddonPurchases).values({
-            deliveryId,
-            stripePaymentIntentId: paymentIntentId,
-            amountPence: session.amount_total ?? items.reduce((sum, i) => sum + i.pricePence * i.quantity, 0),
-            items
+        await db.transaction(async (tx) => {
+            await tx.insert(deliveryAddonPurchases).values({
+                deliveryId,
+                stripePaymentIntentId: paymentIntentId,
+                amountPence: session.amount_total ?? items.reduce((sum, i) => sum + i.pricePence * i.quantity, 0),
+                items
+            });
+
+            for (const item of items) {
+                // Locked, and incremented in SQL, so a concurrent edit from /account or the
+                // dashboard can't be lost to a read-modify-write race.
+                const [existing] = await tx
+                    .select({ id: deliveryAddons.id })
+                    .from(deliveryAddons)
+                    .where(and(eq(deliveryAddons.deliveryId, deliveryId), eq(deliveryAddons.addonId, item.id)))
+                    .for('update');
+                if (existing) {
+                    await tx
+                        .update(deliveryAddons)
+                        .set({ quantity: sql`${deliveryAddons.quantity} + ${item.quantity}` })
+                        .where(eq(deliveryAddons.id, existing.id));
+                } else {
+                    await tx.insert(deliveryAddons).values({ deliveryId, addonId: item.id, quantity: item.quantity });
+                }
+            }
         });
-    } catch {
+    } catch (e) {
         // Unique constraint on stripePaymentIntentId — a concurrent/retried delivery of
         // this same event beat us to it, so the add-ons are already applied.
-        return;
-    }
-
-    for (const item of items) {
-        const [existing] = await db
-            .select()
-            .from(deliveryAddons)
-            .where(and(eq(deliveryAddons.deliveryId, deliveryId), eq(deliveryAddons.addonId, item.id)));
-        if (existing) {
-            await db
-                .update(deliveryAddons)
-                .set({ quantity: existing.quantity + item.quantity })
-                .where(eq(deliveryAddons.id, existing.id));
-        } else {
-            await db.insert(deliveryAddons).values({ deliveryId, addonId: item.id, quantity: item.quantity });
-        }
+        if (isDuplicateKey(e)) return;
+        throw e;
     }
 
     try {
@@ -197,8 +216,11 @@ async function syncSubscription(sub: Stripe.Subscription) {
     const [subRow] = await db.select().from(subscriptions).where(eq(subscriptions.stripeSubscriptionId, sub.id));
     if (!subRow) return;
 
-    const priceId = sub.items.data[0]?.price.id;
-    const [plan] = priceId ? await db.select().from(plans).where(eq(plans.stripePriceId, priceId)) : [];
+    const price = sub.items.data[0]?.price;
+    const priceId = price?.id;
+    // Matches older Prices too, so a customer still billed at a pre-change price keeps
+    // their plan instead of it silently resolving to nothing.
+    const plan = priceId ? await planForStripePrice(priceId) : undefined;
 
     const quantity = sub.items.data[0]?.quantity ?? subRow.quantity ?? 1;
     const periodEnd = sub.items.data[0]?.current_period_end;
@@ -229,12 +251,30 @@ async function syncSubscription(sub: Stripe.Subscription) {
             currentPeriodEnd: nextPeriodEnd,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             pendingPlanId: switchStillPending ? subRow.pendingPlanId : null,
-            pendingPlanAt: switchStillPending ? subRow.pendingPlanAt : null
+            pendingPlanAt: switchStillPending ? subRow.pendingPlanAt : null,
+            // What Stripe bills them. Held back with the plan during a pending switch: the
+            // new Price is already on the Stripe subscription but doesn't bill until renewal.
+            stripePriceId: switchStillPending ? subRow.stripePriceId : (priceId ?? subRow.stripePriceId),
+            unitPricePence: switchStillPending
+                ? subRow.unitPricePence
+                : (price?.unit_amount ?? subRow.unitPricePence)
         })
         .where(eq(subscriptions.id, subRow.id));
 }
 
-async function scheduleDelivery(subscriberId: string, subscriptionId: string, addressId?: string) {
+/**
+ * Book the delivery a paid invoice entitles the subscriber to.
+ *
+ * Keyed on the invoice: `deliveries.stripe_invoice_id` is unique, so a retried webhook
+ * (Stripe delivers at least once) hits the constraint and books nothing. Returns whether
+ * a delivery was actually created, so callers only send confirmations once.
+ */
+async function scheduleDelivery(
+    subscriberId: string,
+    subscriptionId: string,
+    addressId: string | undefined,
+    invoiceId: string | null
+): Promise<boolean> {
     let targetAddressId = addressId;
     
     // If no address was passed in metadata, check the subscription configuration or fallback to primary
@@ -248,28 +288,55 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
         }
     }
     
-    if (!targetAddressId) return;
+    if (!targetAddressId) return false;
 
     // The date the customer would have got if nothing were full, so we can tell whether
     // capacity actually moved them and only notify when it did.
     const soonest = await nextDeliveryDateIgnoringCapacity();
     const scheduledDate = await nextDeliveryDate();
 
-    await db.insert(deliveries).values({
-        subscriberId,
-        subscriptionId,
-        addressId: targetAddressId,
-        scheduledDate,
-        status: 'scheduled'
-    });
+    const units = await deliveryUnits(subscriptionId);
+
+    // Freeze what this delivery is — plan, packs, quantity and the price billed — so order
+    // history doesn't change when the plan or its price does later.
+    const [snapshot] = await db
+        .select({
+            planId: subscriptions.planId,
+            packs: plans.packs,
+            quantity: subscriptions.quantity,
+            unitPricePence: subscriptionUnitPrice
+        })
+        .from(subscriptions)
+        .innerJoin(plans, eq(plans.id, subscriptions.planId))
+        .where(eq(subscriptions.id, subscriptionId));
+
+    try {
+        await db.insert(deliveries).values({
+            subscriberId,
+            subscriptionId,
+            addressId: targetAddressId,
+            scheduledDate,
+            status: 'scheduled',
+            stripeInvoiceId: invoiceId,
+            stockUnits: units,
+            stockDate: scheduledDate,
+            planId: snapshot?.planId ?? null,
+            packs: snapshot?.packs ?? null,
+            quantity: snapshot?.quantity ?? null,
+            unitPricePence: snapshot?.unitPricePence ?? null
+        });
+    } catch (e) {
+        if (isDuplicateKey(e)) return false; // this invoice's delivery is already booked
+        throw e;
+    }
 
     // Reserve capacity for the date actually booked. `nextDeliveryDate` already skipped
-    // full Saturdays, so this normally succeeds; if a concurrent order took the last unit
-    // between those two calls the delivery still stands and the shortfall shows up as an
-    // over-capacity row on the stock dashboard rather than a lost order.
-    const reserved = await consumeStock(scheduledDate, 1);
-    if (!reserved.ok) {
-        console.error('stock: booked a delivery on a date that filled up concurrently', scheduledDate);
+    // full Saturdays, so this normally fits; if a concurrent order took the last units in
+    // between, the paid delivery still stands and is recorded past capacity, so the stock
+    // dashboard shows the date as over-booked rather than silently under-counting it.
+    const reserved = await consumeStock(scheduledDate, units, null, { allowOver: true });
+    if (reserved.row.used > reserved.row.capacity) {
+        console.error('stock: booked a delivery past capacity (date filled up concurrently)', scheduledDate);
     }
 
     if (toCalendarString(scheduledDate) !== toCalendarString(soonest)) {
@@ -296,34 +363,25 @@ async function scheduleDelivery(subscriberId: string, subscriptionId: string, ad
             }
         }
     }
+    return true;
 }
 
 
- async function sendMagicLink(email: string, name: string, request: Request) {
-const randomPassword = Math.random().toString(36).slice(2, 10);
-
-    const [existingUser] = await db.select({ id: user.id}).from(user).where(eq(user.email, email)).limit(1);
-
-    if(existingUser) return;
-
- await auth.api.createUser({
-    body: {
-        email: email, 
-        name: name, // required,
-        password: randomPassword,
-        role: "user",
-    },
-});
-
-
-	await auth.api.signInMagicLink({
-				body: {
-					email: email,
-					callbackURL: '/account' 
-				},
-				headers: request.headers
-			});
- }
+/**
+ * Email a guest buyer a sign-in link so their order shows up under /account.
+ *
+ * No account is created here: the address was typed into Stripe Checkout and is
+ * unverified, so creating a user for it would let anyone mint accounts in a third
+ * party's name. Better Auth's magic-link plugin creates the user only when the link is
+ * clicked — i.e. once the recipient has proved they own the inbox. Existing users just
+ * get a normal sign-in link.
+ */
+async function sendMagicLink(email: string, name?: string) {
+    await auth.api.signInMagicLink({
+        body: { email, name, callbackURL: '/account' },
+        headers: new Headers()
+    });
+}
 
 export const POST: RequestHandler = async ({ request }) => {
     const sig = request.headers.get('stripe-signature');
@@ -369,9 +427,14 @@ if (session.mode === 'payment') {
 		.set({
 			status: 'paid',
 			stripePaymentIntentId: session.payment_intent as string,
-			addons: addonSnapshot.length ? addonSnapshot : null
+			addons: addonSnapshot.length ? addonSnapshot : null,
+			amountPence: session.amount_total ?? before?.amountPence ?? null
 		})
 		.where(eq(giftOrders.id, giftOrderId));
+
+	// Book it onto the next delivery date and reserve its stock. Idempotent (an order
+	// already holding stock is skipped), so it also runs on retries.
+	if (before) await reserveOrderStock('gift', giftOrderId, Math.max(1, before.quantity), await nextDeliveryDate());
 
 	if (alreadyPaid) break;
 
@@ -394,7 +457,7 @@ if (session.mode === 'payment') {
 				addr.city,
 				addr.postcode
 			];
-			const deliveryLabel = deliveryFmt.format(await nextDeliveryDate());
+			const deliveryLabel = deliveryFmt.format(order.deliveryDate ?? (await nextDeliveryDate()));
  
 			if (kind === 'gift') {
 				await sendGiftReceived(order.buyerEmail, {
@@ -450,9 +513,24 @@ if (session.mode === 'payment') {
 			buyerName: name ?? before?.buyerName ?? null,
 			recipientName: before?.recipientName ?? name ?? null,
 			stripePaymentIntentId: session.payment_intent as string,
-			addons: addonSnapshot.length ? addonSnapshot : null
+			addons: addonSnapshot.length ? addonSnapshot : null,
+			amountPence: session.amount_total ?? before?.amountPence ?? null
 		})
 		.where(eq(guestOrders.id, guestOrderId));
+
+	if (before) {
+		if (kind === 'addons') {
+			// Add-ons bought on their own from /addons: no injera, so nothing to take from the
+			// main-product stock. It still rides the next delivery run, which capacity doesn't
+			// gate — a full injera Saturday has room for a jar of berbere.
+			await db
+				.update(guestOrders)
+				.set({ deliveryDate: await nextDeliveryDateIgnoringCapacity() })
+				.where(and(eq(guestOrders.id, guestOrderId), isNull(guestOrders.deliveryDate)));
+		} else {
+			await reserveOrderStock('guest', guestOrderId, Math.max(1, before.quantity), await nextDeliveryDate());
+		}
+	}
 
 	if (alreadyPaid) break;
 
@@ -477,7 +555,7 @@ if (session.mode === 'payment') {
 				addr.city,
 				addr.postcode
 			];
-			const deliveryLabel = deliveryFmt.format(await nextDeliveryDate());
+			const deliveryLabel = deliveryFmt.format(order.deliveryDate ?? (await nextDeliveryDate()));
 
              
                
@@ -504,7 +582,8 @@ if (session.mode === 'payment') {
 				});
 
 				// Give the guest an account so the order shows up under /account.
-				if (email) await sendMagicLink(email, name ?? 'there', request);
+				// Signed-in shoppers on /addons already have one.
+				if (email && session.metadata?.signedIn !== '1') await sendMagicLink(email, name ?? undefined);
 
 			}
 		
@@ -564,12 +643,14 @@ if (session.mode === 'payment') {
 
                 const sub = await stripe.subscriptions.retrieve(subscriptionId);
                 await syncSubscription(sub);
-                
-                if (subscriberId && dbSubscriptionId) {
-                    await scheduleDelivery(subscriberId, dbSubscriptionId, addressId);
-                }
 
-                if (subscriberId && dbSubscriptionId) {
+                // Keyed on the first invoice, so a retried event books (and emails) nothing.
+                const booked =
+                    subscriberId && dbSubscriptionId
+                        ? await scheduleDelivery(subscriberId, dbSubscriptionId, addressId, idOf(session.invoice))
+                        : false;
+
+                if (booked && subscriberId && dbSubscriptionId) {
                     try {
                         const [subUser] = await db.select().from(subscribers).where(eq(subscribers.id, subscriberId));
                         const [subRow] = await db.select().from(subscriptions).where(eq(subscriptions.id, dbSubscriptionId));
@@ -578,7 +659,15 @@ if (session.mode === 'payment') {
                             const [planRow] = await db.select().from(plans).where(eq(plans.id, subRow.planId));
                             const amountLabel = money(session.amount_total ?? planRow?.pricePence ?? 0);
                             const planName = planRow?.name ?? 'Subscription';
-                            const nextDeliveryLabel = deliveryFmt.format(await nextDeliveryDate());
+                            const [firstDelivery] = await db
+                                .select({ scheduledDate: deliveries.scheduledDate })
+                                .from(deliveries)
+                                .where(eq(deliveries.subscriptionId, dbSubscriptionId))
+                                .orderBy(desc(deliveries.createdAt))
+                                .limit(1);
+                            const nextDeliveryLabel = deliveryFmt.format(
+                                firstDelivery?.scheduledDate ?? (await nextDeliveryDate())
+                            );
 
                             await sendSubscriptionConfirmed(subUser.email, {
                                 name: subUser.fullName ?? 'there',
@@ -618,9 +707,10 @@ if (session.mode === 'payment') {
 
             // Recurring payment succeeded — new period; schedule next delivery.
             case 'invoice.paid': {
-                const invoice = event.data.object as Stripe.Invoice & { subscription?: string };
-                if (invoice.subscription) {
-                    const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+                const invoice = event.data.object as Stripe.Invoice;
+                const stripeSubId = invoiceSubscriptionId(invoice);
+                if (stripeSubId) {
+                    const sub = await stripe.subscriptions.retrieve(stripeSubId);
                     await syncSubscription(sub);
                     
                     const [subRow] = await db
@@ -628,8 +718,10 @@ if (session.mode === 'payment') {
                         .from(subscriptions)
                         .where(eq(subscriptions.stripeSubscriptionId, sub.id));
                         
+                    // The first invoice's delivery is booked by checkout.session.completed (with
+                    // the address from checkout); the unique invoice key makes overlap harmless.
                     if (subRow && invoice.billing_reason !== 'subscription_create') {
-                        await scheduleDelivery(subRow.subscriberId, subRow.id);
+                        await scheduleDelivery(subRow.subscriberId, subRow.id, undefined, invoice.id ?? null);
                     }
                 }
                 break;
@@ -637,13 +729,14 @@ if (session.mode === 'payment') {
 
             // Payment failed — notify customer + admin (first attempt only).
             case 'invoice.payment_failed': {
-                const invoice = event.data.object as Stripe.Invoice & { subscription?: string };
-                if (invoice.subscription && (invoice.attempt_count ?? 1) <= 1) {
+                const invoice = event.data.object as Stripe.Invoice;
+                const stripeSubId = invoiceSubscriptionId(invoice);
+                if (stripeSubId && (invoice.attempt_count ?? 1) <= 1) {
                     try {
                         const [subRow] = await db
                             .select()
                             .from(subscriptions)
-                            .where(eq(subscriptions.stripeSubscriptionId, invoice.subscription as string));
+                            .where(eq(subscriptions.stripeSubscriptionId, stripeSubId));
                             
                         if (subRow) {
                             const [subUser] = await db.select().from(subscribers).where(eq(subscribers.id, subRow.subscriberId));

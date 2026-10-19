@@ -18,7 +18,7 @@
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import BulkEmailDialog from '$lib/components/dashboard/BulkEmailDialog.svelte';
-	import { X, Trash2 } from '@lucide/svelte';
+	import { X, Trash2, Boxes } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { enhance as formEnhance } from '$app/forms';
 
@@ -132,6 +132,27 @@
 		>
 			Plan delivery route
 		</a>
+		{#if selectedRows.length}
+			<form
+				method="POST"
+				action="?/assignBatches"
+				use:formEnhance={() =>
+					async ({ result, update }) => {
+						if (result.type === 'success') {
+							const s = result.data?.sync as { unitsAssigned: number; short: unknown[] } | undefined;
+							if (s?.short.length)
+								toast.warning(`${s.unitsAssigned} units assigned; ${s.short.length} lines still need a batch.`);
+							else toast.success(`Batches assigned (${s?.unitsAssigned ?? 0} units)`);
+						} else toast.error('Could not assign batches');
+						await update();
+					}}
+			>
+				{#each selectedRows as r (r.id)}<input type="hidden" name="refs" value="{r.traceType}:{r.id}" />{/each}
+				<Button type="submit" size="sm" variant="outline">
+					<Boxes class="h-4 w-4" /> Assign batches ({selectedRows.length})
+				</Button>
+			</form>
+		{/if}
 		<BulkEmailDialog
 		bulkEmailForm={data.bulkEmailForm}
 			rows={selectedRows.map((r) => ({ id: r.id, email: r.subscriberEmail, name: r.subscriberName }))}
@@ -307,7 +328,7 @@
 
 <FilterMenu
 	data={data.rows}
-	filterKeys={['type', 'status', 'planName']}
+	filterKeys={['type', 'status', 'planName', 'trace']}
 	bind:filteredList={filteredRows}
 	class="mb-4"
 />

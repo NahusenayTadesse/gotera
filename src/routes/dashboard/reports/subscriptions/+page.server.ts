@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { eq, desc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { subscriptionUnitPrice } from '$lib/server/plans';
 import { subscriptions, subscribers, plans } from '$lib/server/db/schema';
 import { parseDateRangeParams, dateRangeCondition, bucketCount } from '$lib/server/reports';
 
@@ -14,7 +15,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			subscriberEmail: subscribers.email,
 			subscriberName: subscribers.fullName,
 			planName: plans.name,
-			pricePence: plans.pricePence,
+			pricePence: subscriptionUnitPrice,
 			status: subscriptions.status,
 			quantity: subscriptions.quantity,
 			cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,

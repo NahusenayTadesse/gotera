@@ -1,10 +1,27 @@
 import type { PageServerLoad } from './$types';
 import { count, countDistinct, eq, asc } from 'drizzle-orm';
+import { getLocale } from '$lib/paraglide/runtime';
+import { localizePlan, sellablePlan } from '$lib/server/plans';
 // Adjust to your project's paths.
 import { db } from '$lib/server/db';
 import { plans, subscriptions, deliveries, addresses } from '$lib/server/db/schema';
 
-const toCard = (p: (typeof planRows)[number]) => {
+type PlanCardRow = Pick<
+	typeof plans.$inferSelect,
+	| 'id'
+	| 'slug'
+	| 'name'
+	| 'subtitle'
+	| 'pricePence'
+	| 'freqLabel'
+	| 'bullets'
+	| 'featured'
+	| 'kind'
+	| 'interval'
+	| 'translations'
+>;
+
+const toCard = (p: PlanCardRow) => {
   let bullets: string[] = [];
 
   if (Array.isArray(p.bullets)) {
@@ -18,14 +35,16 @@ const toCard = (p: (typeof planRows)[number]) => {
     }
   }
 
+  const text = localizePlan(p, bullets, getLocale());
+
   return {
     id: p.id,
     slug: p.slug,
-    name: p.name,
-    subtitle: p.subtitle ?? '',
+    name: text.name,
+    subtitle: text.subtitle,
     price: p.pricePence / 100,
-    freq: p.freqLabel ?? '',
-    bullets,
+    freq: text.freqLabel,
+    bullets: text.bullets,
     featured: p.featured,
     kind: p.kind,
     interval: p.interval
@@ -47,10 +66,11 @@ export const load: PageServerLoad = async () => {
 					bullets: plans.bullets,
 					featured: plans.featured,
 					kind: plans.kind,
-					interval: plans.interval
+					interval: plans.interval,
+					translations: plans.translations
 				})
 				.from(plans)
-				.where(eq(plans.active, true))
+				.where(sellablePlan())
 				.orderBy(asc(plans.sortOrder)),
 
 			// "Active subscribers" = distinct PEOPLE with >=1 active subscription

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { lookupPostcode, bulkLookupPostcodes, autocompletePostcode } from '../geocode';
+import {
+	lookupPostcode,
+	bulkLookupPostcodes,
+	autocompletePostcode,
+	isLondonPostcode
+} from '../geocode';
 
 /**
  * These tests exist for one reason: the checkout flow is allowed to call this module
@@ -57,7 +62,8 @@ describe('lookupPostcode', () => {
 							postcode: 'E5 6AN',
 							latitude: 51.5,
 							longitude: -0.07,
-							admin_district: 'Hackney'
+							admin_district: 'Hackney',
+							region: 'London'
 						}
 					})
 				)
@@ -66,7 +72,8 @@ describe('lookupPostcode', () => {
 			postcode: 'E5 6AN',
 			latitude: 51.5,
 			longitude: -0.07,
-			district: 'Hackney'
+			district: 'Hackney',
+			region: 'London'
 		});
 	});
 
@@ -136,5 +143,36 @@ describe('autocompletePostcode', () => {
 		vi.stubGlobal('fetch', spy);
 		await expect(autocompletePostcode('N')).resolves.toEqual([]);
 		expect(spy).not.toHaveBeenCalled();
+	});
+});
+
+describe('isLondonPostcode', () => {
+	const respondWithRegion = (postcode: string, region: string) =>
+		mockFetch(
+			() =>
+				new Response(
+					JSON.stringify({ result: { postcode, latitude: 51.4, longitude: -0.1, region } })
+				)
+		);
+
+	it('accepts a postcode postcodes.io places in London', async () => {
+		respondWithRegion('CR0 1AA', 'London');
+		await expect(isLondonPostcode('CR0 1AA')).resolves.toBe(true);
+	});
+
+	it('rejects a postcode postcodes.io places outside London, even with a London-ish prefix', async () => {
+		// DA1 is Dartford (Kent): the prefix fallback would let it through, the region must not.
+		respondWithRegion('DA1 1AA', 'South East');
+		await expect(isLondonPostcode('DA1 1AA')).resolves.toBe(false);
+	});
+
+	it('falls back to the prefix check when the lookup fails', async () => {
+		mockFetch(() => {
+			throw new TypeError('fetch failed');
+		});
+		await expect(isLondonPostcode('SW1A 2AA')).resolves.toBe(true);
+		await expect(isLondonPostcode('M1 1AE')).resolves.toBe(false);
+		await expect(isLondonPostcode('EH1 1YZ')).resolves.toBe(false);
+		await expect(isLondonPostcode('not a postcode')).resolves.toBe(false);
 	});
 });

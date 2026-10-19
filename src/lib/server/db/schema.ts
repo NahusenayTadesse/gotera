@@ -6,13 +6,16 @@ import {
 	int,
 	decimal,
 	mysqlEnum,
-	json,
 	date,
 	unique,
 	index,
-	timestamp
+	timestamp,
+	datetime
 } from 'drizzle-orm/mysql-core';
 import { secureFields, user } from './auth.schema';
+// Not drizzle's `json`: this one parses on read, which MariaDB needs (see ./json).
+import { json } from './json';
+import { ADDON_AVAILABILITY, ADDON_CATEGORIES } from '../../addons';
 
 export * from './auth.schema';
 
@@ -49,6 +52,13 @@ export const subscriptions = mysqlTable('subscriptions', {
 	pendingPlanAt: timestamp('pending_plan_at'),
 	quantity: int('quantity').default(1).notNull(),
 	addressId: varchar('address_id', { length: 36 }).references(() => addresses.id),
+	// What Stripe is actually billing this subscription, mirrored by the webhook's
+	// `syncSubscription`. A customer who joined before a price change stays on their old
+	// Stripe Price, so `plans.pricePence` (today's price) is not what they pay. NULL on
+	// rows the webhook hasn't touched since this column was added — fall back to the
+	// plan's price (see `subscriptionUnitPrice` in $lib/server/plans).
+	stripePriceId: varchar('stripe_price_id', { length: 255 }),
+	unitPricePence: int('unit_price_pence'),
 	...secureFields
 });
 
@@ -92,9 +102,22 @@ export const addons = mysqlTable('addons', {
 		.$defaultFn(() => crypto.randomUUID()),
 	name: varchar('name', { length: 255 }).notNull(),
 	description: text('description'),
-	category: mysqlEnum('category', ['spice', 'sauce', 'pantry', 'kit']),
+	// "Type" in the dashboard. Values live in $lib/addons so the shop and editor agree.
+	category: mysqlEnum('category', ADDON_CATEGORIES),
+	// Whether it can be bought on its own from /addons, only alongside injera, or both.
+	availability: mysqlEnum('availability', ADDON_AVAILABILITY).default('both').notNull(),
 	pricePence: int('price_pence').notNull(),
+	// An uploaded file name (served from /files), or a full URL on older rows.
 	imageUrl: text('image_url'),
+	// Pack size shown on the card, e.g. "250 g jar".
+	unitLabel: varchar('unit_label', { length: 64 }),
+	// Short ribbon such as "New" or "Bestseller".
+	badge: varchar('badge', { length: 32 }),
+	// Dietary / flavour tags from ADDON_TAGS, as a JSON string array.
+	tags: json('tags').$type<string[]>(),
+	spiceLevel: int('spice_level').default(0).notNull(),
+	ingredients: text('ingredients'),
+	isFeatured: boolean('is_featured').default(false).notNull(),
 	sortOrder: int('sort_order').default(0),
 	// No `stripePriceId` here on purpose: add-on line items are priced inline from
 	// `pricePence` at checkout (see `addonLineItems` in /subscribe). A stored Stripe Price
@@ -154,6 +177,24 @@ export const deliveries = mysqlTable(
 		// distinct from `id` so an admin-facing URL leaking this delivery's id (e.g. the
 		// dashboard's `?manageAddons=`) can't be used to reach the customer page.
 		addonAccessToken: varchar('addon_access_token', { length: 64 }).unique(),
+		// The Stripe invoice that paid for this delivery. Unique, so a retried
+		// `checkout.session.completed` / `invoice.paid` webhook can't book a second
+		// delivery for the same payment — the insert fails and the retry is a no-op.
+		stripeInvoiceId: varchar('stripe_invoice_id', { length: 255 }).unique(),
+		// Main-product units this delivery currently holds in `stock`, and the date they
+		// are held against. Lets skipping, failing, rescheduling or deleting a delivery
+		// give back exactly what it took (see `syncDeliveryStock` in stock.ts).
+		stockUnits: int('stock_units').default(0).notNull(),
+		stockDate: date('stock_date'),
+		// What this delivery was, frozen when it was booked: the plan, its pack count, how
+		// many the customer had, and the unit price they were billed. Without these, order
+		// history re-derives everything from today's plan and subscription, so a later
+		// price change or plan switch rewrites what past deliveries appear to have been.
+		// NULL only on rows booked before these columns existed and not backfilled.
+		planId: varchar('plan_id', { length: 36 }), // -> plans.id (no FK: see planPrices)
+		packs: int('packs'),
+		quantity: int('quantity'),
+		unitPricePence: int('unit_price_pence'),
 		...secureFields
 	},
 	(table) => [
@@ -347,6 +388,16 @@ export const giftOrders = mysqlTable('gift_orders', {
 	// for gift/guest orders), so this is the only record of what was purchased, and the
 	// only thing the dashboard and packing slips can read.
 	addons: json('addons').$type<{ id: string; name: string; pricePence: number; quantity: number }[]>(),
+	// The Saturday the order was booked onto when it was paid, and the main-product units
+	// it reserved in `stock` for that date (released again if the order is deleted).
+	deliveryDate: date('delivery_date'),
+	stockUnits: int('stock_units').default(0).notNull(),
+	// Which plan was bought and at what price, written at checkout; `amountPence` is the
+	// total Stripe actually charged (plan + add-ons), written by the webhook on payment.
+	// NULL on orders placed before these columns existed.
+	planId: varchar('plan_id', { length: 36 }), // -> plans.id (no FK: see planPrices)
+	unitPricePence: int('unit_price_pence'),
+	amountPence: int('amount_pence'),
 	...secureFields
 });
 
@@ -364,6 +415,14 @@ export const guestOrders = mysqlTable('guest_orders', {
 		addressId: varchar('address_id', { length: 36 }).references(() => addresses.id),
 		quantity: int('quantity').default(1).notNull(),
 		addons: json('addons').$type<{ id: string; name: string; pricePence: number; quantity: number }[]>(),
+		// See giftOrders.deliveryDate / stockUnits.
+		deliveryDate: date('delivery_date'),
+		stockUnits: int('stock_units').default(0).notNull(),
+		// See giftOrders.planId / unitPricePence / amountPence. `planId` stays NULL for
+		// add-on-only orders from /addons, which have no plan.
+		planId: varchar('plan_id', { length: 36 }), // -> plans.id (no FK: see planPrices)
+		unitPricePence: int('unit_price_pence'),
+		amountPence: int('amount_pence'),
 
 	...secureFields
 });
@@ -419,12 +478,220 @@ export const plans = mysqlTable(
 		// ── Admin controls ──
 		active: boolean('active').default(true).notNull(), // hide without deleting
 		sortOrder: int('sort_order').default(0).notNull(),
+		// Shown as "Default quantity" in the dashboard; nothing reads it yet. The quantity
+		// a customer actually buys lives on the subscription / order, not here.
 		quantity: int('quantity').default(1).notNull(),
-		
+
+		// ── Product definition ──
+		// Injera in one pack. `packs` × this × the order quantity = injera delivered.
+		injeraPerPack: int('injera_per_pack').default(3).notNull(),
+		// ISO 4217, lowercase as Stripe writes it. Everything is GBP today; stored so a
+		// second currency doesn't need a migration of every price-bearing table.
+		currency: varchar('currency', { length: 3 }).default('gbp').notNull(),
+		// Optional sale window (seasonal / limited plans). NULL = no limit on that side.
+		availableFrom: datetime('available_from'),
+		availableUntil: datetime('available_until'),
+		// Most a customer can order at once. NULL = the checkout's own cap applies.
+		maxQuantity: int('max_quantity'),
+
+		// ── Translations ──
+		// Per-locale overrides of the customer-facing text, e.g.
+		// { am: { name, subtitle, freqLabel, bullets } }. Anything missing falls back to the
+		// English columns above (see `localizePlan` in $lib/server/plans).
+		translations: json('translations').$type<PlanTranslations>(),
 
 		...secureFields
 	},
 	(table) => [index('idx_plans_kind').on(table.kind), index('idx_plans_active').on(table.active)]
 );
 
+export type PlanTranslation = {
+	name?: string;
+	subtitle?: string;
+	freqLabel?: string;
+	bullets?: string[];
+};
+export type PlanTranslations = Partial<Record<string, PlanTranslation>>;
 
+// ── Plan price history ──
+// Every Stripe Price a plan has ever sold at. Stripe Prices are immutable, so changing a
+// plan's price means a new Price ID — but customers who subscribed earlier keep being
+// billed on the old one. `plans.stripePriceId` is only the price NEW checkouts use; this
+// table is how a webhook carrying an older Price ID is still matched to its plan.
+// `activeTo` NULL = the plan's current price. Maintained by `syncPlanPrices`.
+export const planPrices = mysqlTable(
+	'plan_prices',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		// -> plans.id. Deliberately not a DB foreign key, like the other `plan_id` snapshot
+		// columns added with it: `plans.id` has a different charset from these tables on
+		// some databases (MariaDB then refuses the constraint), and plans are archived,
+		// never deleted, so there's nothing for the constraint to protect against.
+		planId: varchar('plan_id', { length: 36 }).notNull(),
+		stripePriceId: varchar('stripe_price_id', { length: 255 }).notNull().unique(),
+		pricePence: int('price_pence').notNull(),
+		currency: varchar('currency', { length: 3 }).default('gbp').notNull(),
+		activeFrom: timestamp('active_from').defaultNow().notNull(),
+		activeTo: timestamp('active_to'),
+		createdAt: timestamp('created_at').defaultNow().notNull()
+	},
+	(table) => [index('idx_plan_prices_plan_id').on(table.planId)]
+);
+
+
+
+// ── Partner / supplier applications (public /partners form) ──
+export const partnerApplications = mysqlTable(
+	'partner_applications',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		type: mysqlEnum('type', ['partner', 'supplier']).notNull(),
+		businessName: varchar('business_name', { length: 255 }).notNull(),
+		contactName: varchar('contact_name', { length: 255 }).notNull(),
+		email: varchar('email', { length: 255 }).notNull(),
+		phone: varchar('phone', { length: 40 }),
+		website: varchar('website', { length: 255 }),
+		city: varchar('city', { length: 120 }),
+		postcode: varchar('postcode', { length: 16 }),
+		// Partner: restaurant / shop / caterer / community … — Supplier: teff / spices / packaging …
+		category: varchar('category', { length: 60 }).notNull(),
+		message: text('message').notNull(),
+		status: mysqlEnum('status', ['new', 'contacted', 'approved', 'declined']).default('new').notNull(),
+		...secureFields
+	},
+	(t) => [index('partner_applications_status_idx').on(t.status)]
+);
+
+// One row per hand-over with an approved partner/supplier. For suppliers it's goods we
+// received from them; for partners it's injera we delivered to them — the partner's
+// `type` decides how the dashboard words it, the columns are the same.
+export const partnerDeliveries = mysqlTable(
+	'partner_deliveries',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		partnerId: varchar('partner_id', { length: 36 })
+			.notNull()
+			.references(() => partnerApplications.id, { onDelete: 'cascade' }),
+		deliveredOn: date('delivered_on', { mode: 'string' }).notNull(),
+		location: varchar('location', { length: 255 }).notNull(),
+		items: varchar('items', { length: 500 }).notNull(),
+		// decimal: suppliers deal in kg as often as whole units. mysql2 returns a string.
+		quantity: decimal('quantity', { precision: 10, scale: 2 }).notNull(),
+		unit: varchar('unit', { length: 20 }).notNull(),
+		valuePence: int('value_pence'),
+		reference: varchar('reference', { length: 100 }),
+		status: mysqlEnum('status', ['scheduled', 'delivered', 'cancelled']).default('delivered').notNull(),
+		notes: text('notes'),
+		...secureFields
+	},
+	(t) => [index('partner_deliveries_partner_idx').on(t.partnerId, t.deliveredOn)]
+);
+
+// ── Traceability: batches ──
+// A lot of product — injera we baked, or an add-on we made or bought in. Every unit we
+// ship is allocated to a batch (`batchAllocations`), so any delivery traces back to a
+// batch, and a batch to its source: "in house", or the supplier/partner it came from.
+export const batches = mysqlTable(
+	'batches',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		// Human batch number printed on packs, e.g. INJ-261018-01 / ADD-BER-261018-01.
+		code: varchar('code', { length: 40 }).notNull().unique(),
+		product: mysqlEnum('product', ['injera', 'addon']).notNull(),
+		addonId: varchar('addon_id', { length: 36 }).references(() => addons.id),
+		source: mysqlEnum('source', ['in_house', 'external']).default('in_house').notNull(),
+		// Set when `source` is external: the approved supplier/partner it came from.
+		sourcePartnerId: varchar('source_partner_id', { length: 36 }).references(
+			() => partnerApplications.id,
+			{ onDelete: 'restrict' }
+		),
+		// The supply receipt it arrived on, and the supplier's own lot number.
+		sourceDeliveryId: varchar('source_delivery_id', { length: 36 }).references(
+			() => partnerDeliveries.id,
+			{ onDelete: 'set null' }
+		),
+		supplierLotRef: varchar('supplier_lot_ref', { length: 100 }),
+		producedOn: date('produced_on', { mode: 'string' }).notNull(),
+		bestBefore: date('best_before', { mode: 'string' }),
+		// Units this batch can fill — packs for injera, units for add-ons.
+		quantity: int('quantity').notNull(),
+		unit: varchar('unit', { length: 20 }).default('packs').notNull(),
+		status: mysqlEnum('status', ['active', 'quarantined', 'recalled', 'depleted'])
+			.default('active')
+			.notNull(),
+		notes: text('notes'),
+		...secureFields
+	},
+	(t) => [
+		index('batches_product_idx').on(t.product, t.addonId, t.status),
+		index('batches_source_partner_idx').on(t.sourcePartnerId)
+	]
+);
+
+// Ingredient lineage for batches we make in house: which supplier receipts (teff lot,
+// spice delivery…) went into it. Lets a supplier recall walk forward to customers.
+export const batchInputs = mysqlTable(
+	'batch_inputs',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		batchId: varchar('batch_id', { length: 36 })
+			.notNull()
+			.references(() => batches.id, { onDelete: 'cascade' }),
+		partnerDeliveryId: varchar('partner_delivery_id', { length: 36 })
+			.notNull()
+			.references(() => partnerDeliveries.id, { onDelete: 'restrict' }),
+		...secureFields
+	},
+	(t) => [unique('batch_inputs_uniq').on(t.batchId, t.partnerDeliveryId)]
+);
+
+// What actually shipped from which batch. One row per (shipment line, batch) — a line
+// can be split across two batches when the first runs out. Exactly one of the shipment
+// FKs is set, matching `shipmentType`; `lineKey` ('subscription:<id>:injera' or
+// '…:<addonId>') carries the uniqueness, since MySQL unique indexes ignore NULLs.
+export const batchAllocations = mysqlTable(
+	'batch_allocations',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		batchId: varchar('batch_id', { length: 36 })
+			.notNull()
+			.references(() => batches.id, { onDelete: 'restrict' }),
+		shipmentType: mysqlEnum('shipment_type', ['subscription', 'guest', 'gift', 'partner']).notNull(),
+		deliveryId: varchar('delivery_id', { length: 36 }).references(() => deliveries.id, {
+			onDelete: 'cascade'
+		}),
+		guestOrderId: varchar('guest_order_id', { length: 36 }).references(() => guestOrders.id, {
+			onDelete: 'cascade'
+		}),
+		giftOrderId: varchar('gift_order_id', { length: 36 }).references(() => giftOrders.id, {
+			onDelete: 'cascade'
+		}),
+		partnerDeliveryId: varchar('partner_delivery_id', { length: 36 }).references(
+			() => partnerDeliveries.id,
+			{ onDelete: 'cascade' }
+		),
+		addonId: varchar('addon_id', { length: 36 }).references(() => addons.id),
+		lineKey: varchar('line_key', { length: 120 }).notNull(),
+		quantity: int('quantity').notNull(),
+		// 'auto' (FEFO) or 'manual' (admin picked it) — manual picks are never overwritten.
+		method: mysqlEnum('method', ['auto', 'manual']).default('auto').notNull(),
+		...secureFields
+	},
+	(t) => [
+		unique('batch_allocations_line_batch_uniq').on(t.lineKey, t.batchId),
+		index('batch_allocations_batch_idx').on(t.batchId),
+		index('batch_allocations_line_idx').on(t.lineKey)
+	]
+);

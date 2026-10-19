@@ -43,7 +43,7 @@
 
 		{#if !data.open}
 			<p class="banner banner--warn">
-				This delivery can no longer be changed, so extras can't be added to it.
+				The cut-off for this delivery ({data.cutoffLabel}) has passed, so extras can't be added to it.
 			</p>
 		{:else if data.catalogue.length === 0}
 			<p class="empty">No extras are available right now — check back another time.</p>

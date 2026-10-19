@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { m } from '$lib/paraglide/messages.js';
+import { MAX_PLAN_QTY } from './limits';
 
 /**
  * Zod 4 schema for the GOTERA subscribe / gift checkout page.
@@ -16,23 +17,27 @@ import { m } from '$lib/paraglide/messages.js';
  */
 
 export const RECIPIENTS = ['me', 'gift'] as const;
-// NOTE: this list must stay in step with the `plans` table — the subscribe page renders
-// whatever is active in the DB, but `checkoutSchema.plan` validates against this enum, so
-// an active plan missing here is shown to customers and then rejected on submit.
-// `checkout.test.ts` guards the two staying in sync.
-export const SUB_PLANS = ['one-off', 'starter', 'regular', 'Family'] as const;
-export const GIFT_PLANS = ['single-gift', 'double-gift'] as const;
+// Plans are NOT listed here. `plan` is any well-formed slug, and the server checks it
+// against the `plans` table (active, on sale, right kind for the flow) — so a plan added
+// in the dashboard is buyable without a code change. Lowercased, so `?plan=Family` from
+// an old link still matches the stored `family`.
+export const PLAN_SLUG = z
+	.string()
+	.trim()
+	.toLowerCase()
+	.max(64)
+	.regex(/^[a-z0-9-]+$/);
 export const DELIVERY_DAYS = ['Saturday'] as const;
 export const FREQUENCIES = ['Monthly'] as const;
 
-export const ALL_PLANS = [...SUB_PLANS, ...GIFT_PLANS] as const;
+export type PlanSlug = string;
 
 /** Flash message shape returned via superforms `message()` and shown by sonner. */
 export type FormMessage = { type: 'success' | 'error' | 'redirect'; text?: string; url?: string };
 export const checkoutSchema = z
 	.object({
 		recipient: z.enum(RECIPIENTS).default('me'),
-		plan: z.enum(ALL_PLANS).default('regular'),
+		plan: PLAN_SLUG.default('regular'),
 		deliveryDay: z.enum(DELIVERY_DAYS).default('Saturday'),
 		frequency: z.enum(FREQUENCIES).default('Monthly'),
 
@@ -66,7 +71,10 @@ export const checkoutSchema = z
 		latitude: z.coerce.number().optional(),
 		longitude: z.coerce.number().optional(),
 		guestCheckout: z.boolean().default(false),
-		quantity: z.number().default(1),
+		// Packs of the chosen plan. Bounded so a hand-crafted post can't send 0, a negative,
+		// a fraction or an order the kitchen can't fill — Stripe would reject the first three
+		// with an opaque error.
+		quantity: z.coerce.number().int().min(1).max(MAX_PLAN_QTY).default(1),
 
 		// ── Gift-only ──
 		buyerName: z.string().max(255).optional(),
@@ -75,15 +83,8 @@ export const checkoutSchema = z
 		giftMessage: z.string().max(500).optional(),
 		durationMonths: z.number().int().min(1).max(12).default(1)
 	})
-	// Plan must match the chosen recipient.
-	.refine((v) => (v.recipient === 'me' ? (SUB_PLANS as readonly string[]).includes(v.plan) : true), {
-		error: m.subscribe_error_choose_subscription_plan(),
-		path: ['plan']
-	})
-	.refine(
-		(v) => (v.recipient === 'gift' ? (GIFT_PLANS as readonly string[]).includes(v.plan) : true),
-		{ error: m.subscribe_error_choose_gift_pack(), path: ['plan'] }
-	)
+	// Whether the plan suits the recipient ('me' = subscription/one-off, 'gift' = gift)
+	// depends on the plan's `kind`, which lives in the DB — the server actions check it.
 	// Address required for "me".
 	.refine((v) => (v.recipient === 'me' ? v.line1.trim().length > 0 : true), {
 		error: m.subscribe_error_line1_required(),
@@ -108,23 +109,3 @@ export const checkoutSchema = z
 	});
 
 export type CheckoutSchema = typeof checkoutSchema;
-
-/* ────────────────────────────────────────────────────────────────────────
- * Manage-page schemas (update / cancel).
- * These have no UI on the subscribe page — they belong on an account page —
- * but the actions live in +page.server.ts for now, per your request.
- * ──────────────────────────────────────────────────────────────────────── */
-
-export const updateSubscriptionSchema = z.object({
-	subscriberId: z.uuid(),
-	plan: z.enum(['starter', 'regular']),
-	addonIds: z.array(z.string().min(1)).default([]),
-	deliveryDay: z.enum(DELIVERY_DAYS).default('Saturday'),
-	marketingOptIn: z.boolean().default(true)
-});
-export type UpdateSubscriptionSchema = typeof updateSubscriptionSchema;
-
-export const cancelSubscriptionSchema = z.object({
-	subscriberId: z.uuid()
-});
-export type CancelSubscriptionSchema = typeof cancelSubscriptionSchema;

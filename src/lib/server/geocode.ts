@@ -28,6 +28,8 @@ export type GeocodedPostcode = {
 	longitude: number;
 	/** Local authority, e.g. "Haringey". Used to label stops in the route planner. */
 	district: string | null;
+	/** ONS region, e.g. "London" or "South East". Drives the London-only delivery rule. */
+	region: string | null;
 };
 
 /**
@@ -67,7 +69,8 @@ function toGeocoded(raw: unknown): GeocodedPostcode | null {
 		postcode: String(r.postcode ?? ''),
 		latitude,
 		longitude,
-		district: typeof r.admin_district === 'string' ? r.admin_district : null
+		district: typeof r.admin_district === 'string' ? r.admin_district : null,
+		region: typeof r.region === 'string' ? r.region : null
 	};
 }
 
@@ -156,4 +159,32 @@ export async function autocompletePostcode(partial: string): Promise<string[]> {
 	if (key.length < 3) return [];
 	const result = await get<string[]>(`/postcodes/${encodeURIComponent(key)}/autocomplete`);
 	return Array.isArray(result) ? result : [];
+}
+
+/**
+ * Fallback for `isLondonPostcode` when postcodes.io can't answer. Accepts a full,
+ * well-formed UK postcode in an area that is wholly London (E, EC, N, NW, SE, SW, W, WC)
+ * or that covers part of outer London (BR, CR, DA, EN, HA, IG, KT, RM, SM, TW, UB, WD).
+ *
+ * Deliberately lenient: it only runs during an outage or for a postcode postcodes.io
+ * doesn't know, and turning away a real Croydon or Harrow customer costs more than the
+ * odd Dartford order slipping through for a manual check.
+ */
+const LONDON_POSTCODE =
+	/^(EC|WC|NW|SE|SW|BR|CR|DA|EN|HA|IG|KT|RM|SM|TW|UB|WD|E|N|W)\d[A-Z\d]?\s*\d[A-Z]{2}$/i;
+
+/**
+ * Is this postcode inside our London delivery area?
+ *
+ * postcodes.io's `region` is the source of truth ("London" covers all 32 boroughs and
+ * the City). When the lookup fails or doesn't know the postcode, fall back to the area
+ * prefix check above so an outage never stops London customers ordering.
+ *
+ * Unlike the rest of this file, this function *does* gate checkout — on purpose. Like
+ * the rest, it never throws.
+ */
+export async function isLondonPostcode(postcode: string): Promise<boolean> {
+	const hit = await lookupPostcode(postcode);
+	if (hit?.region) return hit.region === 'London';
+	return LONDON_POSTCODE.test(postcode.trim());
 }

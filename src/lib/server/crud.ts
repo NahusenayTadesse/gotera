@@ -2,7 +2,7 @@ import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
-import type { RequestEvent, ServerLoadEvent } from '@sveltejs/kit';
+import { error, type RequestEvent, type ServerLoadEvent } from '@sveltejs/kit';
 import type { MySqlTable } from 'drizzle-orm/mysql-core';
 import { db } from '$lib/server/db';
 import { saveUploadedFile } from '$lib/server/upload';
@@ -121,8 +121,15 @@ export function contentCrud<T extends AnyTable, A extends AnySchema, E extends A
 		return { addForm, editForm, deleteForm, rows };
 	};
 
+	// Defence in depth: hooks.server.ts already refuses non-admins on /dashboard, but these
+	// actions mutate shared tables, so they don't rely on the route guard alone.
+	const requireAdmin = (locals: App.Locals) => {
+		if (!locals.user || locals.role !== 'Admin') error(403, 'Not Allowed');
+	};
+
 	const actions = {
 		add: async ({ request, locals }: RequestEvent) => {
+			requireAdmin(locals);
 			const form = await superValidate(request, zod4(addSchema));
 			if (!form.valid) {
 				return message(
@@ -147,6 +154,7 @@ export function contentCrud<T extends AnyTable, A extends AnySchema, E extends A
 		},
 
 		edit: async ({ request, locals }: RequestEvent) => {
+			requireAdmin(locals);
 			const form = await superValidate(request, zod4(editSchema));
 			if (!form.valid) {
 				return message(
@@ -175,6 +183,7 @@ export function contentCrud<T extends AnyTable, A extends AnySchema, E extends A
 		},
 
 		delete: async ({ request, locals }: RequestEvent) => {
+			requireAdmin(locals);
 			const form = await superValidate(request, zod4(idSchema));
 			if (!form.valid) {
 				return message(form, { type: 'error', text: 'Invalid request' }, { status: 400 });
