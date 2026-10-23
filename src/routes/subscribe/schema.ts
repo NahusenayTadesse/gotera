@@ -27,7 +27,7 @@ export const PLAN_SLUG = z
 	.toLowerCase()
 	.max(64)
 	.regex(/^[a-z0-9-]+$/);
-export const DELIVERY_DAYS = ['Saturday'] as const;
+export const DELIVERY_DAYS = ['Sat-Mon'] as const;
 export const FREQUENCIES = ['Monthly'] as const;
 
 export type PlanSlug = string;
@@ -38,7 +38,7 @@ export const checkoutSchema = z
 	.object({
 		recipient: z.enum(RECIPIENTS).default('me'),
 		plan: PLAN_SLUG.default('regular'),
-		deliveryDay: z.enum(DELIVERY_DAYS).default('Saturday'),
+		deliveryDay: z.enum(DELIVERY_DAYS).default('Sat-Mon'),
 		frequency: z.enum(FREQUENCIES).default('Monthly'),
 
 		// Addon *catalogue* ids (real UUIDs from the addons table). Validated

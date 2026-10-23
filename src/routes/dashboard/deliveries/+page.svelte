@@ -171,10 +171,10 @@
 
 <Card.Root class="mb-8 w-full lg:w-lg">
 	<Card.Header>
-		<Card.Title>Saturday delivery calendar</Card.Title>
+		<Card.Title>Delivery calendar</Card.Title>
 		<Card.Description>
-			We deliver every Saturday by default. Skip a Saturday here and any deliveries already
-			booked for it move automatically to the next one.
+			We deliver every Saturday, Sunday and Monday by default. Skip one of those days here and
+			any deliveries already booked for it move automatically to the next open day.
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="flex flex-col gap-5">

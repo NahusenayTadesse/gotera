@@ -229,7 +229,7 @@ export const customerUpcomingDelivery = (raw: {
 };
 
 /**
- * Sent when the Saturday a customer would normally have got was already at capacity, so
+ * Sent when the delivery day a customer would normally have got was already at capacity, so
  * their first delivery is the one after. Names both dates explicitly — the useful fact is
  * *when it will arrive*, not that something was full.
  */
@@ -274,7 +274,7 @@ export const adminStockLow = (raw: {
 					detailRow('Delivery date', data.deliveryLabel) +
 					detailRow('Remaining', `${data.remaining} of ${data.capacity}`)
 			)}
-			<p style="margin:14px 0 6px;">Once it hits zero, new orders roll to the following Saturday automatically.</p>
+			<p style="margin:14px 0 6px;">Once it hits zero, new orders roll to the next open delivery day automatically.</p>
 			${button('Manage stock', `${SITE}/dashboard/stock`)}
 		`
 		})
@@ -480,7 +480,7 @@ export const customerOrderConfirmed = (raw: {
 			<p style="margin:0 0 14px; color:${C.taupe}; font-size:14px; line-height:1.6;">
 				${data.addressLines.filter(Boolean).join('<br />')}
 			</p>
-			<p style="margin:0 0 6px;">We deliver on Saturdays across London. There's nothing more you need to do.</p>
+			<p style="margin:0 0 6px;">We deliver on Saturdays, Sundays and Mondays across London. There's nothing more you need to do.</p>
 			${button('View your order', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Address wrong? Reply to this email and we'll fix it before dispatch.</p>
 		`
@@ -502,7 +502,7 @@ export const customerGiftReceived = (raw: {
 			preheader: `Your injera gift for ${data.recipientName} is booked in.`,
 			body: `
 			<p style="margin:0 0 14px;">Hi ${data.buyerName},</p>
-			<p style="margin:0 0 6px;">Thank you — your payment has gone through and the gift is booked in. We'll deliver it to ${data.recipientName} on our next Saturday run.</p>
+			<p style="margin:0 0 6px;">Thank you — your payment has gone through and the gift is booked in. We'll deliver it to ${data.recipientName} on our next delivery run.</p>
 			${detailTable(
 				detailRow('Recipient', data.recipientName) +
 					detailRow('Total paid', data.amountLabel) +

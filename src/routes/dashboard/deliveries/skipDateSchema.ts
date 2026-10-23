@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 
-/** Admin marks a Saturday as skipped (bank holiday, etc). Any deliveries already
- * booked for it get bumped to the next non-skipped Saturday automatically. */
+/** Admin marks a delivery day (Sat, Sun or Mon) as skipped (bank holiday, etc). Any
+ * deliveries already booked for it get bumped to the next open delivery day automatically. */
 export const skipDateSchema = z.object({
 	date: z.string().min(1, { error: 'Pick a date.' }),
 	reason: z.string().max(255).optional()

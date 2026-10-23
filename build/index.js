@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs__default from 'node:fs';
 import process from 'node:process';
-import { p as polka, h as handler, f as format_listening_address } from './server/chunks/handler-0X5O35jG.js';
+import { p as polka, h as handler, f as format_listening_address } from './server/chunks/handler-Duj18IEi.js';
 import { env, timeout_env } from './env.js';
 import { rm } from 'node:fs/promises';
 import './shims.js';
@@ -13,16 +13,16 @@ import 'node:querystring';
 import 'node:stream';
 import './server/chunks/chunks/shared.js-CgqsOrws.js';
 import './server/chunks/chunks/utils.js-BQt5v-8G.js';
-import './server/chunks/index.js-CBdg6S5O.js';
+import './server/chunks/index.js-Bt0ds7Zy.js';
 import './server/chunks/chunks/internal.js-B6-4oVm4.js';
 import './server/chunks/chunks/shared-server.js-9-2j12mp.js';
 import './server/chunks/chunks/exports.js-BT-QlP_6.js';
 import './server/chunks/chunks/routing.js-CJYUshuD.js';
 import './server/chunks/chunks/server.js-qDPizQqb.js';
-import './server/chunks/chunks/internal2.js-aW-XQIo9.js';
+import './server/chunks/chunks/internal2.js-C5oX8Rtc.js';
 import './server/chunks/chunks/legacy-client.js-BfOaXL26.js';
 import './server/chunks/chunks/app.js-C6Wtb5Pa.js';
-import './server/chunks/manifest.js-BubhD7Va.js';
+import './server/chunks/manifest.js-DsEWn1bI.js';
 import 'node:url';
 
 const path = env('SOCKET_PATH', false);

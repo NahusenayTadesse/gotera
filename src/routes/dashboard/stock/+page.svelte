@@ -23,7 +23,7 @@
 		};
 	}
 
-	/** Rows grouped by date so each Saturday reads as one block. */
+	/** Rows grouped by date so each delivery day reads as one block. */
 	const byDate = $derived.by(() => {
 		const map = new Map<string, typeof data.rows>();
 		for (const row of data.rows) {
@@ -50,7 +50,7 @@
 	<div>
 		<h1 class="dash-heading text-2xl font-semibold">Stock</h1>
 		<p class="text-sm text-muted-foreground">
-			Capacity per delivery Saturday. When a date fills up, new orders roll to the next one
+			Capacity per delivery day (Saturday, Sunday and Monday). When a date fills up, new orders roll to the next one
 			automatically.
 		</p>
 	</div>
@@ -67,7 +67,7 @@
 			class="flex flex-wrap items-end gap-3"
 		>
 			<label class="flex flex-col gap-1 text-sm">
-				Saturday
+				Delivery day
 				<input
 					type="date"
 					name="date"

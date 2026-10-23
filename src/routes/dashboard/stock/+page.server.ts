@@ -3,11 +3,11 @@ import { fail } from '@sveltejs/kit';
 import { and, asc, desc, eq, gte } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { stock, stockChanges, addons, user } from '$lib/server/db/schema';
-import { nextDeliveryDate } from '$lib/server/deliverySchedule';
+import { isDeliveryDay, nextDeliveryDate } from '$lib/server/deliverySchedule';
 import { getOrCreateStock, setCapacity, MAIN_SCOPE } from '$lib/server/stock';
 import { toCalendarString } from '$lib/format';
 
-/** How many upcoming Saturdays the page manages at once. */
+/** How many weeks of upcoming delivery days the page manages at once. */
 const HORIZON_WEEKS = 8;
 
 export const load: PageServerLoad = async () => {
@@ -98,7 +98,7 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	// Open a date for an item that has no row yet (a new add-on, or a future Saturday).
+	// Open a date for an item that has no row yet (a new add-on, or a future delivery day).
 	createRow: async ({ request }) => {
 		const data = await request.formData();
 		const date = data.get('date');
@@ -106,6 +106,9 @@ export const actions: Actions = {
 
 		if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
 			return fail(400, { error: 'Pick a date.' });
+		}
+		if (!isDeliveryDay(date)) {
+			return fail(400, { error: 'We only deliver on Saturdays, Sundays and Mondays.' });
 		}
 
 		const scope = typeof addonId === 'string' && addonId && addonId !== MAIN_SCOPE ? addonId : null;

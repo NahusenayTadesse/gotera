@@ -431,34 +431,17 @@
 <!-- ═══════════════════════ MOBILE: wizard ═══════════════════════ -->
 <div class="sub-page mobile-view">
 	<div class="sub-bg">
-		<div class="sub-plan-hero">
-			{#if step === 'who'}
+		<!-- The plan summary only showed on later steps, where it repeated the card the
+		     buyer had just picked — so the hero is just the intro on the first step. -->
+		{#if step === 'who'}
+			<div class="sub-plan-hero">
 				<span class="sub-plan-eyebrow">{m.subscribe_eyebrow()}</span>
 				<span class="sub-plan-name"
 					>{m.subscribe_hero_heading_1()}<br />{m.subscribe_hero_heading_2()}</span
 				>
 				<span class="sub-plan-price">{m.subscribe_hero_no_minimum()}</span>
-			{:else}
-				<span class="sub-plan-eyebrow"
-					>{$form.recipient === 'gift'
-						? m.subscribe_badge_gift()
-						: m.subscribe_plan_name_suffix({ name: currentPlanDetails?.name ?? '' })}</span
-				>
-				<span class="sub-plan-name"
-					>{currentPlanDetails?.name}<br /><em
-						>{currentIsOneOff
-							? m.subscribe_freq_one_time()
-							: m.subscribe_freq_every_month()}</em
-					></span
-				>
-				<span class="sub-plan-price">
-					<strong>£{(currentPlanDetails?.price ?? 0).toFixed(2)}</strong>
-					{currentIsOneOff ? m.subscribe_unit_one_time() : m.subscribe_unit_per_month()}
-					{#if addonsTotal > 0}· <strong>+£{addonsTotal.toFixed(2)}</strong>
-						{m.subscribe_extras_label()}{/if}
-				</span>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</div>
 
 	<div class="sub-progress">
@@ -1061,7 +1044,7 @@
 									>{m.subscribe_field_delivery_day_label()}</label
 								>
 								<select id="delivery-day" class="select" bind:value={$form.deliveryDay}
-									><option value="Saturday">{m.subscribe_option_saturday()}</option></select
+									><option value="Sat-Mon">{m.subscribe_option_saturday()}</option></select
 								>
 								<div class="field-help">{m.subscribe_help_delivery_day()}</div>
 							</div>
@@ -1390,7 +1373,7 @@
 					<div class="sum-row">
 						<span class="sum-label">{m.subscribe_label_delivery()}</span>
 						<div class="sum-val">
-							{$form.deliveryDay}{currentIsOneOff ? '' : ` · ${$form.frequency}`}
+							{m.subscribe_option_saturday()}{currentIsOneOff ? '' : ` · ${$form.frequency}`}
 						</div>
 						<div class="sum-sub">{m.subscribe_note_london_only()}</div>
 					</div>
@@ -2715,14 +2698,43 @@
 		.mobile-view .plan-sel-card__badge {
 			font-size: 0.66rem;
 		}
+		.mobile-view .plan-sel {
+			gap: 12px;
+		}
+		.mobile-view .plan-sel-card {
+			padding: 20px 16px;
+		}
+		.mobile-view .plan-sel-card__name.pad,
+		.mobile-view .plan-sel-card__price.pad {
+			padding-top: 16px;
+		}
 		.mobile-view .plan-sel-card__name h3 {
-			font-size: 1.28rem;
+			font-size: 1.65rem;
+			margin-bottom: 6px;
 		}
 		.mobile-view .plan-sel-card__name p {
-			font-size: 0.85rem;
+			font-size: 1.05rem;
+			line-height: 1.4;
+			color: #4a4540;
+		}
+		.mobile-view .plan-sel-card__price {
+			padding-left: 10px;
+		}
+		.mobile-view .plan-sel-card__price-num {
+			font-size: 1.9rem;
 		}
 		.mobile-view .plan-sel-card__price-freq {
-			font-size: 0.78rem;
+			font-size: 0.88rem;
+			margin-top: 4px;
+		}
+		.mobile-view .plan-sel-card__dot {
+			width: 20px;
+			height: 20px;
+			margin-left: 12px;
+		}
+		.mobile-view .plan-sel-card.active .plan-sel-card__dot::after {
+			width: 8px;
+			height: 8px;
 		}
 		.mobile-view .who-card__text h3 {
 			font-size: 1.22rem;

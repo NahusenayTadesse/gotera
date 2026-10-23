@@ -24,7 +24,7 @@ import { bulkEmailSchema } from '$lib/schemas/bulkEmail';
 import { parseJsonColumn } from '$lib/components/dashboard/format';
 import { deliverySchema } from './schema';
 import { skipDateSchema, type AffectedRecipient, type SkipDateFormMessage } from './skipDateSchema';
-import { nextDeliveryDateAfter } from '$lib/server/deliverySchedule';
+import { isDeliveryDay, nextDeliveryDateAfter } from '$lib/server/deliverySchedule';
 import { fullDate } from '$lib/format';
 import { syncAfter, syncAllocations, traceSummaries, type ShipmentRef } from '$lib/server/traceability';
 
@@ -258,12 +258,20 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	// Mark a Saturday as skipped. Anything already booked for it moves to the next
-	// non-skipped Saturday, and the admin gets back who was affected so they can
+	// Mark a delivery day as skipped. Anything already booked for it moves to the next
+	// open delivery day, and the admin gets back who was affected so they can
 	// review/send a notice via the BulkEmailDialog opened on the client.
 	addSkipDate: async ({ request }) => {
 		const form = await superValidate(request, zod4(skipDateSchema));
 		if (!form.valid) return fail(400, { form });
+
+		if (!isDeliveryDay(form.data.date)) {
+			return message<SkipDateFormMessage>(
+				form,
+				{ type: 'error', text: 'We only deliver on Saturdays, Sundays and Mondays — pick one of those.' },
+				{ status: 400 }
+			);
+		}
 
 		// Local midnight — matches how mysql2 hands `date` columns back, so this compares
 		// equal to a delivery row's scheduledDate for the same calendar day.
@@ -310,7 +318,7 @@ export const actions: Actions = {
 			.set({ scheduledDate: newDate })
 			.where(and(eq(deliveries.status, 'scheduled'), eq(deliveries.scheduledDate, skipDate)));
 
-		// Move each delivery's stock with it, off the skipped Saturday onto the new one.
+		// Move each delivery's stock with it, off the skipped day onto the new one.
 		for (const r of affectedRows) {
 			try {
 				await syncDeliveryStock(r.id);
