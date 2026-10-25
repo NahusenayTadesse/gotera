@@ -95,7 +95,15 @@
 					placeholder="jane@example.com"
 					required
 				/>
-				<InputComp label="Phone" {form} {errors} type="text" name="phone" placeholder="+44 7..." />
+				<InputComp
+					label="Phone"
+					{form}
+					{errors}
+					type="tel"
+					name="phone"
+					placeholder="+44 7..."
+					required
+				/>
 				<InputComp
 					label="Marketing"
 					{form}

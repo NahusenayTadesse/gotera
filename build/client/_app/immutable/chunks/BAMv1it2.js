@@ -1,0 +1,1 @@
+import"./ymkjEyrY.js";import{t as e}from"./CyyBZS0p.js";var t=768,n=class extends e{constructor(e=t){super(`max-width: ${e-1}px`)}};export{n as t};

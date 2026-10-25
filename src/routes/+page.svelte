@@ -24,49 +24,20 @@ import type { PageData } from './$types';
 	let heroVideoReady = $state(false);
 	let heroCardVideoReady = $state(false);
 
-	// Bespoke homepage copy, keyed by slug. Facts (price/featured/existence)
-	// come from the DB; this only overrides the marketing wording. A plan with
-	// no entry here still renders using its DB name/subtitle/freq/bullets.
-	const CARD_COPY = $derived<
-		Record<string, { title?: string; desc?: string; freq?: string; bullets?: string[]; cta: string }>
-	>({
-		'one-off': {
-			desc: m.home_plan_oneoff_desc(),
-			bullets: [m.home_plan_oneoff_bullet1(), m.home_plan_oneoff_bullet2()],
-			cta: m.home_plan_oneoff_cta()
-		},
-		starter: {
-			desc: m.home_plan_starter_desc(),
-			bullets: [m.home_plan_starter_bullet1(), m.home_plan_starter_bullet2()],
-			cta: m.home_plan_starter_cta()
-		},
-		regular: {
-			desc: m.home_plan_regular_desc(),
-			bullets: [m.home_plan_regular_bullet1(), m.home_plan_regular_bullet2()],
-			cta: m.home_plan_regular_cta()
-		},
-		'single-gift': {
-			desc: m.home_plan_gift_desc(),
-			bullets: [m.home_plan_gift_bullet1(), m.home_plan_gift_bullet2()],
-			cta: m.home_plan_gift_cta()
-		}
-	});
-
-	// All subscription-type plans from the DB (already ordered by sortOrder),
-	// merged with any bespoke copy. Falls back to DB fields when copy is absent.
+	// Every card is built from the plan's DB row (already localized server-side, with
+	// English filling any missing translation) and ordered by sortOrder.
 	const cards = $derived(
 		(data?.subscriptionPlans ?? []).map((p) => {
-			const copy = CARD_COPY[p.slug] ?? { cta: m.home_plan_default_cta() };
-			// A one-off plan is charged once, so it never carries a per-month label —
-			// whatever the admin typed into the plan's freq field.
 			const oneOff = p.interval === 'one_time';
 			return {
 				slug: p.slug,
-				title: copy.title ?? p.name,
-				desc: copy.desc ?? p.subtitle,
-				freq: oneOff ? m.home_plan_freq_one_time() : (copy.freq ?? p.freq),
-				bullets: copy.bullets ?? p.bullets ?? [],
-				cta: copy.cta,
+				title: p.name,
+				desc: p.subtitle,
+				// The plan's own label wins, one-offs included; a one-off left blank in the
+				// dashboard still says it's a single order.
+				freq: p.freq || (oneOff ? m.home_plan_freq_one_time() : ''),
+				bullets: p.bullets ?? [],
+				cta: oneOff ? m.home_plan_oneoff_cta() : m.home_plan_choose_cta({ name: p.name }),
 				price: p.price,
 				featured: p.featured
 			};
@@ -207,7 +178,7 @@ import type { PageData } from './$types';
 <div class="proof-strip">
 	<div class="container proof-inner">
 		<div class="proof-stat">
-			<span class="proof-stat-num">12</span>
+			<span class="proof-stat-num">105</span>
 			<span class="proof-stat-label">{m.home_proof_label_subscribers()}</span>
 		</div>
 		<div class="proof-divider"></div>

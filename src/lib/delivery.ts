@@ -19,3 +19,14 @@ export const cutoffDateFor = (scheduledDate: Date | CalendarDate): CalendarDate 
  */
 export const isPastCutoff = (scheduledDate: Date | CalendarDate) =>
 	todayInTimeZone() > cutoffDateFor(scheduledDate);
+
+/** A customer whose delivery an admin just moved — for the "your delivery moved" email. */
+export type AffectedRecipient = { email: string; name?: string };
+
+/** What an admin skip/move action hands back, so the page can toast and offer the notice email. */
+export type MoveResult = {
+	text: string;
+	affected: AffectedRecipient[];
+	fromLabel?: string;
+	toLabel: string;
+};

@@ -91,4 +91,14 @@ describe('localizePlan', () => {
 		expect(localizePlan({ ...plan, translations: JSON.stringify(plan.translations) }, [], 'am').name).toBe('መደበኛ');
 		expect(localizePlan({ ...plan, translations: null }, ['x'], 'am').bullets).toEqual(['x']);
 	});
+
+	it('treats blank translated fields and bullets as missing', () => {
+		const blank = { ...plan, translations: { am: { name: '  ', subtitle: '', bullets: ['', '  '] } } };
+		expect(localizePlan(blank, ['Best value'], 'am')).toEqual({
+			name: 'Regular',
+			subtitle: 'Our core plan.',
+			freqLabel: 'Monthly · 4 packs',
+			bullets: ['Best value']
+		});
+	});
 });

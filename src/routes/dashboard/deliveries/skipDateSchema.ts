@@ -1,23 +1,16 @@
 import { z } from 'zod/v4';
 
-/** Admin marks a delivery day (Sat, Sun or Mon) as skipped (bank holiday, etc). Any
- * deliveries already booked for it get bumped to the next open delivery day automatically. */
-export const skipDateSchema = z.object({
-	date: z.string().min(1, { error: 'Pick a date.' }),
-	reason: z.string().max(255).optional()
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: 'Pick a date.' });
+
+/** Admin skips one delivery day (Sat, Sun or Mon) — bank holiday, van off the road, etc.
+ * Anything still booked for it moves to `moveTo`, or the next open delivery day if empty. */
+export const skipDaySchema = z.object({
+	date: day,
+	reason: z.string().trim().max(255).optional(),
+	moveTo: day.or(z.literal('')).optional()
 });
 
-export type SkipDateSchema = typeof skipDateSchema;
+/** Move everything still booked on `from` to `to`, without skipping `from`. */
+export const moveDaySchema = z.object({ from: day, to: day });
 
-/** Recipient shape handed to the "notify customers" dialog when a skip reschedules deliveries. */
-export type AffectedRecipient = { email: string; name?: string };
-
-export type SkipDateFormMessage =
-	| {
-			type: 'success';
-			text: string;
-			affected?: AffectedRecipient[];
-			skippedDateLabel?: string;
-			newDateLabel?: string;
-	  }
-	| { type: 'error'; text: string };
+export type { MoveResult } from '$lib/delivery';

@@ -102,7 +102,15 @@
 </svelte:head>
 
 <ModeWatcher />
-<Toaster position="bottom-right" richColors closeButton />
+<!-- Pages with a fixed bottom bar (the /subscribe wizard) publish its height as
+     --bottom-bar-h so toasts stack above it instead of covering it. -->
+<Toaster
+	position="bottom-right"
+	richColors
+	closeButton
+	offset={{ bottom: 'calc(var(--bottom-bar-h, 0px) + 24px)' }}
+	mobileOffset={{ bottom: 'calc(var(--bottom-bar-h, 0px) + 16px)' }}
+/>
 <ProgressBar color="#bc3d00" zIndex={1000} />
 
 {#if !page.url.pathname.startsWith('/dashboard')}

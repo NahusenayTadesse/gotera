@@ -28,7 +28,12 @@ export const addonShopSchema = z.object({
 		(v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
 		z.email({ error: 'Enter a valid email address.' }).optional()
 	),
-	phone: z.string().trim().max(32).default(''),
+	phone: z
+		.string()
+		.trim()
+		.min(5, { error: 'Enter a phone number for the driver.' })
+		.max(32)
+		.regex(/^[0-9+()\s-]+$/, { error: 'Use digits and + ( ) - only.' }),
 	line1: z.string().trim().min(1, { error: 'Enter the first line of the address.' }).max(255),
 	line2: z.string().trim().max(255).optional(),
 	city: z.string().trim().max(255).default('London'),

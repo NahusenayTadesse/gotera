@@ -25,6 +25,7 @@ import { checkoutSchema, type FormMessage } from './schema';
 import { getLocale } from '$lib/paraglide/runtime';
 import { localizePlan, normaliseSlug, sellablePlan } from '$lib/server/plans';
 import { MAX_PLAN_QTY } from './limits';
+import { saveSubscriberPhone } from '$lib/server/subscribers';
 
 type PlanRow = typeof plans.$inferSelect;
 type AddonRow = typeof addonsTable.$inferSelect;
@@ -119,10 +120,12 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 async function ensureSubscriber(
 	tx: Tx,
 	user: { id: string; email: string; name?: string | null },
-	marketingOptIn: boolean
+	marketingOptIn: boolean,
+	phone: string
 ) {
 	const [existing] = await tx.select().from(subscribers).where(eq(subscribers.userId, user.id));
 	if (existing) {
+		if (phone && existing.phone !== phone) await saveSubscriberPhone(user.id, phone, tx);
 		return { id: existing.id, stripeCustomerId: existing.stripeCustomerId ?? null };
 	}
 	const id = crypto.randomUUID();
@@ -131,7 +134,7 @@ async function ensureSubscriber(
 		userId: user.id,
 		email: user.email,
 		fullName: user.name ?? null,
-		phone: null,
+		phone: phone || null,
 		marketingOptIn
 	});
 	return { id, stripeCustomerId: null };
@@ -394,6 +397,8 @@ export const actions: Actions = {
 		if (plan.kind === 'order') {
 			let checkoutUrl: string;
 			try {
+				// A one-off for themselves: their own number, so keep it on their account.
+				await saveSubscriberPhone(user.id, form.data.phone);
 				checkoutUrl = await oneTimeCheckout({
 					plan,
 					addons: chosenAddons,
@@ -423,7 +428,7 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx) => {
-				const sub = await ensureSubscriber(tx, user, form.data.marketingOptIn);
+				const sub = await ensureSubscriber(tx, user, form.data.marketingOptIn, form.data.phone);
 				subscriberId = sub.id;
 				stripeCustomerId = sub.stripeCustomerId;
 

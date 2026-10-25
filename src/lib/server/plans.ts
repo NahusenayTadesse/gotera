@@ -108,11 +108,16 @@ export function localizePlan<
 	}
 >(plan: T, bullets: string[], locale: string) {
 	const t = translationFor(plan.translations, locale);
+	// Blank bullets left behind in the dashboard's translation form don't count — a
+	// translation with no real bullets falls back to the English list.
+	const translatedBullets = Array.isArray(t?.bullets)
+		? t.bullets.filter((b) => typeof b === 'string' && b.trim())
+		: [];
 	return {
 		name: t?.name?.trim() || plan.name,
 		subtitle: t?.subtitle?.trim() || plan.subtitle || '',
 		freqLabel: t?.freqLabel?.trim() || plan.freqLabel || '',
-		bullets: t?.bullets?.length ? t.bullets : bullets
+		bullets: translatedBullets.length ? translatedBullets : bullets
 	};
 }
 

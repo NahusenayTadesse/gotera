@@ -58,7 +58,14 @@ export const checkoutSchema = z
 		// Reused by both flows (a given submission is either "me" or "gift",
 		// never both, so one address block is enough).
 		addressLabel: z.string().max(255).optional(),
-		phone: z.coerce.string(m.subscribe_error_phone_required()).default(''),
+		// Required on every flow (signed-in, guest and gift) so the driver can reach someone.
+		phone: z
+			.string()
+			.trim()
+			.min(5, { error: m.subscribe_error_phone_required() })
+			.max(32)
+			.regex(/^[0-9+()\s-]+$/, { error: m.acctdetails_phone_format() })
+			.default(''),
 		line1: z.string().max(255).default(''),
 		line2: z.string().max(255).optional(),
 		city: z.string().max(255).default('London'),

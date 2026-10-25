@@ -17,7 +17,6 @@
 		Search,
 		ShoppingBag,
 		Trash2,
-		Truck,
 		X
 	} from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -283,7 +282,6 @@
 			<h1>{m.shop_title()}</h1>
 			<p class="lede">{m.shop_intro()}</p>
 			<ul class="promises">
-				<li><Truck size={16} strokeWidth={1.6} /> {m.shop_next_delivery({ date: deliveryLabel })}</li>
 				<li><ShoppingBag size={16} strokeWidth={1.6} /> {m.shop_promise_alone()}</li>
 				<li><Check size={16} strokeWidth={1.6} /> {m.shop_promise_together()}</li>
 			</ul>
@@ -634,7 +632,8 @@
 
 			<label class="field">
 				<span>{m.shop_field_phone()}</span>
-				<input name="phone" type="tel" autocomplete="tel" bind:value={$form.phone} />
+				<input name="phone" type="tel" autocomplete="tel" bind:value={$form.phone} required />
+				{#if $errors.phone}<em>{$errors.phone}</em>{/if}
 			</label>
 
 			<label class="field">

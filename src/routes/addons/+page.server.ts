@@ -10,6 +10,7 @@ import { isLondonPostcode, lookupPostcode } from '$lib/server/geocode';
 import { nextDeliveryDateIgnoringCapacity } from '$lib/server/deliverySchedule';
 import { addonImageSrc, canSellAlone, tagsOf } from '$lib/addons';
 import { m } from '$lib/paraglide/messages.js';
+import { saveSubscriberPhone } from '$lib/server/subscribers';
 import { addonShopSchema, type ShopMessage } from './schema';
 
 /** Every active add-on, in the shape the shop renders. Includes "with injera only" items. */
@@ -120,6 +121,7 @@ export const actions: Actions = {
 
 		let checkoutUrl: string;
 		try {
+			if (locals.user) await saveSubscriberPhone(locals.user.id, form.data.phone);
 			await db.insert(addresses).values({
 				id: addressId,
 				label: 'Add-on order',

@@ -5,7 +5,8 @@
 	import { superForm } from 'sveltekit-superforms/client';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { deliverySchema } from './schema';
-	import { skipDateSchema, type SkipDateFormMessage } from './skipDateSchema';
+	import type { MoveResult } from '$lib/delivery';
+	import WeekendPlanner from '$lib/components/dashboard/WeekendPlanner.svelte';
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import FilterMenu from '$lib/components/Table/FilterMenu.svelte';
 	import { columns } from './columns';
@@ -18,7 +19,7 @@
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import BulkEmailDialog from '$lib/components/dashboard/BulkEmailDialog.svelte';
-	import { X, Trash2, Boxes } from '@lucide/svelte';
+	import { X, Trash2, Boxes, ArrowRightLeft } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { enhance as formEnhance } from '$app/forms';
 
@@ -31,6 +32,42 @@
 
 	let filteredRows = $state(data.rows);
 	let selectedRows = $state<typeof data.rows>([]);
+	// Keep the table current after a skip/move reloads the data — otherwise moved rows
+	// would keep showing their old date until a full page refresh.
+	$effect(() => {
+		filteredRows = data.rows;
+	});
+
+	/** Set from a weekend day card's "Show" — narrows the table to that one day. */
+	let dayFilter = $state<string | null>(null);
+	const tableRows = $derived(dayFilter ? filteredRows.filter((r) => r.day === dayFilter) : filteredRows);
+	const dayFilterLabel = $derived(
+		dayFilter
+			? (data.weekend.days.find((d) => d.date === dayFilter)?.label ??
+					data.upcoming.find((u) => u.date === dayFilter)?.label ??
+					dayFilter)
+			: ''
+	);
+
+	/** Rows the "move selected" bar can actually move: still to go out. */
+	const movableSelected = $derived(
+		selectedRows.filter((r) => r.status === 'scheduled' || r.status === 'paid')
+	);
+	const moveTargets = $derived(data.upcoming.filter((u) => !u.skipped));
+	let moveTo = $state('');
+	let moving = $state(false);
+
+	/** Open the notice email, prefilled, for whoever a skip/move just affected. */
+	function offerNotice(r: MoveResult) {
+		notifyRows = r.affected.map((a, i) => ({ id: String(i), email: a.email, name: a.name }));
+		notifyPrefill = {
+			subject: `Your delivery has moved to ${r.toLabel}`,
+			message: r.fromLabel
+				? `<p>Hi,</p><p>We've had to change our delivery plan for ${r.fromLabel}, so your delivery has moved to <strong>${r.toLabel}</strong>. Nothing else changes — same order, same address.</p><p>Sorry for any inconvenience, and thanks for your patience.</p>`
+				: `<p>Hi,</p><p>Your next delivery has moved to <strong>${r.toLabel}</strong>. Nothing else changes — same order, same address.</p><p>Thanks for your patience.</p>`
+		};
+		notifyOpen = true;
+	}
 
 	const statuses = [
 		{ value: 'scheduled', name: 'Scheduled' },
@@ -65,36 +102,6 @@
 
 	$effect(() => {
 		if ($message) $message.type === 'error' ? toast.error($message.text) : toast.success($message.text);
-	});
-
-	const {
-		form: skipForm,
-		errors: skipErrors,
-		enhance: skipEnhance,
-		delayed: skipDelayed,
-		allErrors: skipAllErrors
-	} = superForm(data.skipDateForm, {
-		id: 'skip-date',
-		resetForm: true,
-		invalidateAll: true,
-		validators: zod4Client(skipDateSchema),
-		onUpdated({ form: f }) {
-			const msg = f.message as SkipDateFormMessage | undefined;
-			if (!msg) return;
-
-			toast[msg.type === 'error' ? 'error' : 'success'](msg.text);
-
-			// A skip that bumped scheduled deliveries hands back who was affected —
-			// open the bulk-email dialog prefilled so the admin can review before sending.
-			if (msg.type === 'success' && msg.affected?.length) {
-				notifyRows = msg.affected.map((r, i) => ({ id: String(i), email: r.email, name: r.name }));
-				notifyPrefill = {
-					subject: `Your delivery has moved to ${msg.newDateLabel}`,
-					message: `<p>Hi,</p><p>We're not delivering on ${msg.skippedDateLabel}, so your next delivery has moved to <strong>${msg.newDateLabel}</strong>. Nothing else changes — same order, same address.</p><p>Sorry for the short notice, and thanks for your patience.</p>`
-				};
-				notifyOpen = true;
-			}
-		}
 	});
 
 	// Runs before the edit dialog mounts, not after — DatePicker2 only reads its
@@ -132,6 +139,46 @@
 		>
 			Plan delivery route
 		</a>
+		{#if movableSelected.length}
+			<form
+				method="POST"
+				action="?/moveSelected"
+				class="flex items-center gap-2"
+				use:formEnhance={() => {
+					moving = true;
+					return async ({ result, update }) => {
+						moving = false;
+						if (result.type === 'success') {
+							const r = result.data?.result as MoveResult | undefined;
+							toast.success(r?.text ?? 'Moved');
+							if (r?.affected.length) offerNotice(r);
+							selectedRows = [];
+						} else if (result.type === 'failure') {
+							toast.error((result.data?.error as string) ?? 'Could not move');
+						} else toast.error('Could not move');
+						await update();
+					};
+				}}
+			>
+				{#each movableSelected as r (r.id)}<input type="hidden" name="refs" value="{r.traceType}:{r.id}" />{/each}
+				<select
+					name="to"
+					required
+					bind:value={moveTo}
+					aria-label="Move selected to"
+					class="rounded-md border border-border bg-background p-1.5 text-base md:text-sm"
+				>
+					<option value="" disabled>Move to…</option>
+					{#each moveTargets as t (t.date)}
+						<option value={t.date}>{t.label} · {t.remaining} left</option>
+					{/each}
+				</select>
+				<Button type="submit" size="sm" variant="outline" disabled={!moveTo || moving}>
+					<ArrowRightLeft class="h-4 w-4" />
+					{moving ? 'Moving…' : `Move (${movableSelected.length})`}
+				</Button>
+			</form>
+		{/if}
 		{#if selectedRows.length}
 			<form
 				method="POST"
@@ -160,7 +207,7 @@
 	</div>
 </div>
 
-<!-- Opened programmatically from the skip-date action below, prefilled with a delivery-change notice. -->
+<!-- Opened programmatically after a skip or move, prefilled with a delivery-change notice. -->
 <BulkEmailDialog
 	bulkEmailForm={data.bulkEmailForm}
 	rows={notifyRows}
@@ -169,70 +216,13 @@
 	prefill={notifyPrefill}
 />
 
-<Card.Root class="mb-8 w-full lg:w-lg">
-	<Card.Header>
-		<Card.Title>Delivery calendar</Card.Title>
-		<Card.Description>
-			We deliver every Saturday, Sunday and Monday by default. Skip one of those days here and
-			any deliveries already booked for it move automatically to the next open day.
-		</Card.Description>
-	</Card.Header>
-	<Card.Content class="flex flex-col gap-5">
-		<form
-			method="POST"
-			action="?/addSkipDate"
-			use:skipEnhance
-			id="skip-date-form"
-			class="flex flex-col gap-4"
-		>
-			<Errors allErrors={$skipAllErrors} />
-			<InputComp
-				label="Date to skip"
-				form={skipForm}
-				errors={skipErrors}
-				type="date"
-				name="date"
-				oldDays={false}
-				futureDays={false}
-			/>
-			<InputComp
-				label="Reason (optional)"
-				form={skipForm}
-				errors={skipErrors}
-				type="text"
-				name="reason"
-				placeholder="e.g. Bank holiday"
-			/>
-			<Button type="submit" form="skip-date-form" class="w-fit">
-				{#if $skipDelayed}<LoadingBtn name="Saving" />{:else}Skip this date{/if}
-			</Button>
-		</form>
-
-		{#if data.skipDates.length > 0}
-			<ul class="flex flex-col gap-2 border-t pt-4">
-				{#each data.skipDates as skip (skip.id)}
-					<li class="flex items-center justify-between gap-3 text-sm">
-						<span>
-							{new Date(skip.date).toLocaleDateString('en-GB', {
-								weekday: 'long',
-								day: 'numeric',
-								month: 'long',
-								year: 'numeric'
-							})}
-							{#if skip.reason}<span class="text-muted-foreground">— {skip.reason}</span>{/if}
-						</span>
-						<form method="POST" action="?/deleteSkipDate" use:formEnhance>
-							<input type="hidden" name="id" value={skip.id} />
-							<Button type="submit" variant="ghost" size="icon" aria-label="Remove skip date">
-								<Trash2 class="h-4 w-4" />
-							</Button>
-						</form>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</Card.Content>
-</Card.Root>
+<WeekendPlanner
+	weekend={data.weekend}
+	upcoming={data.upcoming}
+	skipDates={data.skipDates}
+	bind:dayFilter
+	onMoved={offerNotice}
+/>
 
 {#if managingAddonsId && managingDelivery}
 	<Card.Root class="mb-8 w-full lg:w-lg">
@@ -326,6 +316,15 @@
 	</Card.Root>
 {/if}
 
+{#if dayFilter}
+	<div class="mb-3 flex items-center gap-2 text-sm">
+		<span>Showing <strong>{dayFilterLabel}</strong> only</span>
+		<Button type="button" variant="ghost" size="sm" onclick={() => (dayFilter = null)}>
+			<X class="h-4 w-4" /> Show all days
+		</Button>
+	</div>
+{/if}
+
 <FilterMenu
 	data={data.rows}
 	filterKeys={['type', 'status', 'planName', 'trace']}
@@ -333,4 +332,4 @@
 	class="mb-4"
 />
 
-<DataTable data={filteredRows} {columns} fileName="Deliveries" bind:selected={selectedRows} />
+<DataTable data={tableRows} {columns} fileName="Deliveries" bind:selected={selectedRows} />

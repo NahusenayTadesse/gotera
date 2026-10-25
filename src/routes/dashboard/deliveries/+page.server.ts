@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { and, eq, asc, desc } from 'drizzle-orm';
+import { and, eq, asc, desc, gte } from 'drizzle-orm';
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import {
@@ -15,7 +15,8 @@ import {
 	deliverySkipDates,
 	deliveryAddons,
 	subscriberAddons,
-	addons as addonsTable
+	addons as addonsTable,
+	stock
 } from '$lib/server/db/schema';
 import { contentCrud, idSchema } from '$lib/server/crud';
 import { deleteReleasingStock, syncDeliveryStock } from '$lib/server/stock';
@@ -23,10 +24,20 @@ import { sendBulkEmailAction } from '$lib/server/bulkEmail';
 import { bulkEmailSchema } from '$lib/schemas/bulkEmail';
 import { parseJsonColumn } from '$lib/components/dashboard/format';
 import { deliverySchema } from './schema';
-import { skipDateSchema, type AffectedRecipient, type SkipDateFormMessage } from './skipDateSchema';
+import { skipDaySchema, moveDaySchema, type MoveResult } from './skipDateSchema';
 import { isDeliveryDay, nextDeliveryDateAfter } from '$lib/server/deliverySchedule';
-import { fullDate } from '$lib/format';
+import { DEFAULT_CAPACITY, MAIN_SCOPE, readMainStock } from '$lib/server/stock';
+import {
+	bookingsOn,
+	moveBookings,
+	targetProblem,
+	toLocalMidnight,
+	type BookingRef
+} from '$lib/server/deliveryMoves';
+import { fullDate, shiftDays, toCalendarString, todayInTimeZone, type CalendarDate } from '$lib/format';
 import { syncAfter, syncAllocations, traceSummaries, type ShipmentRef } from '$lib/server/traceability';
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** Id of the row a superforms CRUD action just saved, if the save was valid. */
 function savedId(res: unknown): string | null {
@@ -47,11 +58,24 @@ type RecipientAddress = { line1: string; line2?: string | null; city: string; po
 
 type AddonLine = { name: string; quantity: number; recurring: boolean };
 
-export const load: PageServerLoad = async () => {
+/** The Saturday that opens the delivery weekend `date` belongs to (Tue–Fri: the coming one). */
+function weekendOf(date: CalendarDate): CalendarDate {
+	const [y, m, d] = date.split('-').map(Number);
+	const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+	return shiftDays(date, dow === 6 ? 0 : dow === 0 ? -1 : dow === 1 ? -2 : 6 - dow);
+}
+
+/** How many weeks of delivery days the "move to" pickers offer. */
+const MOVE_HORIZON_WEEKS = 6;
+
+/** Statuses that still have to go out, across deliveries and one-off orders. */
+const PENDING = new Set(['scheduled', 'paid']);
+const DONE = new Set(['dispatched', 'delivered', 'fulfilled']);
+
+export const load: PageServerLoad = async ({ url }) => {
 	const [
 		form,
 		bulkEmailForm,
-		skipDateForm,
 		skipDates,
 		subscriptionRows,
 		guestRows,
@@ -62,7 +86,6 @@ export const load: PageServerLoad = async () => {
 	] = await Promise.all([
 		superValidate(zod4(deliverySchema)),
 		superValidate(zod4(bulkEmailSchema)),
-		superValidate(zod4(skipDateSchema)),
 		db.select().from(deliverySkipDates).orderBy(desc(deliverySkipDates.date)),
 		db
 			.select({
@@ -192,6 +215,9 @@ export const load: PageServerLoad = async () => {
 		const t = traces.get(`${ref.type}:${ref.id}`) ?? { state: 'none' as const, batches: [] };
 		return {
 			...r,
+			// Calendar day as a string, so the page can group/filter by day without the
+			// browser's time zone shifting a midnight Date onto the day before.
+			day: toCalendarString(r.scheduledDate),
 			traceType: ref.type,
 			trace: TRACE_LABEL[t.state],
 			traceState: t.state,
@@ -199,7 +225,77 @@ export const load: PageServerLoad = async () => {
 		};
 	});
 
-	return { form, bulkEmailForm, skipDateForm, skipDates, rows, addonCatalogue };
+	// ── The weekend planner: Sat/Sun/Mon of one weekend, picked with ?weekend=YYYY-MM-DD.
+	const today = todayInTimeZone();
+	const param = url.searchParams.get('weekend');
+	const weekend = weekendOf(param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? param : today);
+	const skipByDay = new Map(skipDates.map((s) => [toCalendarString(s.date), s]));
+
+		const days = await Promise.all(
+		[0, 1, 2].map(async (offset) => {
+			const date = shiftDays(weekend, offset);
+			const onDay = rows.filter((r) => r.day === date);
+			const stockRow = await readMainStock(date);
+			const skip = skipByDay.get(date);
+			return {
+				date,
+				label: fullDate(date),
+				isPast: date < today,
+				isToday: date === today,
+				skip: skip ? { id: skip.id, reason: skip.reason } : null,
+				pending: onDay.filter((r) => PENDING.has(r.status)).length,
+				done: onDay.filter((r) => DONE.has(r.status)).length,
+				byType: {
+					subscription: onDay.filter((r) => r.type === 'subscription' && PENDING.has(r.status)).length,
+					guest: onDay.filter((r) => r.type === 'guest' && PENDING.has(r.status)).length,
+					oneTime: onDay.filter((r) => r.type === 'one-time' && PENDING.has(r.status)).length
+				},
+				capacity: stockRow?.capacity ?? DEFAULT_CAPACITY,
+				used: stockRow?.used ?? 0
+			};
+		})
+	);
+
+	// Every upcoming delivery day, for the "move to" pickers. Skipped days are listed but
+	// flagged, so the admin sees why one is missing rather than wondering.
+	const firstWeekend = weekendOf(today);
+	const upcoming: { date: string; label: string; skipped: boolean; remaining: number }[] = [];
+	const stockRows = await db
+		.select({ date: stock.deliveryDate, capacity: stock.capacity, used: stock.used })
+		.from(stock)
+		.where(and(eq(stock.scopeKey, MAIN_SCOPE), gte(stock.deliveryDate, toLocalMidnight(today))));
+	const stockByDay = new Map(stockRows.map((r) => [toCalendarString(r.date), r]));
+	for (let w = 0; w < MOVE_HORIZON_WEEKS; w++) {
+		for (const offset of [0, 1, 2]) {
+			const date = shiftDays(firstWeekend, w * 7 + offset);
+			if (date < today) continue;
+			const st = stockByDay.get(date);
+			upcoming.push({
+				date,
+				label: fullDate(date),
+				skipped: skipByDay.has(date),
+				remaining: Math.max(0, (st?.capacity ?? DEFAULT_CAPACITY) - (st?.used ?? 0))
+			});
+		}
+	}
+
+	return {
+		form,
+		bulkEmailForm,
+		skipDates: skipDates
+			.filter((s) => toCalendarString(s.date) >= today)
+			.map((s) => ({ ...s, label: fullDate(s.date), weekend: weekendOf(toCalendarString(s.date)) })),
+		rows,
+		addonCatalogue,
+		weekend: {
+			start: weekend,
+			prev: shiftDays(weekend, -7),
+			next: shiftDays(weekend, 7),
+			isCurrent: weekend === firstWeekend,
+			days
+		},
+		upcoming
+	};
 };
 
 // Deliveries are generated from a subscription's billing cycle; admins only edit/delete existing ones.
@@ -207,6 +303,14 @@ export const actions: Actions = {
 	// Re-syncs batches after a save: dispatching assigns them, skipping releases them.
 	// Stock follows the same way: skipping/failing gives the units back, a new date moves them.
 	edit: syncAfter('subscription', async (event: RequestEvent) => {
+		const check = await superValidate(event.request.clone(), zod4(deliverySchema));
+		if (check.valid && !isDeliveryDay(check.data.scheduledDate)) {
+			return message(
+				check,
+				{ type: 'error', text: 'We only deliver on Saturdays, Sundays and Mondays — pick one of those.' },
+				{ status: 400 }
+			);
+		}
 		const res = await crud.actions.edit(event);
 		const id = savedId(res);
 		if (id) {
@@ -258,99 +362,115 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	// Mark a delivery day as skipped. Anything already booked for it moves to the next
-	// open delivery day, and the admin gets back who was affected so they can
-	// review/send a notice via the BulkEmailDialog opened on the client.
-	addSkipDate: async ({ request }) => {
-		const form = await superValidate(request, zod4(skipDateSchema));
-		if (!form.valid) return fail(400, { form });
+	// Skip one delivery day. Anything still booked for it (subscription deliveries and
+	// paid one-off orders alike) moves to the day the admin picked, or the next open
+	// delivery day, and the page gets back who was affected so it can offer a notice email.
+	skipDay: async ({ request, locals }) => {
+		const parsed = skipDaySchema.safeParse(Object.fromEntries(await request.formData()));
+		if (!parsed.success) return fail(400, { error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+		const { date, reason, moveTo } = parsed.data;
 
-		if (!isDeliveryDay(form.data.date)) {
-			return message<SkipDateFormMessage>(
-				form,
-				{ type: 'error', text: 'We only deliver on Saturdays, Sundays and Mondays — pick one of those.' },
-				{ status: 400 }
-			);
+		if (!isDeliveryDay(date)) {
+			return fail(400, { error: 'We only deliver on Saturdays, Sundays and Mondays — pick one of those.' });
 		}
-
-		// Local midnight — matches how mysql2 hands `date` columns back, so this compares
-		// equal to a delivery row's scheduledDate for the same calendar day.
-		const [y, m, d] = form.data.date.split('-').map(Number);
-		const skipDate = new Date(y, m - 1, d);
+		if (date < todayInTimeZone()) return fail(400, { error: 'That day has already passed.' });
 
 		const [existing] = await db
 			.select({ id: deliverySkipDates.id })
 			.from(deliverySkipDates)
-			.where(eq(deliverySkipDates.date, skipDate));
-		if (existing) {
-			return message<SkipDateFormMessage>(
-				form,
-				{ type: 'error', text: 'That date is already marked as skipped.' },
-				{ status: 400 }
-			);
+			.where(eq(deliverySkipDates.date, toLocalMidnight(date)));
+		if (existing) return fail(400, { error: 'That day is already skipped.' });
+
+		if (moveTo) {
+			if (moveTo === date) return fail(400, { error: 'Pick a different day to move deliveries to.' });
+			const problem = await targetProblem(moveTo);
+			if (problem) return fail(400, { error: problem });
 		}
 
-		await db.insert(deliverySkipDates).values({
-			date: skipDate,
-			reason: form.data.reason || null
-		});
+		await db.insert(deliverySkipDates).values({ date: toLocalMidnight(date), reason: reason || null });
 
-		const affectedRows = await db
-			.select({
-				id: deliveries.id,
-				email: subscribers.email,
-				name: subscribers.fullName
-			})
-			.from(deliveries)
-			.innerJoin(subscribers, eq(subscribers.id, deliveries.subscriberId))
-			.where(and(eq(deliveries.status, 'scheduled'), eq(deliveries.scheduledDate, skipDate)));
-
-		if (affectedRows.length === 0) {
-			return message<SkipDateFormMessage>(form, {
-				type: 'success',
-				text: `${fullDate(skipDate)} marked as skipped. No deliveries were booked for it.`
-			});
+		const bookings = await bookingsOn(date);
+		if (bookings.length === 0) {
+			return { result: { text: `${fullDate(date)} skipped. Nothing was booked for it.`, affected: [], toLabel: '' } satisfies MoveResult };
 		}
 
-		const newDate = await nextDeliveryDateAfter(skipDate);
-		await db
-			.update(deliveries)
-			.set({ scheduledDate: newDate })
-			.where(and(eq(deliveries.status, 'scheduled'), eq(deliveries.scheduledDate, skipDate)));
-
-		// Move each delivery's stock with it, off the skipped day onto the new one.
-		for (const r of affectedRows) {
-			try {
-				await syncDeliveryStock(r.id);
-			} catch (err) {
-				console.error('Stock move after skip date failed:', err);
-			}
-		}
-
-		const seen = new Set<string>();
-		const affected: AffectedRecipient[] = [];
-		for (const r of affectedRows) {
-			if (seen.has(r.email)) continue;
-			seen.add(r.email);
-			affected.push({ email: r.email, name: r.name ?? undefined });
-		}
-
-		return message<SkipDateFormMessage>(form, {
-			type: 'success',
-			text: `${fullDate(skipDate)} skipped — ${affectedRows.length} ${affectedRows.length === 1 ? 'delivery' : 'deliveries'} moved to ${fullDate(newDate)}.`,
-			affected,
-			skippedDateLabel: fullDate(skipDate),
-			newDateLabel: fullDate(newDate)
-		});
+		const to = moveTo || toCalendarString(await nextDeliveryDateAfter(date));
+		const { moved, left, recipients } = await moveBookings(bookings, to, locals.user?.id);
+		return {
+			result: {
+				text:
+					`${fullDate(date)} skipped — ${plural(moved, 'booking')} moved to ${fullDate(to)}.` +
+					(left ? ` ${left} couldn't be moved; check the table.` : ''),
+				affected: recipients,
+				fromLabel: fullDate(date),
+				toLabel: fullDate(to)
+			} satisfies MoveResult
+		};
 	},
 
-	deleteSkipDate: async ({ request }) => {
-		const formData = await request.formData();
-		const id = formData.get('id');
+	// Un-skip a day. Deliveries that were moved off it stay where they went — moving them
+	// back is a separate, deliberate "move day" so nobody gets a second surprise date.
+	unskipDay: async ({ request }) => {
+		const id = (await request.formData()).get('id');
 		if (typeof id !== 'string' || !id) return fail(400, { error: 'Invalid request' });
-
 		await db.delete(deliverySkipDates).where(eq(deliverySkipDates.id, id));
 		return { success: true };
+	},
+
+	// Move everything still booked on one day to another, without skipping the first —
+	// e.g. a light Monday folded into Sunday.
+	moveDay: async ({ request, locals }) => {
+		const parsed = moveDaySchema.safeParse(Object.fromEntries(await request.formData()));
+		if (!parsed.success) return fail(400, { error: 'Pick both days.' });
+		const { from, to } = parsed.data;
+		if (from === to) return fail(400, { error: 'Pick a different day.' });
+		const problem = await targetProblem(to);
+		if (problem) return fail(400, { error: problem });
+
+		const bookings = await bookingsOn(from);
+		if (!bookings.length) return fail(400, { error: `Nothing is booked for ${fullDate(from)}.` });
+
+		const { moved, left, recipients } = await moveBookings(bookings, to, locals.user?.id);
+		return {
+			result: {
+				text:
+					`${plural(moved, 'booking')} moved from ${fullDate(from)} to ${fullDate(to)}.` +
+					(left ? ` ${left} couldn't be moved.` : ''),
+				affected: recipients,
+				fromLabel: fullDate(from),
+				toLabel: fullDate(to)
+			} satisfies MoveResult
+		};
+	},
+
+	// Move the rows selected in the table to one day.
+	moveSelected: async ({ request, locals }) => {
+		const f = await request.formData();
+		const to = String(f.get('to') ?? '');
+		const problem = await targetProblem(to);
+		if (problem) return fail(400, { error: problem });
+
+		const refs = f
+			.getAll('refs')
+			.map(String)
+			.map((v) => {
+				const [type, id] = v.split(':');
+				return { type, id } as BookingRef;
+			})
+			.filter((r) => ['subscription', 'guest', 'gift'].includes(r.type) && r.id)
+			.slice(0, 1000);
+		if (!refs.length) return fail(400, { error: 'Nothing selected' });
+
+		const { moved, left, recipients } = await moveBookings(refs, to, locals.user?.id);
+		return {
+			result: {
+				text:
+					`${plural(moved, 'booking')} moved to ${fullDate(to)}.` +
+					(left ? ` ${left} skipped — already dispatched, delivered or not yet paid.` : ''),
+				affected: recipients,
+				toLabel: fullDate(to)
+			} satisfies MoveResult
+		};
 	},
 
 	// Admin equivalent of the customer's own "add extras to this delivery" — a one-off,

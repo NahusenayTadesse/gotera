@@ -5,7 +5,12 @@ export const subscriberSchema = z.object({
 	id: z.string().optional(),
 	email: z.email({ error: 'A valid email is required.' }),
 	fullName: z.string().max(255).optional(),
-	phone: z.string().max(40).optional(),
+	phone: z
+		.string()
+		.trim()
+		.min(5, { error: 'A phone number is required.' })
+		.max(40)
+		.regex(/^[0-9+()\s-]+$/, { error: 'Use digits and + ( ) - only.' }),
 	marketingOptIn: z.boolean().default(true),
 	isActive: z.boolean().default(true)
 });

@@ -256,6 +256,39 @@ export async function reserveOrderStock(type: 'gift' | 'guest', orderId: string,
 }
 
 /**
+ * Move a paid one-off (gift or guest) order to another delivery day, taking its stock
+ * with it. The date write is guarded on the old date, so two concurrent moves can't both
+ * release the same units. Returns false if the order changed underneath us.
+ */
+export async function moveOrderStock(type: 'gift' | 'guest', orderId: string, to: Date) {
+	const table = type === 'gift' ? giftOrders : guestOrders;
+	const [o] = await db
+		.select({ units: table.stockUnits, date: table.deliveryDate })
+		.from(table)
+		.where(eq(table.id, orderId));
+	if (!o) return false;
+	if (o.date && toCalendarString(o.date) === toCalendarString(to)) return true;
+
+	const [res] = await db
+		.update(table)
+		.set({ deliveryDate: to })
+		.where(
+			and(
+				eq(table.id, orderId),
+				o.date ? sql`${table.deliveryDate} = ${toCalendarString(o.date)}` : isNull(table.deliveryDate)
+			)
+		);
+	if (res.affectedRows === 0) return false;
+
+	if (o.units > 0) {
+		if (o.date) await releaseStock(o.date, o.units, null, 'One-off order moved');
+		// The admin's call, so it is booked even if the new date is already full.
+		await consumeStock(to, o.units, null, { allowOver: true, reason: 'One-off order moved' });
+	}
+	return true;
+}
+
+/**
  * Run a delete of a delivery or one-off order and give back the stock it held.
  *
  * The hold is read first and released only once the row is confirmed gone, so a delete

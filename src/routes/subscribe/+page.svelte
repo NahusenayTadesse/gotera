@@ -239,6 +239,14 @@
 	]);
 	const stepNo = (key: string) => String(DESKTOP_STEPS.indexOf(key) + 1).padStart(2, '0');
 	let animating = $state(false);
+	// Height of the fixed mobile CTA bar, reserved under the form so it never covers content.
+	let ctaHeight = $state(0);
+	// Shared with the root layout's Toaster so toasts sit above the bar, not on it.
+	$effect(() => {
+		const root = document.documentElement;
+		root.style.setProperty('--bottom-bar-h', `${ctaHeight}px`);
+		return () => root.style.removeProperty('--bottom-bar-h');
+	});
 	let stepError = $state<string | null>(null);
 
 	// Compute the wizard's starting position. Extracted so both the initial
@@ -417,6 +425,32 @@
 	}
 </script>
 
+{#snippet packageDetails()}
+	{#if currentPlanDetails}
+		<div class="pkg">
+			{#if currentPlanDetails.sub}<p class="pkg__sub">{currentPlanDetails.sub}</p>{/if}
+			<p class="pkg__line">
+				{m.subscribe_package_packs({
+					packs: currentPlanDetails.packs,
+					perPack: currentPlanDetails.injeraPerPack
+				})}{#if qty > 1}
+					{' '}× {qty}{/if}
+			</p>
+			<p class="pkg__total">
+				{m.subscribe_package_total({
+					total: currentPlanDetails.packs * currentPlanDetails.injeraPerPack * qty
+				})}
+			</p>
+			{#if currentPlanDetails.bullet?.length}
+				<ul class="pkg__bullets">
+					{#each currentPlanDetails.bullet as item, i (i)}<li>{item}</li>{/each}
+				</ul>
+			{/if}
+		</div>
+	{/if}
+{/snippet}
+
+
 <svelte:head>
 	<title>{m.subscribe_page_title()}</title>
 	<meta name="description" content={m.subscribe_meta_description()} />
@@ -454,7 +488,14 @@
 		{#each postcode.suggestions as s (s)}<option value={s}></option>{/each}
 	</datalist>
 
-	<form class="sub-card-wrap" method="POST" id="start" use:enhance bind:this={checkoutForm}>
+	<form
+		class="sub-card-wrap"
+		method="POST"
+		id="start"
+		use:enhance
+		bind:this={checkoutForm}
+		style:padding-bottom="{ctaHeight}px"
+	>
 		<div class="sub-card" class:animating>
 			<div class="sub-card__head">
 				{#if stepIdx > 0}
@@ -552,6 +593,7 @@
 							<button
 								type="button"
 								class="plan-sel-card"
+								class:featured={p.featured}
 								class:active={$form.plan === p.id}
 								onclick={() => ($form.plan = p.id)}
 							>
@@ -560,7 +602,14 @@
 									>{/if}
 								<div class="plan-sel-card__name" class:pad={p.featured}>
 									<h3>{p.name}</h3>
-									{#if !isOneOffPlan(p)}<p>{p.freq}</p>{/if}
+									{#if p.freq}<p>{p.freq}</p>{/if}
+									<!-- Only the first bullet fits beside the price; the home page
+									     shows the full list. -->
+									{#if p.bullet?.length}
+										<ul class="plan-sel-card__bullets">
+											{#each p.bullet.slice(0, 1) as item, i (i)}<li>{item}</li>{/each}
+										</ul>
+									{/if}
 								</div>
 								<div class="plan-sel-card__price" class:pad={p.featured}>
 									<span class="plan-sel-card__price-num"
@@ -636,7 +685,8 @@
 					{#if $form.recipient === 'gift'}
 						<div class="sub-field">
 							<label for="phone">{m.subscribe_field_phone_gift_label()}</label>
-							<input id="phone" type="tel" bind:value={$form.phone} autocomplete="tel" />
+							<input id="phone" type="tel" bind:value={$form.phone} required autocomplete="tel" />
+							{#if $errors.phone}<span class="sub-error">{$errors.phone}</span>{/if}
 						</div>
 						<div class="sub-field">
 							<label for="m-buyerEmail">{m.subscribe_field_email_label()}</label>
@@ -736,10 +786,11 @@
 							<input
 								id="phone"
 								type="tel"
-								name="address"
 								bind:value={$form.phone}
+								required
 								autocomplete="tel"
 							/>
+							{#if $errors.phone}<span class="sub-error">{$errors.phone}</span>{/if}
 						</div>
 						<div class="sub-field">
 							<label for="m-line1b">{m.subscribe_field_line1_label()}</label>
@@ -806,6 +857,11 @@
 				{/if}
 
 				{#if step === 'review'}
+					<div class="pkg-card">
+						<span class="pkg-card__label">{m.subscribe_label_package()}</span>
+						<strong class="pkg-card__name">{currentPlanDetails?.name}</strong>
+						{@render packageDetails()}
+					</div>
 					<div class="pay-summary">
 						<div class="pay-row">
 							<span class="pay-row__label">{m.subscribe_label_quantity()}</span>
@@ -850,10 +906,6 @@
 								>
 							</div>
 						{/each}
-						<div class="pay-row">
-							<span class="pay-row__label">{m.subscribe_label_saturday_delivery()}</span>
-							<span class="pay-row__val">{m.subscribe_label_included()}</span>
-						</div>
 						<div class="pay-total">
 							<span class="pay-total__label">{m.subscribe_label_first_payment()}</span>
 							<span class="pay-total__val">£{finalTotalPrice.toFixed(2)}</span>
@@ -878,7 +930,7 @@
 		</div>
 		<input hidden name="guestCheckout" bind:value={$form.guestCheckout} />
 
-		<div class="sub-cta">
+		<div class="sub-cta" bind:clientHeight={ctaHeight}>
 			{#if step === 'review'}
 				{#if requiresAccount}
 					<div class="w-full! mt-4! flex flex-col items-center justify-center gap-2">
@@ -1020,7 +1072,7 @@
 										<div class="price">£{plan.price.toFixed(plan.price % 1 === 0 ? 0 : 2)}</div>
 										<div class="freq">{plan.freq}</div>
 										<ul>
-											{#each plan.bullet as item, i (i)}
+											{#each plan.bullet.slice(0, 1) as item, i (i)}
 												<li>{item}</li>
 											{/each}
 										</ul>
@@ -1149,6 +1201,7 @@
 										required
 										autocomplete="tel"
 									/>
+									{#if $errors.phone}<span class="form-error">{$errors.phone}</span>{/if}
 								</div>
 								<div class="field full">
 									<label class="field-label" for="buyerEmail"
@@ -1257,6 +1310,7 @@
 											required
 											autocomplete="tel"
 										/>
+										{#if $errors.phone}<span class="form-error">{$errors.phone}</span>{/if}
 									</div>
 								</div>
 								<div class="field full">
@@ -1349,6 +1403,10 @@
 								: currentPlanDetails?.freq}{#if qty > 1}
 								{m.subscribe_qty_suffix({ qty })}{/if}
 						</div>
+					</div>
+					<div class="sum-row">
+						<span class="sum-label">{m.subscribe_label_package()}</span>
+						{@render packageDetails()}
 					</div>
 					<div class="sum-row sum-row--qty">
 						<span class="sum-label">{m.subscribe_label_quantity()}</span>
@@ -1616,6 +1674,14 @@
 		padding: 16px 20px;
 	}
 	.sub-cta {
+		/* Pinned to the viewport so the continue button stays reachable on every step,
+		   even when the step's content (or the site footer) runs past the fold. */
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 150;
+		box-shadow: 0 -6px 18px rgba(26, 26, 26, 0.08);
 		background: #faf8f4;
 		border-top: 1px solid #e8e4e0;
 		padding: 12px 20px;
@@ -1664,6 +1730,14 @@
 	.plan-sel-card.active {
 		border-color: #1a1a1a;
 	}
+	/* The most popular plan always carries the brand copper; selecting it thickens
+	   the border rather than swapping it to black. */
+	.plan-sel-card.featured {
+		border-color: var(--copper);
+	}
+	.plan-sel-card.featured.active {
+		box-shadow: inset 0 0 0 1px var(--copper);
+	}
 	.plan-sel-card__badge {
 		position: absolute;
 		top: -1px;
@@ -1694,6 +1768,26 @@
 		font-size: 0.75rem;
 		color: #7a746e;
 		margin: 0;
+	}
+	.plan-sel-card__bullets {
+		list-style: none;
+		margin: 6px 0 0;
+		padding: 0;
+		display: grid;
+		gap: 2px;
+	}
+	.plan-sel-card__bullets li {
+		position: relative;
+		padding-left: 12px;
+		font-size: 0.72rem;
+		color: #7a746e;
+	}
+	.plan-sel-card__bullets li::before {
+		content: '—';
+		position: absolute;
+		left: 0;
+		color: rgba(164, 89, 38, 0.5);
+		font-size: 0.65rem;
 	}
 	.plan-sel-card__price {
 		text-align: right;
@@ -1998,6 +2092,58 @@
 		width: 16px;
 		height: 16px;
 		accent-color: #9a4f22;
+	}
+	.pkg {
+		display: grid;
+		gap: 4px;
+		font-size: 0.82rem;
+		color: #433e39;
+	}
+	.pkg p {
+		margin: 0;
+	}
+	.pkg__sub {
+		color: #7a746e;
+	}
+	.pkg__total {
+		font-weight: 500;
+		color: #1a1a1a;
+	}
+	.pkg__bullets {
+		list-style: none;
+		margin: 4px 0 0;
+		padding: 0;
+		display: grid;
+		gap: 3px;
+	}
+	.pkg__bullets li {
+		position: relative;
+		padding-left: 14px;
+		color: #7a746e;
+	}
+	.pkg__bullets li::before {
+		content: '—';
+		position: absolute;
+		left: 0;
+		color: rgba(164, 89, 38, 0.5);
+	}
+	.pkg-card {
+		display: grid;
+		gap: 6px;
+		margin-bottom: 14px;
+		padding: 14px;
+		border: 1px solid #e8e4e0;
+	}
+	.pkg-card__label {
+		font-size: 0.66rem;
+		font-weight: 500;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: #a45926;
+	}
+	.pkg-card__name {
+		font-size: 0.95rem;
+		color: #1a1a1a;
 	}
 	.pay-summary {
 		border: 1px solid #e8e4e0;
@@ -2713,9 +2859,13 @@
 			margin-bottom: 6px;
 		}
 		.mobile-view .plan-sel-card__name p {
-			font-size: 1.05rem;
+			font-size: 0.9rem;
 			line-height: 1.4;
 			color: #4a4540;
+		}
+		.mobile-view .plan-sel-card__bullets li {
+			font-size: 0.85rem;
+			line-height: 1.35;
 		}
 		.mobile-view .plan-sel-card__price {
 			padding-left: 10px;
