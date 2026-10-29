@@ -100,6 +100,7 @@
 	"account_notice_switching_with_date": "Switching to {plan} on {date}.",
 	"account_next_delivery_eyebrow": "Next Delivery",
 	"account_cutoff_label": "Cut-off {cutoff}",
+	"account_delivery_scheduled": "Delivery scheduled",
 	"account_no_delivery_scheduled": "No delivery scheduled",
 	"account_delivery_note_paused": "This plan is paused.",
 	"account_delivery_note_cancelled": "This plan has ended.",

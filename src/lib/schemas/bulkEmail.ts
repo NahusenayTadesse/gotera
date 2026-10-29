@@ -8,7 +8,13 @@ import { z } from 'zod/v4';
  * need to know which table every id belongs to. Every page already renders these emails from
  * server-loaded data, and only Admins reach these routes, so trusting the pairs back is fine.
  */
+/** Mailboxes the dashboard can send from — see src/lib/server/email.ts. */
+export const EMAIL_SENDERS = ['orders', 'hello'] as const;
+export type EmailSender = (typeof EMAIL_SENDERS)[number];
+
 export const bulkEmailSchema = z.object({
+	/** Which mailbox it goes out from. Order pages keep the default; the Bulk Email page seeds 'hello'. */
+	sender: z.enum(EMAIL_SENDERS).default('orders'),
 	recipients: z
 		.array(
 			z.object({

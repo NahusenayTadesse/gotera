@@ -3,6 +3,7 @@
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
+	import EmailSenderPicker from '$lib/components/dashboard/EmailSenderPicker.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { superForm } from 'sveltekit-superforms/client';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
@@ -106,6 +107,7 @@
 			class="flex flex-col gap-4"
 		>
 			<Errors allErrors={$allErrors} />
+			<EmailSenderPicker bind:value={$form.sender} />
 			<InputComp
 				label="Subject"
 				{form}

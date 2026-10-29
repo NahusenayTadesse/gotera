@@ -176,6 +176,13 @@
       "when": 1792437577681,
       "tag": "0024_plan_catalogue_futureproof",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1793280123439,
+      "tag": "0025_page_views",
+      "breakpoints": true
     }
   ]
 }

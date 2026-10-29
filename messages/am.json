@@ -100,6 +100,7 @@
 	"account_notice_switching_with_date": "ወደ {plan} በ{date} ይቀየራል።",
 	"account_next_delivery_eyebrow": "ቀጣይ ማድረሻ",
 	"account_cutoff_label": "የመጨረሻ ጊዜ {cutoff}",
+	"account_delivery_scheduled": "ማድረሻ ታቅዷል",
 	"account_no_delivery_scheduled": "ምንም ማድረሻ አልታቀደም",
 	"account_delivery_note_paused": "ይህ ዕቅድ ባለ እረፍት ላይ ነው።",
 	"account_delivery_note_cancelled": "ይህ ዕቅድ አብቅቷል።",

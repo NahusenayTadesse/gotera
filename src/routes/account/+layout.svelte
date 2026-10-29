@@ -78,11 +78,6 @@
 						<span class="header-meta-item">
 							<strong>{data.summary.planLabel}</strong>{data.summary.packsLabel}
 						</span>
-						{#if data.summary.nextDeliveryLabel}
-							<span class="header-meta-item">
-								<strong>{m.account_next_delivery_label()}</strong>{data.summary.nextDeliveryLabel}
-							</span>
-						{/if}
 						<span class="header-meta-item">
 							<strong>{m.account_next_payment_label()}</strong>{paymentLabel}
 						</span>

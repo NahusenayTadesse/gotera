@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 // Adjust to your project's paths.
@@ -28,14 +28,12 @@ import {
     sendGiftReceived,
     notifyAdminGiftOrder,
     sendOrderConfirmed, notifyAdminOrder,
-    sendAddonsAdded,
-    sendDeliveryRolled
+    sendAddonsAdded
 } from '$lib/server/email';
 import { auth } from '$lib/server/auth';
 import { nextDeliveryDate, nextDeliveryDateIgnoringCapacity } from '$lib/server/deliverySchedule';
-import { consumeStock, deliveryUnits, notify, reserveOrderStock } from '$lib/server/stock';
+import { consumeStock, deliveryUnits, reserveOrderStock } from '$lib/server/stock';
 import { invoiceSubscriptionId } from '$lib/server/stripeInvoice';
-import { toCalendarString } from '$lib/format';
 import { planForStripePrice, subscriptionUnitPrice } from '$lib/server/plans';
 
 const WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
@@ -201,7 +199,6 @@ async function handleDeliveryAddonPurchase(session: Stripe.Checkout.Session) {
         if (delivery && subscriber) {
             await sendAddonsAdded(subscriber.email, {
                 name: subscriber.fullName ?? 'there',
-                deliveryLabel: deliveryFmt.format(delivery.scheduledDate),
                 amountLabel: money(session.amount_total ?? 0),
                 addonLines: items.map((i) => `${i.name}${i.quantity > 1 ? ` x${i.quantity}` : ''}`)
             });
@@ -290,9 +287,6 @@ async function scheduleDelivery(
     
     if (!targetAddressId) return false;
 
-    // The date the customer would have got if nothing were full, so we can tell whether
-    // capacity actually moved them and only notify when it did.
-    const soonest = await nextDeliveryDateIgnoringCapacity();
     const scheduledDate = await nextDeliveryDate();
 
     const units = await deliveryUnits(subscriptionId);
@@ -339,30 +333,6 @@ async function scheduleDelivery(
         console.error('stock: booked a delivery past capacity (date filled up concurrently)', scheduledDate);
     }
 
-    if (toCalendarString(scheduledDate) !== toCalendarString(soonest)) {
-        const [subscriber] = await db.select().from(subscribers).where(eq(subscribers.id, subscriberId));
-        if (subscriber) {
-            const originalLabel = deliveryFmt.format(soonest);
-            const deliveryLabel = deliveryFmt.format(scheduledDate);
-
-            await notify(
-                subscriberId,
-                'delivery-rolled',
-                `Your first delivery is ${deliveryLabel}`,
-                `Our ${originalLabel} run was fully booked, so we've scheduled you for the next one.`
-            );
-
-            try {
-                await sendDeliveryRolled(subscriber.email, {
-                    name: subscriber.fullName ?? 'there',
-                    originalLabel,
-                    deliveryLabel
-                });
-            } catch (e) {
-                console.error('delivery-rolled email failed', e);
-            }
-        }
-    }
     return true;
 }
 
@@ -476,7 +446,6 @@ if (session.mode === 'payment') {
 				await sendOrderConfirmed(order.buyerEmail, {
 					name: order.buyerName ?? 'there',
 					amountLabel,
-					deliveryLabel,
 					addressLines,
 					addonNames
 				});
@@ -567,7 +536,6 @@ if (session.mode === 'payment') {
 					await sendOrderConfirmed(email, {
 						name: name ?? 'there',
 						amountLabel,
-						deliveryLabel,
 						addressLines,
 						addonNames
 					});
@@ -659,21 +627,11 @@ if (session.mode === 'payment') {
                             const [planRow] = await db.select().from(plans).where(eq(plans.id, subRow.planId));
                             const amountLabel = money(session.amount_total ?? planRow?.pricePence ?? 0);
                             const planName = planRow?.name ?? 'Subscription';
-                            const [firstDelivery] = await db
-                                .select({ scheduledDate: deliveries.scheduledDate })
-                                .from(deliveries)
-                                .where(eq(deliveries.subscriptionId, dbSubscriptionId))
-                                .orderBy(desc(deliveries.createdAt))
-                                .limit(1);
-                            const nextDeliveryLabel = deliveryFmt.format(
-                                firstDelivery?.scheduledDate ?? (await nextDeliveryDate())
-                            );
 
                             await sendSubscriptionConfirmed(subUser.email, {
                                 name: subUser.fullName ?? 'there',
                                 planName,
-                                amountLabel,
-                                nextDeliveryLabel
+                                amountLabel
                             });
                             await notifyAdminNewSubscriber({
                                 name: subUser.fullName ?? '—',

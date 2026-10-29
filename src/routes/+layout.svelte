@@ -7,6 +7,7 @@
 	import { Toaster } from 'svelte-sonner';
 	import { ProgressBar } from '@prgm/sveltekit-progress-bar';
 	import { page } from '$app/state';
+	import { afterNavigate } from '$app/navigation';
 	import { Hamburger, Menu } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
@@ -59,6 +60,24 @@
 			}
 		}).replace(/</g, '\\u003c')}<\/script>`
 	);
+
+	// Page-view beacon for the dashboard's Analytics page. Sends the route id rather than
+	// the URL so tokens in dynamic segments never leave the browser; query-only changes on
+	// the same page aren't counted as another view.
+	afterNavigate(({ from, to, type }) => {
+		if (!to || from?.url.pathname === to.url.pathname) return;
+		// `to.route.id` is null on the initial 'enter' navigation; `page` is already current here.
+		const path = page.route.id ?? to.route.id ?? '/(not-found)';
+		if (path.startsWith('/dashboard')) return;
+		try {
+			navigator.sendBeacon(
+				'/api/track',
+				JSON.stringify({ path, referrer: type === 'enter' ? document.referrer : null })
+			);
+		} catch {
+			// Analytics is best-effort.
+		}
+	});
 </script>
 
 <svelte:window onscroll={handleScroll} />

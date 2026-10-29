@@ -3,6 +3,7 @@ import type { LayoutServerLoad } from './$types';
 import { nextDeliveryDate } from '$lib/server/deliverySchedule';
 import { readMainStock, remainingOf, isLow } from '$lib/server/stock';
 import { fullDate } from '$lib/format';
+import { availableSenders } from '$lib/server/email';
 
 
 export const load: LayoutServerLoad = async ({ locals }) => {
@@ -25,6 +26,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
 	return {
 		name,
+		/** Mailboxes the bulk email forms can pick between (just one = no picker). */
+		emailSenders: availableSenders,
 		stock: mainStock
 			? {
 					remaining: remainingOf(mainStock),

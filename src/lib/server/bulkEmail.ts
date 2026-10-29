@@ -32,7 +32,7 @@ export async function sendBulkEmailAction({ request }: RequestEvent) {
 	});
 
 	const results = await Promise.allSettled(
-		recipients.map((r) => sendBulkEmail(r.email, { subject: form.data.subject, bodyHtml }))
+		recipients.map((r) => sendBulkEmail(r.email, { subject: form.data.subject, bodyHtml }, form.data.sender))
 	);
 
 	const failed = results.filter((r) => r.status === 'rejected').length;

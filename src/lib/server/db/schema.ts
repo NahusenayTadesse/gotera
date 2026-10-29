@@ -695,3 +695,27 @@ export const batchAllocations = mysqlTable(
 		index('batch_allocations_line_idx').on(t.lineKey)
 	]
 );
+
+// ── Site analytics ──
+// One row per page view, written by /api/track from a client-side beacon. Cookieless:
+// `visitorHash` is a hash of IP + user agent salted with the day, so the same person
+// counts once per day but can't be followed across days, and no IP is stored.
+// `path` is the SvelteKit route id ("/addons/[token]"), never the raw URL, so tokens
+// and other secrets in dynamic segments don't end up in the table.
+export const pageViews = mysqlTable(
+	'page_views',
+	{
+		id: int('id').autoincrement().primaryKey(),
+		visitorHash: varchar('visitor_hash', { length: 32 }).notNull(),
+		path: varchar('path', { length: 255 }).notNull(),
+		/** Host of the external site that sent the visitor, on the first page of a visit only. */
+		referrer: varchar('referrer', { length: 255 }),
+		device: mysqlEnum('device', ['mobile', 'tablet', 'desktop']).notNull(),
+		signedIn: boolean('signed_in').default(false).notNull(),
+		createdAt: timestamp('created_at').defaultNow().notNull()
+	},
+	(table) => [
+		index('idx_page_views_created_at').on(table.createdAt),
+		index('idx_page_views_path').on(table.path)
+	]
+);

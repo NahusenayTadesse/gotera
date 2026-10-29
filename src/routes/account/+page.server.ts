@@ -181,7 +181,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		if (delivery) {
 			nextDelivery = {
 				id: delivery.id,
-				dateLabel: fullDate(delivery.scheduledDate),
 				cutoffLabel: fullDate(cutoffDateFor(delivery.scheduledDate)),
 				// Drives whether the UI offers Skip / Add at all.
 				pastCutoff: isPastCutoff(delivery.scheduledDate),

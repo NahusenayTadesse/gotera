@@ -171,21 +171,18 @@ export const customerSubscriptionConfirmed = (raw: {
 	name: string;
 	planName: string;
 	amountLabel: string;
-	nextDeliveryLabel: string;
 }) => {
 	const data = escAll(raw);
 	return {
 		subject: 'Your GOTERA subscription is live',
 		html: layout({
 			heading: 'Subscription Confirmed',
-			preheader: `Your ${data.planName} plan is active. First delivery on ${data.nextDeliveryLabel}.`,
+			preheader: `Your ${data.planName} plan is active.`,
 			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Your subscription is live — real injera, made in Ethiopia, on its way to your door.</p>
 			${detailTable(
-				detailRow('Plan', data.planName) +
-					detailRow('Payment', data.amountLabel) +
-					detailRow('First delivery', data.nextDeliveryLabel)
+				detailRow('Plan', data.planName) + detailRow('Payment', data.amountLabel)
 			)}
 			${button('View your account', `${SITE}/account`)}
 			<p style="margin:14px 0 0; color:${C.taupe}; font-size:13px;">Pause, skip, or change your plan any time from your account.</p>
@@ -196,23 +193,21 @@ export const customerSubscriptionConfirmed = (raw: {
 
 export const customerUpcomingDelivery = (raw: {
 	name: string;
-	deliveryLabel: string;
 	cutoffLabel: string;
 	address: string;
 	addonsUrl?: string;
 }) => {
 	const data = escAll(raw);
 	return {
-		subject: `Your injera arrives ${raw.deliveryLabel}`,
+		subject: 'Your next GOTERA delivery is coming up',
 		html: layout({
 			heading: 'Delivery on the way',
-			preheader: `Next delivery ${data.deliveryLabel}. Changes before ${data.cutoffLabel}.`,
+			preheader: `Your next delivery is scheduled. Changes before ${data.cutoffLabel}.`,
 			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Your next GOTERA delivery is scheduled.</p>
 			${detailTable(
-				detailRow('Delivery', data.deliveryLabel) +
-					detailRow('Address', data.address) +
+				detailRow('Address', data.address) +
 					detailRow('Changes by', data.cutoffLabel)
 			)}
 			<p style="margin:0 0 6px;">Need to skip or update your address? Do it before the cut-off and it'll apply to this delivery.</p>
@@ -223,32 +218,6 @@ export const customerUpcomingDelivery = (raw: {
 			${button('Add extras', data.addonsUrl)}`
 					: ''
 			}
-		`
-		})
-	};
-};
-
-/**
- * Sent when the delivery day a customer would normally have got was already at capacity, so
- * their first delivery is the one after. Names both dates explicitly — the useful fact is
- * *when it will arrive*, not that something was full.
- */
-export const customerDeliveryRolled = (raw: {
-	name: string;
-	originalLabel: string;
-	deliveryLabel: string;
-}) => {
-	const data = escAll(raw);
-	return {
-		subject: `Your first delivery is ${raw.deliveryLabel}`,
-		html: layout({
-			heading: 'Your delivery date',
-			preheader: `We'll deliver on ${data.deliveryLabel}.`,
-			body: `
-			<p style="margin:0 0 14px;">Hi ${data.name},</p>
-			<p style="margin:0 0 6px;">Thanks for your order! Our ${data.originalLabel} run is fully booked, so we've scheduled you for the next one:</p>
-			${detailTable(detailRow('Delivery date', data.deliveryLabel))}
-			<p style="margin:14px 0 6px;">Nothing for you to do — we'll email you again a couple of days before it arrives.</p>
 		`
 		})
 	};
@@ -283,19 +252,18 @@ export const adminStockLow = (raw: {
 
 export const customerAddonsAdded = (raw: {
 	name: string;
-	deliveryLabel: string;
 	amountLabel: string;
 	addonLines: string[];
 }) => {
 	const data = escAll(raw);
 	return {
-		subject: `Added to your ${raw.deliveryLabel} delivery`,
+		subject: 'Extras added to your next delivery',
 		html: layout({
 			heading: 'Extras added',
 			preheader: `${data.addonLines.join(', ')} — added to your next delivery.`,
 			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
-			<p style="margin:0 0 6px;">Thanks — we've added the following to your delivery on ${data.deliveryLabel}:</p>
+			<p style="margin:0 0 6px;">Thanks — we've added the following to your next delivery:</p>
 			${detailTable(data.addonLines.map((line) => detailRow('', line)).join('') + detailRow('Charged', data.amountLabel))}
 		`
 		})
@@ -457,7 +425,6 @@ export const customerChangeEmail = (url: string) => ({
 export const customerOrderConfirmed = (raw: {
 	name: string;
 	amountLabel: string;
-	deliveryLabel: string;
 	addressLines: string[];
 	addonNames?: string[];
 }) => {
@@ -466,13 +433,12 @@ export const customerOrderConfirmed = (raw: {
 		subject: 'Your GOTERA order is confirmed',
 		html: layout({
 			heading: 'Order confirmed',
-			preheader: `Your injera is booked in for ${data.deliveryLabel}.`,
+			preheader: 'Your injera is booked in.',
 			body: `
 			<p style="margin:0 0 14px;">Hi ${data.name},</p>
 			<p style="margin:0 0 6px;">Thank you — your payment has gone through and your order is confirmed. This is a one-time order: there's no subscription, and nothing will renew.</p>
 			${detailTable(
-				detailRow('Delivery', data.deliveryLabel) +
-					detailRow('Total paid', data.amountLabel) +
+				detailRow('Total paid', data.amountLabel) +
 					(data.addonNames?.length ? detailRow('Extras', data.addonNames.join(', ')) : '') +
 					detailRow('Status', 'Confirmed')
 			)}

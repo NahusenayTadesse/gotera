@@ -1,41 +1,73 @@
 import nodemailer from 'nodemailer';
 import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import * as t from './emailTemplates';
+import type { EmailSender } from '$lib/schemas/bulkEmail';
 
 const port = Number(SMTP_PORT);
 
-const transporter = nodemailer.createTransport({
-	host: SMTP_HOST,
-	port,
-	secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
-	auth: {
-		user: SMTP_USER,
-		pass: SMTP_PASSWORD
-	}
-});
+const createTransport = (user: string, pass: string) =>
+	nodemailer.createTransport({
+		host: SMTP_HOST,
+		port,
+		secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
+		auth: { user, pass }
+	});
 
-const FROM = `GOTERA <${SMTP_USER}>`;
+/**
+ * Two mailboxes on the same SMTP host:
+ * - `orders` (SMTP_USER, orders@) — subscriptions, deliveries, payments, admin order alerts.
+ * - `hello` (SMTP_HELLO_USER, hello@) — account/auth mail, marketing, general enquiries.
+ * If the hello credentials aren't set, hello mail falls back to the orders mailbox.
+ */
+type Sender = EmailSender;
 
-/** Low-level send. */
-export const sendEmail = async (to: string, subject: string, html: string) => {
- await transporter.sendMail({ from: FROM, to, subject, html });	
+const ordersMailer = { user: SMTP_USER, transport: createTransport(SMTP_USER, SMTP_PASSWORD) };
+
+const helloMailer = (() => {
+	const { SMTP_HELLO_USER: user, SMTP_HELLO_PASSWORD: pass } = env;
+	if (user && pass) return { user, transport: createTransport(user, pass) };
+	console.warn('[email] SMTP_HELLO_USER/PASSWORD not set; hello mail will send from orders');
+	return ordersMailer;
+})();
+
+const mailers: Record<Sender, typeof ordersMailer> = { orders: ordersMailer, hello: helloMailer };
+
+/** Mailboxes actually configured — the dashboard only offers a choice when there's more than one. */
+export const availableSenders: { id: Sender; address: string }[] = [
+	{ id: 'orders', address: ordersMailer.user },
+	...(helloMailer !== ordersMailer ? [{ id: 'hello' as const, address: helloMailer.user }] : [])
+];
+
+/** Inbox for general (non-order) admin notifications. */
+const HELLO_INBOX = helloMailer.user;
+
+/** Low-level send. Defaults to the orders mailbox. */
+export const sendEmail = async (
+	to: string,
+	subject: string,
+	html: string,
+	sender: Sender = 'orders'
+) => {
+	const { user, transport } = mailers[sender];
+	await transport.sendMail({ from: `GOTERA <${user}>`, to, subject, html });
 };
 
 /* ── Customer sends ── */
 
 export const sendResetPassword = (to: string, url: string) => {
 	const { subject, html } = t.customerResetPassword(url);
-	return sendEmail(to, subject, html);
+	return sendEmail(to, subject, html, 'hello');
 };
 
 export const sendVerifyEmail = (to: string, url: string) => {
 	const { subject, html } = t.customerVerifyEmail(url);
-	return sendEmail(to, subject, html);
+	return sendEmail(to, subject, html, 'hello');
 };
 
 export const sendSubscriptionConfirmed = (
 	to: string,
-	data: { name: string; planName: string; amountLabel: string; nextDeliveryLabel: string }
+	data: { name: string; planName: string; amountLabel: string }
 ) => {
 	const { subject, html } = t.customerSubscriptionConfirmed(data);
 	return sendEmail(to, subject, html);
@@ -43,7 +75,7 @@ export const sendSubscriptionConfirmed = (
 
 export const sendUpcomingDelivery = (
 	to: string,
-	data: { name: string; deliveryLabel: string; cutoffLabel: string; address: string; addonsUrl?: string }
+	data: { name: string; cutoffLabel: string; address: string; addonsUrl?: string }
 ) => {
 	const { subject, html } = t.customerUpcomingDelivery(data);
 	return sendEmail(to, subject, html);
@@ -51,17 +83,9 @@ export const sendUpcomingDelivery = (
 
 export const sendAddonsAdded = (
 	to: string,
-	data: { name: string; deliveryLabel: string; amountLabel: string; addonLines: string[] }
+	data: { name: string; amountLabel: string; addonLines: string[] }
 ) => {
 	const { subject, html } = t.customerAddonsAdded(data);
-	return sendEmail(to, subject, html);
-};
-
-export const sendDeliveryRolled = (
-	to: string,
-	data: { name: string; originalLabel: string; deliveryLabel: string }
-) => {
-	const { subject, html } = t.customerDeliveryRolled(data);
 	return sendEmail(to, subject, html);
 };
 
@@ -81,7 +105,7 @@ export const sendPaymentFailed = (to: string, data: { name: string }) => {
 	return sendEmail(to, subject, html);
 };
 
-/* ── Admin sends (go to ADMIN_EMAIL) ── */
+/* ── Admin sends (go to the orders inbox unless noted) ── */
 
 export const notifyAdminNewSubscriber = (data: {
 	name: string;
@@ -107,7 +131,7 @@ export const notifyAdminPartnerApplication = (
 	data: Parameters<typeof t.adminPartnerApplication>[0]
 ) => {
 	const { subject, html } = t.adminPartnerApplication(data);
-	return sendEmail(SMTP_USER, subject, html);
+	return sendEmail(HELLO_INBOX, subject, html, 'hello');
 };
 
 export const notifyAdminPaymentFailed = (data: { name: string; email: string }) => {
@@ -146,12 +170,12 @@ export const notifyAdminSubscriptionCancelled = (
 export const sendMagicLink = (to: string, url: string) => {
 	const { subject, html } = t.customerMagicLink(url);
 
-	return sendEmail(to, subject, html);
+	return sendEmail(to, subject, html, 'hello');
 };
 
 export const sendChangeEmail = (to: string, url: string) => {
 	const { subject, html } = t.customerChangeEmail(url);
-	return sendEmail(to, subject, html);
+	return sendEmail(to, subject, html, 'hello');
 };
 
 export const sendGiftReceived = (
@@ -165,7 +189,7 @@ export const sendGiftReceived = (
 
 export const sendAdminTest = () => {
 	const { subject, html } = t.adminTest();
-	return sendEmail(SMTP_USER, subject, html);
+	return sendEmail(HELLO_INBOX, subject, html, 'hello');
 };
 
 import { customerOrderConfirmed, adminNewOrder } from './emailTemplates';
@@ -186,9 +210,13 @@ export async function notifyAdminOrder(data: Parameters<typeof adminNewOrder>[0]
 
 /* ── Bulk / marketing send (dashboard bulk email sender) ── */
 
-export const sendBulkEmail = (to: string, data: Parameters<typeof t.customerBulkEmail>[0]) => {
+export const sendBulkEmail = (
+	to: string,
+	data: Parameters<typeof t.customerBulkEmail>[0],
+	sender: Sender = 'hello'
+) => {
 	const { subject, html } = t.customerBulkEmail(data);
-	return sendEmail(to, subject, html);
+	return sendEmail(to, subject, html, sender);
 };
 
  

@@ -105,7 +105,6 @@ export const GET: RequestHandler = async ({ request }) => {
 		upcoming.map((d) =>
 			sendUpcomingDelivery(d.email, {
 				name: d.name ?? 'there',
-				deliveryLabel: fullDate(d.scheduledDate),
 				cutoffLabel: fullDate(cutoffDateFor(d.scheduledDate)),
 				address: [d.line1, d.line2, d.city, d.postcode].filter(Boolean).join(', '),
 				addonsUrl: addonsAvailable && d.addonAccessToken ? `${SITE}/addons/${d.addonAccessToken}` : undefined

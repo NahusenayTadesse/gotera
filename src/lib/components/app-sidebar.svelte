@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		ChartLine,
 		Users,
 		UserRoundCog,
 		ChartArea,
@@ -43,6 +44,7 @@
 	const navigation = [
 		{ title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 		{ title: 'Customers', url: '/dashboard/customers', icon: Users },
+		{ title: 'Analytics', url: '/dashboard/analytics', icon: ChartLine },
 		{ title: 'Bulk Email', url: '/dashboard/bulk-email', icon: Mail },
 		{ title: 'Plans', url: '/dashboard/plans', icon: Sheet },
 		{ title: 'Add-ons', url: '/dashboard/addons', icon: CookingPot },

@@ -36,7 +36,6 @@ describe('email templates escape untrusted data', () => {
 		const { html } = customerOrderConfirmed({
 			name: 'Sam',
 			amountLabel: '£10.00',
-			deliveryLabel: 'Saturday',
 			addressLines: ['1 High St', 'London']
 		});
 		expect(html).toContain('1 High St<br />London');

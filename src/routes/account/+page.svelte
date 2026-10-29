@@ -231,7 +231,7 @@
 				<div>
 					<span class="delivery-card-eyebrow">{m.account_next_delivery_eyebrow()}</span>
 					{#if sub.nextDelivery}
-						<div class="delivery-date">{sub.nextDelivery.dateLabel}</div>
+						<div class="delivery-date">{m.account_delivery_scheduled()}</div>
 						<div class="delivery-detail">{sub.nextDelivery.addressLine}</div>
 						{#if sub.nextDelivery.pastCutoff}
 							<span class="cutoff cutoff-closed">{m.account_cutoff_passed()}</span>
@@ -340,7 +340,7 @@
 				<label class="target-label" for="target-sub">{m.account_adding_to_label()}</label>
 				<select id="target-sub" class="target-select" bind:value={selectedSubId}>
 					{#each deliverableSubs as s (s.id)}
-						<option value={s.id}>{s.planName} — {s.nextDelivery?.dateLabel}</option>
+						<option value={s.id}>{s.planName}</option>
 					{/each}
 				</select>
 			{/if}

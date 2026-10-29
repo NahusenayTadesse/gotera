@@ -12,7 +12,8 @@ const STATUS_PRIORITY = ['active', 'paused', 'pending', 'cancelled'] as const;
 
 export const load: PageServerLoad = async () => {
 	const [bulkEmailForm, subscriberRows, subscriptionRows] = await Promise.all([
-		superValidate(zod4(bulkEmailSchema)),
+		// General/marketing mail — default to the hello@ mailbox here.
+		superValidate({ sender: 'hello' }, zod4(bulkEmailSchema), { errors: false }),
 		db
 			.select({
 				id: subscribers.id,

@@ -186,12 +186,6 @@ import type { PageData } from './$types';
 			<span class="proof-stat-num">300</span>
 			<span class="proof-stat-label">{m.home_proof_label_deliveries()}</span>
 		</div>
-		<div class="proof-divider"></div>
-		<div class="proof-stat">
-			<span class="proof-stat-num text-[24px]!">{m.home_proof_city_london()}</span>
-			<span class="proof-stat-label">{m.home_proof_label_delivering_in()}</span>
-		</div>
-		<div class="proof-divider"></div>
 		<!-- <div class="proof-quote-ph">
 			<span class="proof-quote-ph-text">"Subscriber quote placeholder — replace at launch."</span>
 			<span class="proof-quote-ph-attr">Name · Location · GOTERA subscriber</span>
@@ -954,7 +948,9 @@ import type { PageData } from './$types';
 			order: -1;
 		}
 		.proof-inner {
-			justify-content: flex-start;
+			display: grid;
+			grid-template-columns: 1fr auto 1fr;
+			gap: 16px;
 		}
 		.origin-gallery :global(.grid) {
 			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -972,9 +968,6 @@ import type { PageData } from './$types';
 		.btn,
 		.btn-outline {
 			width: 100%;
-		}
-		.proof-divider {
-			display: none;
 		}
 		.pillars,
 		.plans,

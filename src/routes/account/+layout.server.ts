@@ -8,11 +8,10 @@ import {
 	subscribers,
 	subscriptions,
 	plans,
-	deliveries,
 	subscriberAddons,
 	addons as addonsTable
 } from '$lib/server/db/schema';
-import { dayMonth, instantDate, money, monthlyEquivalentPence } from '$lib/format';
+import { instantDate, money, monthlyEquivalentPence } from '$lib/format';
 
 const intervalWord = (i?: string) =>
 	i === 'bi_monthly' ? 'bi-monthly' : i === 'one_time' ? 'one-time' : 'monthly';
@@ -53,16 +52,6 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	if (rows.length === 0) return { firstName, summary: null };
 
 	const subscriptionIds = rows.map((r) => r.id);
-
-	// Soonest scheduled delivery across every plan they hold.
-	const [delivery] = await db
-		.select({ scheduledDate: deliveries.scheduledDate })
-		.from(deliveries)
-		.where(
-			and(inArray(deliveries.subscriptionId, subscriptionIds), eq(deliveries.status, 'scheduled'))
-		)
-		.orderBy(asc(deliveries.scheduledDate))
-		.limit(1);
 
 	// Recurring add-ons are attached to a specific subscription.
 	const recurring = await db
@@ -115,7 +104,6 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 					: `${headline.packs} packs ${intervalWord(headline.interval)}`, // "4 packs monthly"
 			status: headline.status,
 			statusLabel: STATUS_LABEL[headline.status] ?? headline.status,
-			nextDeliveryLabel: delivery ? dayMonth(delivery.scheduledDate) : null, // "18 April"
 			nextPaymentAmount: money(monthlyPence),
 			nextPaymentDate: nextPeriodEnd ? instantDate(nextPeriodEnd) : null
 		}
